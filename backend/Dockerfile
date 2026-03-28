@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-# 최소 패키지만 설치 (Tesseract 제거 → Claude API로 OCR 처리)
+# 최소 패키지만 설치 (Tesseract 완전 제거 → Claude Vision API로 OCR 처리) v2
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     gcc \
