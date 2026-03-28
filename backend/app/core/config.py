@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # Kakao (알림톡)
     KAKAO_API_KEY: Optional[str] = None
 
+    # CORS
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
+
     # SMTP (이메일)
     SMTP_HOST: Optional[str] = None
     SMTP_PORT: int = 587
