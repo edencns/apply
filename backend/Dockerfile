@@ -1,13 +1,10 @@
 FROM python:3.12-slim
 
-# Tesseract OCR (한국어 지원)
+# 최소 패키지만 설치 (Tesseract 제거 → Claude API로 OCR 처리)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    tesseract-ocr \
-    tesseract-ocr-kor \
-    tesseract-ocr-eng \
-    poppler-utils \
     libpq-dev \
     gcc \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -15,8 +12,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-
-# 업로드 디렉토리 생성
 RUN mkdir -p /app/uploads/contracts
 
 EXPOSE 8000
