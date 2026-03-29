@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from . import announcements, customers, documents, contracts, eligibility, sites, auth, winners
+from . import announcements, customers, documents, contracts, eligibility, sites, auth, winners, seed
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(auth.router, prefix="/auth", tags=["인증"])
@@ -10,3 +10,4 @@ router.include_router(documents.router, prefix="/documents", tags=["서류 처�
 router.include_router(eligibility.router, prefix="/eligibility", tags=["적격 판정"])
 router.include_router(contracts.router, prefix="/contracts", tags=["전자계약"])
 router.include_router(winners.router, prefix="/winners", tags=["당첨자 관리"])
+router.include_router(seed.router, prefix="/seed", tags=["시드 데이터"])
