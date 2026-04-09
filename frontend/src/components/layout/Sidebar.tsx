@@ -4,12 +4,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Building2, LayoutDashboard, Users, FileText,
-  ClipboardCheck, BookOpen, LogOut, PenLine,
+  ClipboardCheck, BookOpen, LogOut, PenLine, GitCompareArrows,
 } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard",          icon: LayoutDashboard, label: "대시보드" },
   { href: "/announcements",      icon: BookOpen,         label: "모집공고" },
+  { href: "/announcements/compare", icon: GitCompareArrows, label: "공고 비교" },
   { href: "/customers",          icon: Users,            label: "고객 관리" },
   { href: "/documents",          icon: FileText,         label: "서류 검수" },
   { href: "/winners",            icon: ClipboardCheck,   label: "당첨자 관리" },
