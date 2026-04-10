@@ -1,10 +1,11 @@
 from fastapi import APIRouter
-from . import announcements, customers, documents, contracts, eligibility, sites, auth, winners, seed
+from . import announcements, announcement_parse, customers, documents, contracts, eligibility, sites, auth, winners, seed
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(auth.router, prefix="/auth", tags=["인증"])
 router.include_router(sites.router, prefix="/sites", tags=["분양 현장"])
 router.include_router(announcements.router, prefix="/announcements", tags=["모집공고"])
+router.include_router(announcement_parse.router, prefix="/announcements", tags=["공고문 파싱"])
 router.include_router(customers.router, prefix="/customers", tags=["고객 관리"])
 router.include_router(documents.router, prefix="/documents", tags=["서류 처리"])
 router.include_router(eligibility.router, prefix="/eligibility", tags=["적격 판정"])
