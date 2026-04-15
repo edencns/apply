@@ -427,7 +427,7 @@ export default function AnnouncementsPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || !siteId}
+                  disabled={submitting}
                   className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {submitting ? (<><Loader2 className="w-4 h-4 animate-spin" /> 등록 중…</>) : "등록"}
