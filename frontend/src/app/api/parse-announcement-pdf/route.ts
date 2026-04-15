@@ -219,52 +219,83 @@ export async function POST(req: NextRequest) {
 
 /**
  * PDF 본문에서 전용면적 값 추출.
- * — 공급대상 표에 나오는 "주택형" 또는 "전용면적(m²)" 컬럼값을 regex로 수집
- * — 타입 접미사(A/B/C 등) 제거, 중복 제거, 20~500m² 범위 필터
+ * — 한국 표준 공고문의 "주택형 전용면적기준" 컬럼은 3자리 0-패딩 포맷 사용
+ *   (예: 040.5800, 042.6600, 061.1400, 084.9876)
+ * — 이 포맷은 주거전용면적/공용면적/계약면적/대지지분 등 다른 컬럼과 유일하게 구별됨
+ * — Primary: 0-패딩 패턴만 매칭 (정밀)
+ * — Fallback: 약식표기 패턴 매칭 (예: "40A5H" → 40)
+ * — 최후: 전용면적 라벨 근처의 숫자 (정밀도 낮음)
  */
 function extractExclusiveAreasFromText(fullText: string): number[] {
-  const areas = new Set<number>();
+  const areas = new Map<string, number>(); // key=소숫점 2자리 반올림, value=원본 정밀값
 
-  // 패턴 1: "74.9786A", "84.9534B" 처럼 숫자.숫자 + 선택적 영문 접미사
-  //         (주로 주택형 컬럼)
-  const typeCodePattern = /(\d{2,3}\.\d{2,4})[A-Za-z]?/g;
-  // 패턴 2: "전용면적 74.98m²" 같은 명시적 라벨
-  const labeledPattern = /전용\s*면적[^0-9]{0,10}(\d{2,3}(?:\.\d{1,4})?)/g;
-  // 패턴 3: 단독 숫자 + m²
-  const m2Pattern = /(\d{2,3}(?:\.\d{1,4})?)\s*(?:m²|㎡|m2)/g;
-
-  // 공급대상/주택형 섹션 근처만 스캔하여 노이즈 최소화
-  const lines = fullText.split('\n');
-  const relevantLines: string[] = [];
-  const triggers = ['공급대상', '공급 대상', '주택형', '전용면적', '전용 면적', '주택관리번호'];
-  for (let i = 0; i < lines.length; i++) {
-    if (triggers.some(t => lines[i].includes(t))) {
-      const end = Math.min(lines.length, i + 30);
-      for (let j = i; j < end; j++) relevantLines.push(lines[j]);
-    }
-  }
-  const scope = relevantLines.length > 0 ? relevantLines.join('\n') : fullText;
-
-  const collect = (re: RegExp, source: string) => {
-    let m: RegExpExecArray | null;
-    re.lastIndex = 0;
-    while ((m = re.exec(source)) !== null) {
-      const n = parseFloat(m[1]);
-      if (Number.isFinite(n) && n >= 20 && n <= 500) areas.add(n);
+  const addArea = (n: number) => {
+    if (!Number.isFinite(n) || n < 20 || n > 500) return;
+    const key = n.toFixed(2);
+    // 더 정밀한 값(소숫점 4자리)이 들어오면 덮어쓰기
+    if (!areas.has(key) || String(n).length > String(areas.get(key)).length) {
+      areas.set(key, n);
     }
   };
-  collect(typeCodePattern, scope);
-  collect(labeledPattern, scope);
-  collect(m2Pattern, scope);
 
-  // 스코프에서 못 찾았으면 전체 텍스트로 fallback
-  if (areas.size === 0) {
-    collect(typeCodePattern, fullText);
-    collect(labeledPattern, fullText);
-    collect(m2Pattern, fullText);
+  // ── Primary: 0-패딩 주택형 코드 (예: 040.5800, 084.9876)
+  //    앞자리는 반드시 0으로 시작하는 3자리, 소숫점 1~4자리
+  const paddedPattern = /\b0(\d{2}\.\d{1,4})\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = paddedPattern.exec(fullText)) !== null) {
+    // m[1]은 "40.5800" 식 (선두 0 제거)
+    const n = parseFloat(m[1]);
+    addArea(n);
   }
 
-  return Array.from(areas).sort((a, b) => a - b);
+  // Primary에서 충분히 수집되면 바로 반환
+  if (areas.size >= 2) {
+    console.log('[extractExclusiveAreas] matched by padded pattern:', Array.from(areas.values()));
+    return Array.from(areas.values()).sort((a, b) => a - b);
+  }
+
+  // ── Fallback 1: 약식표기 "40A5H" 류 (숫자 2~3 + 영문 + 숫자 + 영문)
+  //    이 경우는 정수부만 추출되므로 정밀도가 떨어짐 (뒤에 나오는 정밀값과 매칭 시도)
+  const shortCodePattern = /\b(\d{2,3})([A-Z]\d[A-Z]|[A-Z]\d)\b/g;
+  const shortCodeAreas = new Set<number>();
+  while ((m = shortCodePattern.exec(fullText)) !== null) {
+    const n = parseInt(m[1], 10);
+    if (n >= 20 && n <= 500) shortCodeAreas.add(n);
+  }
+
+  // Fallback 2: "전용면적" 라벨 직후 숫자
+  //    "주거전용면적 40.5800" 식의 표 구조에서 뽑기
+  //    라벨과 숫자 사이에 컬럼이 여러 개 낄 수 있으므로 조심
+  const lines = fullText.split('\n');
+  const areaLabelPattern = /(주거\s*전용\s*면적|전용\s*면적\s*기준)/;
+  const decimalPattern = /\b(\d{2,3}\.\d{2,4})\b/g;
+  for (let i = 0; i < lines.length; i++) {
+    if (!areaLabelPattern.test(lines[i])) continue;
+    // 같은 줄 또는 바로 다음 1~20줄에서 소숫점 숫자 수집
+    const windowEnd = Math.min(lines.length, i + 20);
+    for (let j = i; j < windowEnd; j++) {
+      let dm: RegExpExecArray | null;
+      decimalPattern.lastIndex = 0;
+      while ((dm = decimalPattern.exec(lines[j])) !== null) {
+        const n = parseFloat(dm[1]);
+        // 약식표기에서 추출한 정수부와 일치하는 값만 신뢰 (교차 검증)
+        if (shortCodeAreas.size > 0) {
+          const intPart = Math.floor(n);
+          if (shortCodeAreas.has(intPart)) addArea(n);
+        } else {
+          addArea(n);
+        }
+      }
+    }
+  }
+
+  if (areas.size === 0 && shortCodeAreas.size > 0) {
+    // 정밀값을 못 찾았으면 정수부만이라도 반환
+    shortCodeAreas.forEach(n => addArea(n));
+  }
+
+  console.log('[extractExclusiveAreas] matched by fallback:', Array.from(areas.values()));
+  return Array.from(areas.values()).sort((a, b) => a - b);
 }
 
 /**
