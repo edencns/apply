@@ -307,25 +307,31 @@ export default function DocumentsPage() {
                             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                           </button>
 
-                          {/* 업로드 버튼 */}
-                          <label className={`p-1.5 rounded-md cursor-pointer transition-colors flex items-center justify-center ${
-                            isUploading
-                              ? "bg-gray-100 text-gray-400"
-                              : "bg-blue-100 text-blue-600 hover:bg-blue-200"
-                          }`}>
+                          {/* 업로드 버튼 — input은 ref로 명시적으로 click 호출 */}
+                          <button
+                            type="button"
+                            disabled={isUploading}
+                            onClick={() => fileInputRefs.current[docDef.type]?.click()}
+                            className={`p-1.5 rounded-md transition-colors flex items-center justify-center ${
+                              isUploading
+                                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                : "bg-blue-100 text-blue-600 hover:bg-blue-200 cursor-pointer"
+                            }`}
+                            title={uploaded?.uploaded || submittedDoc ? "다시 업로드" : "업로드"}
+                          >
                             {isUploading
                               ? <RefreshCw className="w-4 h-4 animate-spin" />
                               : <Plus className="w-4 h-4" />
                             }
-                            <input
-                              type="file"
-                              accept=".pdf,.jpg,.jpeg,.png"
-                              className="hidden"
-                              disabled={isUploading}
-                              ref={(el) => { fileInputRefs.current[docDef.type] = el; }}
-                              onChange={handleFileChange(docDef.type)}
-                            />
-                          </label>
+                          </button>
+                          <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            className="hidden"
+                            disabled={isUploading}
+                            ref={(el) => { fileInputRefs.current[docDef.type] = el; }}
+                            onChange={handleFileChange(docDef.type)}
+                          />
                         </div>
                       </div>
 

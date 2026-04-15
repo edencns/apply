@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { sitesApi, api } from "@/lib/api";
-import { Plus, BookOpen, CalendarDays, ChevronRight } from "lucide-react";
+import { Plus, BookOpen, CalendarDays, ChevronRight, FileUp, Loader2, CheckCircle2 } from "lucide-react";
 
 interface Announcement {
   id: number;
@@ -44,6 +44,9 @@ export default function AnnouncementsPage() {
     rules: { ...DEFAULT_RULES },
     regionInput: "",
   });
+  const [pdfParsing, setPdfParsing] = useState(false);
+  const [pdfFilled, setPdfFilled] = useState<string[]>([]);
+  const pdfInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     sitesApi.list().then((r) => {
@@ -102,6 +105,47 @@ export default function AnnouncementsPage() {
 
   const removeRegion = (i: number) => {
     setForm((p) => ({ ...p, rules: { ...p.rules, region_priority: p.rules.region_priority.filter((_, idx) => idx !== i) } }));
+  };
+
+  /** PDF 업로드 → 서버 파싱 → 폼 자동 채우기 */
+  const handlePdfUpload = async (file: File) => {
+    setPdfParsing(true);
+    setPdfFilled([]);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/parse-announcement-pdf", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "파싱 실패");
+      }
+      const d = json.data as Record<string, any>;
+      const filled: string[] = [];
+      setForm((p) => {
+        const next = { ...p, rules: { ...p.rules } };
+        if (d.title && !p.title) { next.title = d.title; filled.push("공고명"); }
+        if (d.announcementNo && !p.announcement_no) { next.announcement_no = d.announcementNo; filled.push("공고번호"); }
+        if (d.applicationStart && !p.application_start) { next.application_start = d.applicationStart; filled.push("청약 접수 시작일"); }
+        if (d.applicationEnd && !p.application_end) { next.application_end = d.applicationEnd; filled.push("청약 접수 종료일"); }
+        if (d.winnerAnnounceDate && !p.winner_announce_date) { next.winner_announce_date = d.winnerAnnounceDate; filled.push("당첨자 발표일"); }
+        if (d.contractStart && !p.contract_start) { next.contract_start = d.contractStart; filled.push("계약 시작일"); }
+        if (typeof d.noHomeRequired === "boolean") { next.rules.no_home_required = d.noHomeRequired; filled.push("무주택 필수"); }
+        if (d.minSubscriptionMonths) { next.rules.min_subscription_period = d.minSubscriptionMonths; filled.push("통장 납입 기간"); }
+        if (Array.isArray(d.specialTypes) && d.specialTypes.length > 0) { next.rules.special_supply_types = d.specialTypes; filled.push(`특별공급(${d.specialTypes.length}종)`); }
+        if (d.region && p.rules.region_priority.length === 0) {
+          // 시/도 단위만 추출
+          const firstRegion = d.region.split(/\s+/)[0];
+          if (firstRegion) { next.rules.region_priority = [firstRegion]; filled.push("지역 우선순위"); }
+        }
+        return next;
+      });
+      setPdfFilled(filled);
+    } catch (err: any) {
+      alert(err.message || "PDF 파싱 실패");
+    } finally {
+      setPdfParsing(false);
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+    }
   };
 
   return (
@@ -182,6 +226,58 @@ export default function AnnouncementsPage() {
               <h2 className="text-lg font-semibold">모집공고 등록</h2>
             </div>
             <form onSubmit={handleCreate} className="p-6 space-y-5">
+              {/* PDF 자동 입력 */}
+              <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50/50 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center flex-shrink-0">
+                    <FileUp className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-blue-900">공고 PDF 자동 입력</div>
+                    <p className="text-xs text-blue-700 mt-0.5 mb-2">
+                      입주자모집공고문 PDF를 업로드하면 제목·번호·일정·자격 기준을 자동으로 채워넣습니다.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={pdfParsing}
+                        onClick={() => pdfInputRef.current?.click()}
+                        className="btn-secondary text-xs flex items-center gap-1.5 px-3 py-1.5"
+                      >
+                        {pdfParsing ? (
+                          <><Loader2 className="w-3 h-3 animate-spin" /> 분석 중…</>
+                        ) : (
+                          <><FileUp className="w-3 h-3" /> PDF 선택</>
+                        )}
+                      </button>
+                      {pdfFilled.length > 0 && !pdfParsing && (
+                        <span className="inline-flex items-center gap-1 text-xs text-green-700">
+                          <CheckCircle2 className="w-3 h-3" />
+                          {pdfFilled.length}개 항목 자동 입력됨
+                        </span>
+                      )}
+                    </div>
+                    {pdfFilled.length > 0 && !pdfParsing && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {pdfFilled.map((f) => (
+                          <span key={f} className="inline-block text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">{f}</span>
+                        ))}
+                      </div>
+                    )}
+                    <input
+                      ref={pdfInputRef}
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) handlePdfUpload(f);
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* 기본 정보 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">공고명 *</label>

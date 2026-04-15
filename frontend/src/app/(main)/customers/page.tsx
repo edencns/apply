@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { customersApi, sitesApi, eligibilityApi } from "@/lib/api";
-import { UserPlus, Search, ChevronRight, Calculator } from "lucide-react";
+import { UserPlus, Search, ChevronRight, Calculator, FileSpreadsheet, Loader2, Download } from "lucide-react";
 
 interface Customer {
   id: number;
@@ -39,6 +39,11 @@ export default function CustomersPage() {
     is_first_time_buyer: false, is_newlywed: false,
     current_region: "", income_monthly: "",
   });
+
+  // 엑셀 업로드
+  const excelInputRef = useRef<HTMLInputElement | null>(null);
+  const [excelUploading, setExcelUploading] = useState(false);
+  const [excelResult, setExcelResult] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
 
   useEffect(() => {
     sitesApi.list().then((r) => {
@@ -78,6 +83,110 @@ export default function CustomersPage() {
     setCalcResult(r.data);
   };
 
+  /** 엑셀 템플릿 다운로드 — xlsx 라이브러리를 lazy-load */
+  const downloadTemplate = async () => {
+    const XLSX = await import("xlsx");
+    const ws = XLSX.utils.json_to_sheet([
+      {
+        성명: "홍길동",
+        연락처: "010-1234-5678",
+        주민번호앞: "800101",
+        주민번호뒤: "1234567",
+        주소: "서울 강남구 역삼동",
+        무주택기간_년: 10,
+        부양가족수: 2,
+        통장개월: 120,
+        생애최초: "N",
+        신혼부부: "N",
+        월소득_원: 5000000,
+      },
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "고객등록");
+    XLSX.writeFile(wb, "고객등록_템플릿.xlsx");
+  };
+
+  /** 엑셀 일괄 등록 — 컬럼명은 한글/영문 모두 허용, xlsx lazy-load */
+  const handleExcelUpload = async (file: File) => {
+    if (!siteId) { alert("현장을 먼저 선택해주세요"); return; }
+    setExcelUploading(true);
+    setExcelResult(null);
+    try {
+      const XLSX = await import("xlsx");
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: "" });
+
+      // 컬럼명 정규화 — 한글/영문 둘 다 허용
+      const pick = (row: Record<string, any>, ...keys: string[]): any => {
+        for (const k of keys) {
+          if (row[k] !== undefined && row[k] !== "") return row[k];
+        }
+        return undefined;
+      };
+      const toBool = (v: any): boolean => {
+        if (typeof v === "boolean") return v;
+        const s = String(v).trim().toLowerCase();
+        return s === "y" || s === "yes" || s === "true" || s === "1" || s === "예" || s === "o" || s === "해당";
+      };
+      const toNum = (v: any): number => {
+        if (v === undefined || v === "" || v === null) return 0;
+        const n = Number(String(v).replace(/[^\d.-]/g, ""));
+        return Number.isFinite(n) ? n : 0;
+      };
+      const toStr = (v: any): string => (v === undefined || v === null ? "" : String(v).trim());
+
+      let success = 0, failed = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        try {
+          const name = toStr(pick(row, "성명", "이름", "name"));
+          if (!name) { failed++; errors.push(`${i + 2}행: 성명 누락`); continue; }
+          const rrnFront = toStr(pick(row, "주민번호앞", "주민번호 앞", "rrn_front")).replace(/\D/g, "").slice(0, 6);
+          const rrnBack = toStr(pick(row, "주민번호뒤", "주민번호 뒤", "rrn_back")).replace(/\D/g, "").slice(0, 7);
+          if (!rrnFront || !rrnBack) { failed++; errors.push(`${i + 2}행(${name}): 주민번호 누락`); continue; }
+
+          const payload = {
+            site_id: siteId,
+            name,
+            phone: toStr(pick(row, "연락처", "전화", "phone")),
+            rrn_front: rrnFront,
+            rrn_back: rrnBack,
+            address: toStr(pick(row, "주소", "address")),
+            no_home_years: toNum(pick(row, "무주택기간_년", "무주택년", "무주택기간", "no_home_years")),
+            dependents_count: toNum(pick(row, "부양가족수", "부양가족", "dependents_count")),
+            subscription_months: toNum(pick(row, "통장개월", "청약통장개월", "가입기간", "subscription_months")),
+            is_first_time_buyer: toBool(pick(row, "생애최초", "is_first_time_buyer")),
+            is_newlywed: toBool(pick(row, "신혼부부", "is_newlywed")),
+            current_region: toStr(pick(row, "지역", "current_region")),
+            income_monthly: (() => {
+              const n = toNum(pick(row, "월소득_원", "월소득", "소득", "income_monthly"));
+              return n > 0 ? n : null;
+            })(),
+          };
+          await customersApi.create(payload as any);
+          success++;
+        } catch (err: any) {
+          failed++;
+          const msg = err?.response?.data?.detail || err?.message || "등록 실패";
+          const name = String(pick(row, "성명", "이름", "name") || "(이름없음)");
+          errors.push(`${i + 2}행(${name}): ${msg}`);
+        }
+      }
+
+      setExcelResult({ success, failed, errors: errors.slice(0, 10) });
+      if (success > 0) loadCustomers();
+    } catch (err: any) {
+      alert(err?.message || "엑셀 파일 파싱 실패");
+    } finally {
+      setExcelUploading(false);
+      if (excelInputRef.current) excelInputRef.current.value = "";
+    }
+  };
+
   const filtered = customers.filter((c) =>
     c.name.includes(search) || c.phone?.includes(search)
   );
@@ -93,11 +202,61 @@ export default function CustomersPage() {
           <button onClick={() => setShowCalc(!showCalc)} className="btn-secondary flex items-center gap-2">
             <Calculator className="w-4 h-4" /> 가점 계산기
           </button>
+          <button onClick={downloadTemplate} className="btn-secondary flex items-center gap-2" title="엑셀 템플릿 다운로드">
+            <Download className="w-4 h-4" /> 템플릿
+          </button>
+          <button
+            onClick={() => excelInputRef.current?.click()}
+            disabled={excelUploading}
+            className="btn-secondary flex items-center gap-2"
+          >
+            {excelUploading ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> 등록 중…</>
+            ) : (
+              <><FileSpreadsheet className="w-4 h-4" /> 엑셀 업로드</>
+            )}
+          </button>
+          <input
+            ref={excelInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleExcelUpload(f);
+            }}
+          />
           <button onClick={() => setShowForm(true)} className="btn-primary flex items-center gap-2">
             <UserPlus className="w-4 h-4" /> 고객 등록
           </button>
         </div>
       </div>
+
+      {/* 엑셀 업로드 결과 */}
+      {excelResult && (
+        <div className={`card mb-4 ${excelResult.failed === 0 ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-gray-800">
+                엑셀 일괄 등록 결과
+              </div>
+              <div className="mt-1 text-sm text-gray-700">
+                성공 <strong className="text-green-700">{excelResult.success}건</strong>
+                {excelResult.failed > 0 && <> · 실패 <strong className="text-red-700">{excelResult.failed}건</strong></>}
+              </div>
+              {excelResult.errors.length > 0 && (
+                <ul className="mt-2 text-xs text-red-700 space-y-0.5 list-disc list-inside">
+                  {excelResult.errors.map((e, i) => <li key={i}>{e}</li>)}
+                  {excelResult.failed > excelResult.errors.length && (
+                    <li className="text-gray-500">…외 {excelResult.failed - excelResult.errors.length}건 더</li>
+                  )}
+                </ul>
+              )}
+            </div>
+            <button onClick={() => setExcelResult(null)} className="text-gray-400 hover:text-gray-600 text-sm">×</button>
+          </div>
+        </div>
+      )}
 
       {/* 현장 선택 + 검색 */}
       <div className="flex gap-3 mb-4">
