@@ -576,8 +576,8 @@ function SupplyUnitsPanel({
             <tr className="text-gray-500 border-b border-indigo-200">
               <th className="text-left font-semibold px-1.5 py-1.5">#</th>
               <th className="text-left font-semibold px-1.5 py-1.5">약식</th>
-              <th className="text-right font-semibold px-1.5 py-1.5">전용</th>
-              <th className="text-right font-semibold px-1.5 py-1.5">계약</th>
+              <th className="text-right font-semibold px-1.5 py-1.5 text-indigo-700">계약</th>
+              <th className="text-right font-semibold px-1.5 py-1.5 text-gray-400">전용</th>
               <th className="text-center font-semibold px-1.5 py-1.5">총</th>
               <th className="text-center font-semibold px-1.5 py-1.5 text-amber-700">다자녀</th>
               <th className="text-center font-semibold px-1.5 py-1.5 text-pink-700">신혼</th>
@@ -608,8 +608,8 @@ function SupplyUnitsPanel({
                 >
                   <td className="px-1.5 py-1.5 font-mono">{String(u.no).padStart(2, '0')}</td>
                   <td className="px-1.5 py-1.5 font-mono">{u.shortCode}</td>
-                  <td className="px-1.5 py-1.5 text-right font-semibold">{u.exclusiveArea.toFixed(2)}</td>
-                  <td className="px-1.5 py-1.5 text-right">{u.contractArea.toFixed(2)}</td>
+                  <td className={`px-1.5 py-1.5 text-right font-bold ${active ? 'text-white' : 'text-indigo-900'}`}>{u.contractArea.toFixed(2)}</td>
+                  <td className={`px-1.5 py-1.5 text-right text-[10px] ${active ? 'text-white/70' : 'text-gray-400'}`}>{u.exclusiveArea.toFixed(2)}</td>
                   <td className={`px-1.5 py-1.5 text-center font-bold ${active ? 'text-white' : 'text-gray-900'}`}>{u.totalUnits}</td>
                   <td className="px-1.5 py-1.5 text-center">{u.multiChild || '-'}</td>
                   <td className="px-1.5 py-1.5 text-center">{u.newlywed || '-'}</td>
@@ -635,16 +635,28 @@ function SupplyUnitsPanel({
 }
 
 function ExclusiveAreaEditor({
-  areas, selected, onSelect, onAdd, onRemove,
+  areas, selected, onSelect, onAdd, onRemove, supplyUnits,
 }: {
   areas: number[];
   selected: string;
   onSelect: (v: string) => void;
   onAdd: (v: number) => void;
   onRemove: (v: number) => void;
+  supplyUnits?: SupplyUnit[];
 }) {
   const [adding, setAdding] = useState(false);
   const [newVal, setNewVal] = useState('');
+
+  // 전용면적 → 계약면적 룩업 (공고 PDF 파싱 결과 기준)
+  const contractAreaMap = useMemo(() => {
+    const m = new Map<string, number>();
+    if (supplyUnits && supplyUnits.length > 0) {
+      for (const u of supplyUnits) m.set(u.exclusiveArea.toFixed(2), u.contractArea);
+    }
+    return m;
+  }, [supplyUnits]);
+
+  const hasContractArea = contractAreaMap.size > 0;
 
   const commitAdd = () => {
     const n = parseFloat(newVal.replace(/[^\d.]/g, ''));
@@ -660,7 +672,7 @@ function ExclusiveAreaEditor({
     <div>
       <div className="flex items-center justify-between mb-1.5">
         <label className="block text-xs font-semibold text-gray-500">
-          전용면적 <span className="text-gray-400 font-normal">({areas.length}개)</span>
+          {hasContractArea ? '계약면적' : '전용면적'} <span className="text-gray-400 font-normal">({areas.length}개)</span>
         </label>
         <button
           type="button"
@@ -715,6 +727,8 @@ function ExclusiveAreaEditor({
           {areas.map(a => {
             const key = String(a);
             const active = selected === key;
+            const contract = contractAreaMap.get(a.toFixed(2));
+            const primaryLabel = contract != null ? contract.toFixed(2) : String(a);
             return (
               <div
                 key={key}
@@ -725,9 +739,14 @@ function ExclusiveAreaEditor({
                 <button
                   type="button"
                   onClick={() => onSelect(key)}
-                  className="px-2.5 py-1.5"
+                  className="px-2.5 py-1.5 flex items-baseline gap-1"
                 >
-                  {a}m²
+                  <span>{primaryLabel}m²</span>
+                  {contract != null && (
+                    <span className={`text-[9px] font-normal ${active ? 'text-white/70' : 'text-gray-400'}`}>
+                      전용 {a}
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"
@@ -1010,21 +1029,31 @@ function CriteriaPane({
   if (!condition) {
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-500">
-        선택한 공급유형·전용면적에 해당하는 조건을 찾을 수 없습니다.
+        선택한 공급유형·주택형에 해당하는 조건을 찾을 수 없습니다.
       </div>
     );
   }
   const deposit = pickDepositForArea(condition.depositByArea, area);
+  const matchedUnit = announcement.supplyUnits?.find(
+    u => Math.abs(u.exclusiveArea - area) < 0.01,
+  );
 
   return (
     <div className="space-y-3">
       <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
           <span className="px-2 py-0.5 rounded-full bg-violet-600 text-white text-[10px] font-bold">
             {supplyTypeKey}
           </span>
           <span className="text-sm font-bold text-violet-900">{condition.label}</span>
-          <span className="text-xs text-violet-600">· 전용 {area}m²</span>
+          {matchedUnit ? (
+            <span className="text-xs text-violet-600">
+              · 계약 {matchedUnit.contractArea.toFixed(2)}m²
+              <span className="text-violet-400"> (전용 {area}m²)</span>
+            </span>
+          ) : (
+            <span className="text-xs text-violet-600">· 전용 {area}m²</span>
+          )}
         </div>
         {condition.description && (
           <p className="text-xs text-violet-800 leading-relaxed whitespace-pre-wrap">
@@ -1746,13 +1775,14 @@ export default function CheckerPage() {
               />
             )}
 
-            {/* 전용면적 (수동 편집 가능) */}
+            {/* 주택형 (계약면적 기준 — 공고에 공급대상 표가 있으면 자동으로 계약면적 표시) */}
             <ExclusiveAreaEditor
               areas={areaList}
               selected={selectedArea}
               onSelect={(v) => { setSelectedArea(v); setInquired(false); }}
               onAdd={addExclusiveArea}
               onRemove={removeExclusiveArea}
+              supplyUnits={announcement.supplyUnits}
             />
 
             {/* 당첨자 정보 + 조회 */}
