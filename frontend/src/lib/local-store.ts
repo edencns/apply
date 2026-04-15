@@ -34,6 +34,9 @@ export interface LocalAnnouncement {
 const SITES_KEY = "apply:sites";
 const ANNOUNCEMENTS_KEY = "apply:announcements";
 const ACTIVE_ANN_KEY = "apply:activeAnnouncement";
+const CUSTOMERS_KEY = "apply:customers";
+const WINNERS_KEY = "apply:winners";
+const CONTRACTS_KEY = "apply:contracts";
 
 function read<T>(key: string): T[] {
   if (typeof window === "undefined") return [];
@@ -105,6 +108,182 @@ export const localAnnouncements = {
     items.push(ann);
     write(ANNOUNCEMENTS_KEY, items);
     return ann;
+  },
+};
+
+// ─── Customers ─────────────────────────────────────────
+export interface LocalCustomer {
+  id: number;
+  announcement_id: number; // 공고 단위로 관리
+  site_id: number;
+  name: string;
+  phone?: string;
+  rrn_front?: string;
+  rrn_back?: string;
+  address?: string;
+  no_home_years?: number;
+  dependents_count?: number;
+  subscription_months?: number;
+  current_region?: string;
+  income_monthly?: number | null;
+  // 특별공급 분류 — 공고별 특별공급 유형에 맞춰 동적으로 추가됨
+  special_types?: string[];
+  total_score?: number;
+  status?: string;
+  created_at: string;
+}
+
+export const localCustomers = {
+  listByAnnouncement(announcementId: number): LocalCustomer[] {
+    return read<LocalCustomer>(CUSTOMERS_KEY).filter((c) => c.announcement_id === announcementId);
+  },
+  listAll(): LocalCustomer[] {
+    return read<LocalCustomer>(CUSTOMERS_KEY);
+  },
+  get(id: number): LocalCustomer | null {
+    return read<LocalCustomer>(CUSTOMERS_KEY).find((c) => c.id === id) || null;
+  },
+  create(input: Omit<LocalCustomer, "id" | "created_at" | "total_score" | "status"> & { total_score?: number; status?: string }): LocalCustomer {
+    const items = read<LocalCustomer>(CUSTOMERS_KEY);
+    const c: LocalCustomer = {
+      id: nextId(items),
+      announcement_id: input.announcement_id,
+      site_id: input.site_id,
+      name: input.name,
+      phone: input.phone || "",
+      rrn_front: input.rrn_front || "",
+      rrn_back: input.rrn_back || "",
+      address: input.address || "",
+      no_home_years: input.no_home_years ?? 0,
+      dependents_count: input.dependents_count ?? 0,
+      subscription_months: input.subscription_months ?? 0,
+      current_region: input.current_region || "",
+      income_monthly: input.income_monthly ?? null,
+      special_types: input.special_types ?? [],
+      total_score: input.total_score ?? 0,
+      status: input.status ?? "inquiry",
+      created_at: new Date().toISOString(),
+    };
+    items.push(c);
+    write(CUSTOMERS_KEY, items);
+    return c;
+  },
+  update(id: number, patch: Partial<LocalCustomer>): LocalCustomer | null {
+    const items = read<LocalCustomer>(CUSTOMERS_KEY);
+    const idx = items.findIndex((c) => c.id === id);
+    if (idx === -1) return null;
+    items[idx] = { ...items[idx], ...patch };
+    write(CUSTOMERS_KEY, items);
+    return items[idx];
+  },
+  remove(id: number) {
+    const items = read<LocalCustomer>(CUSTOMERS_KEY).filter((c) => c.id !== id);
+    write(CUSTOMERS_KEY, items);
+  },
+};
+
+// ─── Winners (당첨자) ───────────────────────────────────
+export interface LocalWinner {
+  id: number;
+  announcement_id: number;
+  customer_id?: number | null;
+  customer_name: string;
+  customer_phone?: string;
+  unit_number?: string;
+  unit_type?: string;
+  supply_type?: string;
+  is_preliminary?: boolean;
+  doc_review_status: string; // pending | reviewing | eligible | ineligible | needs_review | needs_supplement
+  contract_intent: string;   // pending | confirmed | declined
+  total_score?: number;
+  created_at: string;
+}
+
+export const localWinners = {
+  listByAnnouncement(announcementId: number): LocalWinner[] {
+    return read<LocalWinner>(WINNERS_KEY).filter((w) => w.announcement_id === announcementId);
+  },
+  create(input: Omit<LocalWinner, "id" | "created_at" | "doc_review_status" | "contract_intent"> & { doc_review_status?: string; contract_intent?: string }): LocalWinner {
+    const items = read<LocalWinner>(WINNERS_KEY);
+    const w: LocalWinner = {
+      id: nextId(items),
+      announcement_id: input.announcement_id,
+      customer_id: input.customer_id ?? null,
+      customer_name: input.customer_name,
+      customer_phone: input.customer_phone || "",
+      unit_number: input.unit_number || "",
+      unit_type: input.unit_type || "",
+      supply_type: input.supply_type || "일반공급",
+      is_preliminary: input.is_preliminary ?? false,
+      doc_review_status: input.doc_review_status ?? "pending",
+      contract_intent: input.contract_intent ?? "pending",
+      total_score: input.total_score ?? 0,
+      created_at: new Date().toISOString(),
+    };
+    items.push(w);
+    write(WINNERS_KEY, items);
+    return w;
+  },
+  update(id: number, patch: Partial<LocalWinner>): LocalWinner | null {
+    const items = read<LocalWinner>(WINNERS_KEY);
+    const idx = items.findIndex((w) => w.id === id);
+    if (idx === -1) return null;
+    items[idx] = { ...items[idx], ...patch };
+    write(WINNERS_KEY, items);
+    return items[idx];
+  },
+};
+
+// ─── Walk-in Contracts (방문 계약) ─────────────────────
+export interface LocalContract {
+  id: number;
+  announcement_id: number;
+  customer_id?: number | null;
+  customer_name: string;
+  unit_number?: string;
+  unit_type?: string;
+  contract_no?: string;
+  total_price?: number;
+  status: string; // draft | ready | signed
+  signed_at?: string | null;
+  created_at: string;
+}
+
+export const localContracts = {
+  listByAnnouncement(announcementId: number): LocalContract[] {
+    return read<LocalContract>(CONTRACTS_KEY).filter((c) => c.announcement_id === announcementId);
+  },
+  findByName(announcementId: number, name: string): LocalContract | null {
+    return read<LocalContract>(CONTRACTS_KEY).find(
+      (c) => c.announcement_id === announcementId && c.customer_name === name,
+    ) || null;
+  },
+  create(input: Omit<LocalContract, "id" | "created_at" | "status"> & { status?: string }): LocalContract {
+    const items = read<LocalContract>(CONTRACTS_KEY);
+    const c: LocalContract = {
+      id: nextId(items),
+      announcement_id: input.announcement_id,
+      customer_id: input.customer_id ?? null,
+      customer_name: input.customer_name,
+      unit_number: input.unit_number || "",
+      unit_type: input.unit_type || "",
+      contract_no: input.contract_no || `WI-${Date.now()}`,
+      total_price: input.total_price ?? 0,
+      status: input.status ?? "ready",
+      signed_at: null,
+      created_at: new Date().toISOString(),
+    };
+    items.push(c);
+    write(CONTRACTS_KEY, items);
+    return c;
+  },
+  update(id: number, patch: Partial<LocalContract>): LocalContract | null {
+    const items = read<LocalContract>(CONTRACTS_KEY);
+    const idx = items.findIndex((c) => c.id === id);
+    if (idx === -1) return null;
+    items[idx] = { ...items[idx], ...patch };
+    write(CONTRACTS_KEY, items);
+    return items[idx];
   },
 };
 

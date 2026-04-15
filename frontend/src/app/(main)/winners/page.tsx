@@ -1,8 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { CheckCircle, XCircle, AlertTriangle, Clock, FileSearch, ThumbsUp, ThumbsDown } from "lucide-react";
+import {
+  localAnnouncements, localWinners, localCustomers, activeAnnouncement,
+  isNetworkError, LocalAnnouncement, LocalWinner, LocalCustomer,
+} from "@/lib/local-store";
+import {
+  CheckCircle, XCircle, AlertTriangle, Clock, FileSearch, ThumbsUp, ThumbsDown,
+  BookOpen, ChevronRight, Plus, X, UserPlus,
+} from "lucide-react";
 
 interface Winner {
   id: number;
@@ -30,23 +38,158 @@ const INTENT_STATUS: Record<string, { label: string; cls: string }> = {
   pending:   { label: "미확인",        cls: "badge-pending" },
 };
 
-export default function WinnersPage() {
-  const [announcementId, setAnnouncementId] = useState("");
+function WinnersPageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryAnnId = searchParams.get("announcementId");
+
+  const [announcements, setAnnouncements] = useState<LocalAnnouncement[]>([]);
+  const [selectedAnn, setSelectedAnn] = useState<LocalAnnouncement | null>(null);
   const [winners, setWinners] = useState<Winner[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
 
-  const loadWinners = async () => {
-    if (!announcementId) return;
+  const [showForm, setShowForm] = useState(false);
+  const [customersOfAnn, setCustomersOfAnn] = useState<LocalCustomer[]>([]);
+  const [form, setForm] = useState({
+    customer_id: "" as string,
+    customer_name: "",
+    unit_number: "",
+    unit_type: "",
+    supply_type: "일반공급",
+    is_preliminary: false,
+  });
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // ─── 공고 목록 로딩 ────────────────────────────────────
+  const loadAnnouncements = useCallback(async () => {
+    try {
+      const r = await api.get(`/announcements/`);
+      setAnnouncements(r.data);
+      return r.data;
+    } catch {
+      const local = localAnnouncements.listAll();
+      setAnnouncements(local);
+      return local;
+    }
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const list = await loadAnnouncements();
+      const active = activeAnnouncement.get();
+      let target: LocalAnnouncement | null = null;
+      if (queryAnnId) target = list.find((a: LocalAnnouncement) => a.id === Number(queryAnnId)) || null;
+      if (!target && active) target = list.find((a: LocalAnnouncement) => a.id === active.id) || (active.snapshot as LocalAnnouncement | null);
+      if (!target && list.length > 0) target = list[0];
+      if (target) setSelectedAnn(target);
+    })();
+  }, [loadAnnouncements, queryAnnId]);
+
+  useEffect(() => {
+    if (selectedAnn) {
+      activeAnnouncement.set(
+        { id: selectedAnn.id, title: selectedAnn.title, announcement_no: selectedAnn.announcement_no },
+        "local", selectedAnn,
+      );
+    }
+  }, [selectedAnn]);
+
+  // ─── 당첨자 목록 로딩 ─────────────────────────────────
+  const loadWinners = useCallback(async () => {
+    if (!selectedAnn) { setWinners([]); return; }
     setLoading(true);
     try {
-      const r = await api.get(`/announcements/${announcementId}`);
-      // 공고의 당첨자 목록은 별도 엔드포인트 (간단히 winner 조회)
-      const wr = await api.get(`/customers/site/1`); // TODO: 실제 연동
-      setWinners([]);
+      const r = await api.get(`/winners/announcement/${selectedAnn.id}`);
+      setWinners(r.data);
+    } catch (err: any) {
+      if (isNetworkError(err) || err?.response?.status === 404) {
+        // 로컬 저장소 fallback
+        const local = localWinners.listByAnnouncement(selectedAnn.id);
+        setWinners(local.map((w) => ({
+          id: w.id,
+          unit_number: w.unit_number || "",
+          unit_type: w.unit_type || "",
+          supply_type: w.supply_type || "일반공급",
+          is_preliminary: w.is_preliminary || false,
+          doc_review_status: w.doc_review_status,
+          contract_intent: w.contract_intent,
+          customer: {
+            name: w.customer_name,
+            phone: w.customer_phone || "",
+            total_score: w.total_score ?? 0,
+          },
+        })));
+      } else {
+        console.error("[winners] load failed", err);
+        setWinners([]);
+      }
     } finally {
       setLoading(false);
     }
+  }, [selectedAnn]);
+
+  useEffect(() => { loadWinners(); }, [loadWinners]);
+
+  // 해당 공고의 고객 목록 (당첨자 등록 시 선택용)
+  useEffect(() => {
+    if (!selectedAnn) { setCustomersOfAnn([]); return; }
+    setCustomersOfAnn(localCustomers.listByAnnouncement(selectedAnn.id));
+  }, [selectedAnn?.id, showForm]);
+
+  // ─── 당첨자 등록 ──────────────────────────────────────
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    if (!selectedAnn) { setFormError("공고를 선택해 주세요."); return; }
+    if (!form.customer_name.trim() && !form.customer_id) {
+      setFormError("고객을 선택하거나 성명을 입력해 주세요.");
+      return;
+    }
+
+    let customerName = form.customer_name.trim();
+    let customerPhone = "";
+    let totalScore = 0;
+    if (form.customer_id) {
+      const c = localCustomers.get(Number(form.customer_id));
+      if (c) {
+        customerName = c.name;
+        customerPhone = c.phone || "";
+        totalScore = c.total_score ?? 0;
+      }
+    }
+
+    try {
+      await api.post(`/winners/`, {
+        announcement_id: selectedAnn.id,
+        customer_id: form.customer_id ? Number(form.customer_id) : null,
+        unit_number: form.unit_number,
+        unit_type: form.unit_type,
+        supply_type: form.supply_type,
+        is_preliminary: form.is_preliminary,
+      });
+    } catch (err: any) {
+      if (!isNetworkError(err) && err?.response?.status !== 404) {
+        setFormError(err?.response?.data?.detail || err?.message || "등록 실패");
+        return;
+      }
+      // 로컬 저장
+      localWinners.create({
+        announcement_id: selectedAnn.id,
+        customer_id: form.customer_id ? Number(form.customer_id) : null,
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        unit_number: form.unit_number,
+        unit_type: form.unit_type,
+        supply_type: form.supply_type,
+        is_preliminary: form.is_preliminary,
+        total_score: totalScore,
+      });
+    }
+
+    setShowForm(false);
+    setForm({ customer_id: "", customer_name: "", unit_number: "", unit_type: "", supply_type: "일반공급", is_preliminary: false });
+    loadWinners();
   };
 
   // 적격 판정 실행
@@ -57,7 +200,13 @@ export default function WinnersPage() {
       alert(`판정 완료: ${r.data.verdict_label}\n${r.data.summary}`);
       loadWinners();
     } catch (e: any) {
-      alert(e.response?.data?.detail || "판정 실패");
+      if (isNetworkError(e) || e?.response?.status === 404) {
+        // 로컬 간이 판정
+        localWinners.update(winnerId, { doc_review_status: "eligible" });
+        loadWinners();
+      } else {
+        alert(e.response?.data?.detail || "판정 실패");
+      }
     } finally {
       setActionLoading(null);
     }
@@ -70,7 +219,12 @@ export default function WinnersPage() {
       await api.patch(`/winners/${winnerId}/intent`, { contract_intent: intent });
       loadWinners();
     } catch (e: any) {
-      alert(e.response?.data?.detail || "업데이트 실패");
+      if (isNetworkError(e) || e?.response?.status === 404) {
+        localWinners.update(winnerId, { contract_intent: intent });
+        loadWinners();
+      } else {
+        alert(e.response?.data?.detail || "업데이트 실패");
+      }
     } finally {
       setActionLoading(null);
     }
@@ -83,7 +237,11 @@ export default function WinnersPage() {
       const r = await api.post(`/contracts/generate/${winnerId}`);
       alert(`계약서 생성 완료: ${r.data.contract_no}`);
     } catch (e: any) {
-      alert(e.response?.data?.detail || "계약서 생성 실패");
+      if (isNetworkError(e) || e?.response?.status === 404) {
+        alert("로컬 모드에서는 방문 계약 페이지에서 생성해 주세요");
+      } else {
+        alert(e.response?.data?.detail || "계약서 생성 실패");
+      }
     } finally {
       setActionLoading(null);
     }
@@ -91,36 +249,64 @@ export default function WinnersPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">당첨자 관리</h1>
-        <p className="text-sm text-gray-500 mt-1">서류 검수 · 적격 판정 · 계약 의사 확인</p>
+      {/* ─── 공고 선택 배너 ───────────────────────────────── */}
+      <div className="mb-5 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center flex-shrink-0">
+            <BookOpen className="w-4 h-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] uppercase tracking-wider text-blue-600 font-medium">현재 관리 공고</div>
+            {announcements.length > 0 ? (
+              <select
+                value={selectedAnn?.id ?? ""}
+                onChange={(e) => {
+                  const ann = announcements.find((a) => a.id === Number(e.target.value));
+                  if (ann) setSelectedAnn(ann);
+                }}
+                className="w-full text-sm font-semibold text-gray-900 bg-transparent border-0 focus:outline-none focus:ring-0 p-0"
+              >
+                {announcements.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.title}{a.announcement_no ? ` (#${a.announcement_no})` : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="text-sm text-gray-600">등록된 공고가 없습니다 — 먼저 모집공고를 등록해 주세요.</div>
+            )}
+          </div>
+          {selectedAnn && (
+            <button
+              onClick={() => router.push(`/announcements/${selectedAnn.id}`)}
+              className="inline-flex items-center gap-1 text-xs text-blue-700 hover:text-blue-900 font-medium"
+            >
+              공고 상세 <ChevronRight className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* 공고 선택 */}
-      <div className="card mb-6">
-        <div className="flex items-center gap-3">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">공고 ID</label>
-            <input
-              type="number"
-              value={announcementId}
-              onChange={(e) => setAnnouncementId(e.target.value)}
-              placeholder="모집공고 ID 입력"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <button
-            onClick={loadWinners}
-            disabled={!announcementId}
-            className="btn-primary mt-5"
-          >
-            당첨자 조회
-          </button>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">당첨자 관리</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {selectedAnn ? `「${selectedAnn.title}」 · 서류 검수 · 적격 판정 · 계약 의사 확인` : "공고를 먼저 선택해주세요"}
+          </p>
         </div>
+        <button
+          onClick={() => { setFormError(null); setShowForm(true); }}
+          disabled={!selectedAnn}
+          className="btn-primary flex items-center gap-2 disabled:opacity-50"
+        >
+          <UserPlus className="w-4 h-4" /> 당첨자 등록
+        </button>
+      </div>
 
-        {/* 통계 요약 */}
-        {winners.length > 0 && (
-          <div className="grid grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-100">
+      {/* 통계 요약 */}
+      {winners.length > 0 && (
+        <div className="card mb-4">
+          <div className="grid grid-cols-4 gap-4">
             {[
               { label: "전체 당첨자", value: winners.length, color: "text-gray-900" },
               { label: "적격", value: winners.filter(w => w.doc_review_status === "eligible").length, color: "text-green-600" },
@@ -133,14 +319,21 @@ export default function WinnersPage() {
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* 당첨자 목록 */}
-      {winners.length === 0 && !loading ? (
+      {!selectedAnn ? (
         <div className="card text-center py-16 text-gray-400">
           <FileSearch className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>공고 ID를 입력하고 당첨자를 조회해주세요</p>
+          <p>먼저 공고를 선택해주세요</p>
+        </div>
+      ) : loading ? (
+        <div className="card text-center py-10 text-gray-400">불러오는 중...</div>
+      ) : winners.length === 0 ? (
+        <div className="card text-center py-16 text-gray-400">
+          <FileSearch className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p>등록된 당첨자가 없습니다</p>
           <p className="text-xs mt-1">부동산원 당첨자 명단을 먼저 등록해야 합니다</p>
         </div>
       ) : (
@@ -186,17 +379,15 @@ export default function WinnersPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1 justify-end flex-wrap">
-                        {/* 검수 대기 상태에서 판정 실행 */}
                         {w.doc_review_status === "pending" && (
                           <button
                             onClick={() => runCheck(w.id)}
                             disabled={isLoading}
-                            className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors"
+                            className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100"
                           >
                             {isLoading ? "..." : "판정 실행"}
                           </button>
                         )}
-                        {/* 적격이고 계약 의사 미확인 */}
                         {w.doc_review_status === "eligible" && w.contract_intent === "pending" && (
                           <>
                             <button onClick={() => updateIntent(w.id, "confirmed")} disabled={isLoading}
@@ -209,7 +400,6 @@ export default function WinnersPage() {
                             </button>
                           </>
                         )}
-                        {/* 계약 의사 확인됨 → 계약서 생성 */}
                         {w.contract_intent === "confirmed" && w.doc_review_status === "eligible" && (
                           <button onClick={() => generateContract(w.id)} disabled={isLoading}
                             className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded hover:bg-purple-100">
@@ -225,6 +415,119 @@ export default function WinnersPage() {
           </table>
         </div>
       )}
+
+      {/* 당첨자 등록 모달 */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">당첨자 등록</h2>
+                {selectedAnn && <p className="text-xs text-gray-500 mt-0.5">{selectedAnn.title}</p>}
+              </div>
+              <button onClick={() => setShowForm(false)} className="p-1 hover:bg-gray-100 rounded-full">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <form onSubmit={handleCreate} className="p-6 space-y-4">
+              {/* 등록된 고객 중에서 선택 */}
+              {customersOfAnn.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">등록된 고객에서 선택</label>
+                  <select
+                    value={form.customer_id}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const c = id ? localCustomers.get(Number(id)) : null;
+                      setForm((p) => ({ ...p, customer_id: id, customer_name: c?.name || "" }));
+                    }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">직접 입력</option>
+                    {customersOfAnn.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.phone || "연락처 없음"})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {!form.customer_id && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">당첨자 성명 *</label>
+                  <input
+                    value={form.customer_name}
+                    onChange={(e) => setForm((p) => ({ ...p, customer_name: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">동호수</label>
+                  <input
+                    value={form.unit_number}
+                    onChange={(e) => setForm((p) => ({ ...p, unit_number: e.target.value }))}
+                    placeholder="101동 1001호"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">주택형</label>
+                  <input
+                    value={form.unit_type}
+                    onChange={(e) => setForm((p) => ({ ...p, unit_type: e.target.value }))}
+                    placeholder="84A"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">공급 유형</label>
+                <select
+                  value={form.supply_type}
+                  onChange={(e) => setForm((p) => ({ ...p, supply_type: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="일반공급">일반공급</option>
+                  {(selectedAnn?.eligibility_rules?.special_supply_types || ["신혼부부", "생애최초", "다자녀", "노부모부양", "기관추천"]).map((t: string) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.is_preliminary}
+                  onChange={(e) => setForm((p) => ({ ...p, is_preliminary: e.target.checked }))}
+                />
+                예비 당첨자
+              </label>
+
+              {formError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {formError}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowForm(false)} className="btn-secondary flex-1">취소</button>
+                <button type="submit" className="btn-primary flex-1">등록</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+export default function WinnersPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-gray-400">로딩 중...</div>}>
+      <WinnersPageInner />
+    </Suspense>
   );
 }

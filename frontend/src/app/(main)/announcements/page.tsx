@@ -172,6 +172,7 @@ export default function AnnouncementsPage() {
           site_id: useSiteId,
           ...annPayload,
           eligibility_rules: eligibilityRules,
+          status: "published", // 등록 즉시 공고 비교/고객/서류 검수에 노출
         });
       } catch (backendErr: any) {
         if (!isNetworkError(backendErr)) throw backendErr;
@@ -195,6 +196,7 @@ export default function AnnouncementsPage() {
           site_id: localSiteId,
           ...annPayload,
           eligibility_rules: eligibilityRules,
+          status: "published", // 등록 즉시 공고 비교/고객/서류 검수에 노출
         });
       }
 
