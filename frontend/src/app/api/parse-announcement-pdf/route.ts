@@ -74,11 +74,36 @@ export async function POST(req: NextRequest) {
       totalPages: pdfData.numpages,
     });
 
-    // 공급대상 표(또는 특별공급 섹션)에 실제 등장하는 유형만 허용
-    // 단, 감지 결과가 불안정(0~1개)하면 화이트리스트를 적용하지 않고 LLM에 위임
-    const detected = detectPresentSpecialTypes(fullText);
-    const allowedSpecialTypes = detected.length >= 2 ? detected : undefined;
-    console.log('[parse-announcement-pdf] detected:', detected, 'applied whitelist:', allowedSpecialTypes || '(none)');
+    // 공급대상 표를 먼저 파싱 — 특공 유형 화이트리스트의 정확한 소스로 사용
+    const supplyUnitsEarly = parseSupplyUnitsFromText(fullText);
+    console.log('[parse-announcement-pdf] supplyUnits early:', supplyUnitsEarly.length);
+
+    // 화이트리스트 도출 전략:
+    //  A) supplyUnits 파싱 성공 → 각 유형별 합계가 >0인 것만 채택 (ground truth)
+    //  B) 실패 → 텍스트 등장 횟수 기반 detectPresentSpecialTypes fallback
+    let allowedSpecialTypes: string[] | undefined;
+    if (supplyUnitsEarly.length > 0) {
+      const sums = supplyUnitsEarly.reduce(
+        (a, u) => ({
+          mc: a.mc + u.multiChild,
+          nw: a.nw + u.newlywed,
+          ep: a.ep + u.elderParent,
+          ft: a.ft + u.firstTime,
+        }),
+        { mc: 0, nw: 0, ep: 0, ft: 0 },
+      );
+      const list: string[] = [];
+      if (sums.mc > 0) list.push('다자녀가구');
+      if (sums.nw > 0) list.push('신혼부부');
+      if (sums.ep > 0) list.push('노부모부양');
+      if (sums.ft > 0) list.push('생애최초');
+      allowedSpecialTypes = list.length > 0 ? list : undefined;
+      console.log('[parse-announcement-pdf] whitelist from supplyUnits:', allowedSpecialTypes, 'sums:', sums);
+    } else {
+      const detected = detectPresentSpecialTypes(fullText);
+      allowedSpecialTypes = detected.length >= 2 ? detected : undefined;
+      console.log('[parse-announcement-pdf] whitelist from text detection:', allowedSpecialTypes || '(none)');
+    }
 
     // 4개 병렬 호출 — 하나 실패해도 나머지는 계속 진행
     const safeCall = async <T>(name: string, fn: () => Promise<T>): Promise<T | null> => {
@@ -195,9 +220,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 공급대상 표 파싱 — 주택형별 총공급·특공 4종·일반·최하층우선 세대수
-    const supplyUnits = parseSupplyUnitsFromText(fullText);
-    console.log('[parse-announcement-pdf] supplyUnits parsed:', supplyUnits.length);
+    // 공급대상 표 파싱 결과 재사용 (위에서 화이트리스트 도출용으로 이미 파싱)
+    const supplyUnits = supplyUnitsEarly;
+    console.log('[parse-announcement-pdf] supplyUnits final:', supplyUnits.length);
     if (supplyUnits.length > 0) {
       console.log('[parse-announcement-pdf] supplyUnits sample:',
         supplyUnits.slice(0, 3).map(u => ({
@@ -407,7 +432,8 @@ function parseSupplyUnitsFromText(fullText: string): SupplyUnit[] {
   // 관대한 약식표기: 2~3자리 숫자 + [A-Z]{1,2} + \d? + [A-Z]{0,2}
   // 예: 40A5H, 40A5, 40A, 40AB5H, 84B2A 등
   const shortCodeRe = /^(\d{2,3})[A-Z]{1,2}\d?[A-Z]{0,2}$/;
-  const decimalRe = /^0?\d{2,3}\.\d{1,4}$/;
+  // 1~3자리 숫자 + 소수점 허용 — 대지지분은 6.4700처럼 1자리일 수 있음
+  const decimalRe = /^0?\d{1,3}\.\d{1,4}$/;
   const intOrDash = (t: string): number | null => {
     if (t === '-' || t === '–' || t === '—' || t === '−') return 0;
     if (/^\d{1,3}$/.test(t)) return parseInt(t, 10);
