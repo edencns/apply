@@ -51,18 +51,46 @@ export default function AnnouncementsPage() {
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
 
   const [sitesError, setSitesError] = useState<string | null>(null);
-  useEffect(() => {
-    sitesApi.list()
-      .then((r) => {
-        setSites(r.data);
-        if (r.data.length > 0) setSiteId(r.data[0].id);
-        else setSitesError("등록된 현장이 없습니다. 먼저 현장을 추가해 주세요.");
-      })
-      .catch((err) => {
-        console.error("[announcements] sites load failed", err);
-        setSitesError(err?.message || "현장 목록을 불러오지 못했습니다 (API 서버 연결 확인).");
-      });
+  const [quickSite, setQuickSite] = useState({ name: "", address: "" });
+  const [creatingSite, setCreatingSite] = useState(false);
+
+  const reloadSites = useCallback(async () => {
+    try {
+      const r = await sitesApi.list();
+      setSites(r.data);
+      if (r.data.length > 0) {
+        setSiteId(r.data[0].id);
+        setSitesError(null);
+      } else {
+        setSitesError("등록된 현장이 없습니다. 아래에서 바로 추가하거나 먼저 현장을 선택해 주세요.");
+      }
+    } catch (err: any) {
+      console.error("[announcements] sites load failed", err);
+      setSitesError(err?.message || "현장 목록을 불러오지 못했습니다 (API 서버 연결 확인).");
+    }
   }, []);
+
+  useEffect(() => { reloadSites(); }, [reloadSites]);
+
+  const handleQuickCreateSite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickSite.name.trim()) return;
+    setCreatingSite(true);
+    try {
+      await sitesApi.create({
+        name: quickSite.name.trim(),
+        address: quickSite.address.trim() || "미입력",
+        total_units: 0,
+      });
+      setQuickSite({ name: "", address: "" });
+      await reloadSites();
+    } catch (err: any) {
+      console.error("[announcements] site create failed", err);
+      alert(err?.response?.data?.detail || err?.message || "현장 추가 실패");
+    } finally {
+      setCreatingSite(false);
+    }
+  };
 
   const loadAnnouncements = useCallback(async () => {
     if (!siteId) return;
@@ -211,7 +239,30 @@ export default function AnnouncementsPage() {
       </div>
       {sitesError && (
         <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {sitesError}
+          <div className="font-medium mb-2">{sitesError}</div>
+          {sites.length === 0 && (
+            <form onSubmit={handleQuickCreateSite} className="flex flex-wrap items-center gap-2 mt-2">
+              <input
+                value={quickSite.name}
+                onChange={(e) => setQuickSite((p) => ({ ...p, name: e.target.value }))}
+                placeholder="현장명 (예: 힐스테이트 안양펠루스)"
+                className="flex-1 min-w-[200px] border border-amber-300 bg-white rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+              <input
+                value={quickSite.address}
+                onChange={(e) => setQuickSite((p) => ({ ...p, address: e.target.value }))}
+                placeholder="주소 (선택)"
+                className="flex-1 min-w-[200px] border border-amber-300 bg-white rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+              <button
+                type="submit"
+                disabled={creatingSite || !quickSite.name.trim()}
+                className="inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-1.5 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {creatingSite ? (<><Loader2 className="w-3.5 h-3.5 animate-spin" /> 추가 중…</>) : "현장 추가"}
+              </button>
+            </form>
+          )}
         </div>
       )}
 
