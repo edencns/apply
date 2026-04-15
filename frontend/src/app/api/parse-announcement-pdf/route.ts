@@ -208,33 +208,45 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // exclusiveAreas: LLM + regex 결과를 합집합으로 병합 (한쪽 누락 보강)
-    const regexAreas = extractExclusiveAreasFromText(fullText);
-    console.log('[parse-announcement-pdf] regex exclusive areas:', regexAreas);
-
-    const llmAreasRaw = (basicResult as any)?.exclusiveAreas;
-    const llmAreas: number[] = Array.isArray(llmAreasRaw)
-      ? llmAreasRaw
-          .map((v: any) => (typeof v === 'number' ? v : parseFloat(String(v).replace(/[^\d.]/g, ''))))
-          .filter((n: number) => Number.isFinite(n) && n > 20 && n < 500)
-      : [];
-    console.log('[parse-announcement-pdf] llm exclusive areas:', llmAreas);
-
-    // 병합: 소숫점 2자리 반올림 key로 중복 제거, 더 정밀한 값 우선
-    const mergedMap = new Map<string, number>();
-    const addToMerged = (n: number) => {
-      const key = n.toFixed(2);
-      const cur = mergedMap.get(key);
-      if (cur === undefined || String(n).length > String(cur).length) {
-        mergedMap.set(key, n);
+    // exclusiveAreas 결정 전략:
+    //  - supplyUnits가 있으면 그게 유일한 ground truth (공급대상 표에서 검증 통과한 행만 존재)
+    //    → regex/LLM 결과는 버림 (중복·노이즈 방지)
+    //  - supplyUnits가 비었을 때만 regex + LLM 합집합 fallback
+    let mergedAreas: number[];
+    if (supplyUnits.length > 0) {
+      // supplyUnits에서 직접 추출, 중복 제거 + 오름차순
+      const map = new Map<string, number>();
+      for (const u of supplyUnits) {
+        map.set(u.exclusiveArea.toFixed(2), u.exclusiveArea);
       }
-    };
-    regexAreas.forEach(addToMerged);
-    llmAreas.forEach(addToMerged);
-    // 공급대상 표 파싱 결과의 전용면적도 병합 (가장 신뢰도 높음)
-    supplyUnits.forEach(u => addToMerged(u.exclusiveArea));
-    const mergedAreas = Array.from(mergedMap.values()).sort((a, b) => a - b);
-    console.log('[parse-announcement-pdf] final exclusiveAreas:', mergedAreas);
+      mergedAreas = Array.from(map.values()).sort((a, b) => a - b);
+      console.log('[parse-announcement-pdf] exclusiveAreas from supplyUnits (authoritative):', mergedAreas);
+    } else {
+      // Fallback: regex + LLM 합집합
+      const regexAreas = extractExclusiveAreasFromText(fullText);
+      console.log('[parse-announcement-pdf] regex exclusive areas:', regexAreas);
+
+      const llmAreasRaw = (basicResult as any)?.exclusiveAreas;
+      const llmAreas: number[] = Array.isArray(llmAreasRaw)
+        ? llmAreasRaw
+            .map((v: any) => (typeof v === 'number' ? v : parseFloat(String(v).replace(/[^\d.]/g, ''))))
+            .filter((n: number) => Number.isFinite(n) && n > 20 && n < 500)
+        : [];
+      console.log('[parse-announcement-pdf] llm exclusive areas:', llmAreas);
+
+      const mergedMap = new Map<string, number>();
+      const addToMerged = (n: number) => {
+        const key = n.toFixed(2);
+        const cur = mergedMap.get(key);
+        if (cur === undefined || String(n).length > String(cur).length) {
+          mergedMap.set(key, n);
+        }
+      };
+      regexAreas.forEach(addToMerged);
+      llmAreas.forEach(addToMerged);
+      mergedAreas = Array.from(mergedMap.values()).sort((a, b) => a - b);
+      console.log('[parse-announcement-pdf] final exclusiveAreas (fallback):', mergedAreas);
+    }
 
     const totalSupplyUnits = supplyUnits.reduce((s, u) => s + u.totalUnits, 0);
 

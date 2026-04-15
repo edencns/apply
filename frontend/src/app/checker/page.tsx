@@ -1427,7 +1427,17 @@ export default function CheckerPage() {
   }, [announcement.complexName, selectedSupplyType, selectedArea, inquired, documents, applicantName, applicantMemo]);
 
   const supplyTypeList = announcement.supplyTypes || [];
-  const areaList = announcement.exclusiveAreas || [];
+  // supplyUnits가 있으면 그게 유일한 source of truth — 구 localStorage 캐시(noise 포함)를 사용자 재업로드 없이도 정화
+  const areaList = useMemo(() => {
+    if (announcement.supplyUnits && announcement.supplyUnits.length > 0) {
+      const map = new Map<string, number>();
+      for (const u of announcement.supplyUnits) {
+        map.set(u.exclusiveArea.toFixed(2), u.exclusiveArea);
+      }
+      return Array.from(map.values()).sort((a, b) => a - b);
+    }
+    return announcement.exclusiveAreas || [];
+  }, [announcement.supplyUnits, announcement.exclusiveAreas]);
   const currentSupplyType = supplyTypeList.find(s => s.type === selectedSupplyType);
   const matchedCondition: SupplyCondition | null = useMemo(() => {
     if (!inquired || !currentSupplyType || !selectedArea) return null;
