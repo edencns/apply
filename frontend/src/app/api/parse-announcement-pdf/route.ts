@@ -45,8 +45,9 @@ export async function POST(req: NextRequest) {
     // 섹션별 텍스트 추출 — 8b-instant 폴백시 TPM 6000 제한에 맞게 축소
     const basicText = extractRelevantSections(fullText, [
       '단지명', '주택유형', '주택형', '소재지', '공급규모', '공급대상', '전용면적',
-      '공급위치', '입주자모집공고일', '입주예정일', '전매', '재당첨',
-    ], 3500);
+      '공급위치', '입주자모집공고일', '입주예정일', '전매', '재당첨', '주택관리번호',
+      '약식표기', '타입',
+    ], 5000);
 
     const generalText = extractRelevantSections(fullText, [
       '일반공급', '1순위', '2순위', '청약통장', '예치금', '가입기간', '납입횟수',
@@ -186,7 +187,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // exclusiveAreas 폴백: LLM이 누락하거나 비정상 값을 반환한 경우 regex로 보강
+    // exclusiveAreas: LLM + regex 결과를 합집합으로 병합 (한쪽 누락 보강)
     const regexAreas = extractExclusiveAreasFromText(fullText);
     console.log('[parse-announcement-pdf] regex exclusive areas:', regexAreas);
 
@@ -196,9 +197,20 @@ export async function POST(req: NextRequest) {
           .map((v: any) => (typeof v === 'number' ? v : parseFloat(String(v).replace(/[^\d.]/g, ''))))
           .filter((n: number) => Number.isFinite(n) && n > 20 && n < 500)
       : [];
+    console.log('[parse-announcement-pdf] llm exclusive areas:', llmAreas);
 
-    // LLM 결과가 비었거나 너무 적으면 regex 결과로 보강
-    const mergedAreas = llmAreas.length >= 1 ? llmAreas : regexAreas;
+    // 병합: 소숫점 2자리 반올림 key로 중복 제거, 더 정밀한 값 우선
+    const mergedMap = new Map<string, number>();
+    const addToMerged = (n: number) => {
+      const key = n.toFixed(2);
+      const cur = mergedMap.get(key);
+      if (cur === undefined || String(n).length > String(cur).length) {
+        mergedMap.set(key, n);
+      }
+    };
+    regexAreas.forEach(addToMerged);
+    llmAreas.forEach(addToMerged);
+    const mergedAreas = Array.from(mergedMap.values()).sort((a, b) => a - b);
     console.log('[parse-announcement-pdf] final exclusiveAreas:', mergedAreas);
 
     const result = {
@@ -219,83 +231,109 @@ export async function POST(req: NextRequest) {
 
 /**
  * PDF 본문에서 전용면적 값 추출.
- * — 한국 표준 공고문의 "주택형 전용면적기준" 컬럼은 3자리 0-패딩 포맷 사용
- *   (예: 040.5800, 042.6600, 061.1400, 084.9876)
- * — 이 포맷은 주거전용면적/공용면적/계약면적/대지지분 등 다른 컬럼과 유일하게 구별됨
- * — Primary: 0-패딩 패턴만 매칭 (정밀)
- * — Fallback: 약식표기 패턴 매칭 (예: "40A5H" → 40)
- * — 최후: 전용면적 라벨 근처의 숫자 (정밀도 낮음)
+ *
+ * 전략:
+ *  1) 약식표기 "40A5H", "61C3H" 류를 찾아 각 타입의 정수부(40, 61, ...) 수집
+ *     — 이것이 공급대상 표에 실제로 존재하는 주택형의 ground-truth 집합
+ *  2) 약식표기 직전/직후의 정밀 소숫점 값(40.5800)을 매칭하여 정밀 값 획득
+ *  3) 0-패딩 패턴(040.5800)도 보조로 수집
+ *  4) 약식표기 정수부 집합에 속하는 값만 최종 채택 (컬럼 간 noise 필터링)
  */
 function extractExclusiveAreasFromText(fullText: string): number[] {
-  const areas = new Map<string, number>(); // key=소숫점 2자리 반올림, value=원본 정밀값
+  const log = (...args: any[]) => console.log('[extractExclusiveAreas]', ...args);
 
+  // ── Step 1: 약식표기 수집 ("40A5H", "61C3H", "84B2A" 등)
+  //    패턴: 2~3자리 숫자 + 영문자 + 1자리 숫자 + 영문자 (+ 선택적 추가 영문자)
+  const shortCodeRegex = /(\d{2,3})([A-Z]\d[A-Z]?)/g;
+  const shortCodeInts = new Set<number>();
+  const shortCodeMatches: Array<{ int: number; index: number; raw: string }> = [];
+  let sm: RegExpExecArray | null;
+  while ((sm = shortCodeRegex.exec(fullText)) !== null) {
+    const n = parseInt(sm[1], 10);
+    if (n >= 20 && n <= 500) {
+      shortCodeInts.add(n);
+      shortCodeMatches.push({ int: n, index: sm.index, raw: sm[0] });
+    }
+  }
+  log('short-code integer parts:', Array.from(shortCodeInts).sort((a, b) => a - b));
+  log('short-code match count:', shortCodeMatches.length);
+
+  // ── Step 2: 모든 소숫점 숫자 수집 (원본 텍스트 인덱스 포함)
+  const decimalRegex = /(\d{2,3}\.\d{1,4})/g;
+  const decimalMatches: Array<{ val: number; index: number; raw: string }> = [];
+  let dm: RegExpExecArray | null;
+  while ((dm = decimalRegex.exec(fullText)) !== null) {
+    const n = parseFloat(dm[1]);
+    if (Number.isFinite(n) && n >= 20 && n <= 500) {
+      decimalMatches.push({ val: n, index: dm.index, raw: dm[1] });
+    }
+  }
+  log('decimal match count (20~500):', decimalMatches.length);
+
+  // ── Step 3: 약식표기 앞뒤 60자 내의 소숫점 값을, 그 약식표기의 정수부에 매칭
+  //    주택형 표에서 "040.5800   40A5H   40.5800" 처럼 가까이 붙어있음
+  const areas = new Map<string, number>();
   const addArea = (n: number) => {
-    if (!Number.isFinite(n) || n < 20 || n > 500) return;
     const key = n.toFixed(2);
-    // 더 정밀한 값(소숫점 4자리)이 들어오면 덮어쓰기
-    if (!areas.has(key) || String(n).length > String(areas.get(key)).length) {
+    const cur = areas.get(key);
+    if (cur === undefined || String(n).length > String(cur).length) {
       areas.set(key, n);
     }
   };
 
-  // ── Primary: 0-패딩 주택형 코드 (예: 040.5800, 084.9876)
-  //    앞자리는 반드시 0으로 시작하는 3자리, 소숫점 1~4자리
-  const paddedPattern = /\b0(\d{2}\.\d{1,4})\b/g;
-  let m: RegExpExecArray | null;
-  while ((m = paddedPattern.exec(fullText)) !== null) {
-    // m[1]은 "40.5800" 식 (선두 0 제거)
-    const n = parseFloat(m[1]);
-    addArea(n);
+  for (const sc of shortCodeMatches) {
+    // 같은 정수부를 가진 소숫점 값 중 약식표기와 가장 가까운 것
+    const nearby = decimalMatches
+      .filter(d => Math.floor(d.val) === sc.int)
+      .map(d => ({ ...d, dist: Math.abs(d.index - sc.index) }))
+      .sort((a, b) => a.dist - b.dist);
+    if (nearby.length > 0 && nearby[0].dist < 200) {
+      // 여러 주택형이 동일 정수부를 가질 수 있음 (예: 66.2800과 66.4900)
+      // → 200자 윈도우 내의 모든 매칭 수집
+      nearby.filter(n => n.dist < 200).forEach(n => addArea(n.val));
+    } else {
+      // 정밀값 못 찾으면 정수부만이라도 (임시)
+      addArea(sc.int);
+    }
   }
 
-  // Primary에서 충분히 수집되면 바로 반환
-  if (areas.size >= 2) {
-    console.log('[extractExclusiveAreas] matched by padded pattern:', Array.from(areas.values()));
-    return Array.from(areas.values()).sort((a, b) => a - b);
+  // ── Step 4: 0-패딩 패턴 "040.5800" 보조 수집 (이중 안전망)
+  const paddedRegex = /0(\d{2}\.\d{1,4})/g;
+  let pm: RegExpExecArray | null;
+  while ((pm = paddedRegex.exec(fullText)) !== null) {
+    const n = parseFloat(pm[1]);
+    if (Number.isFinite(n) && n >= 20 && n <= 500) {
+      // 약식표기 정수부가 있으면 그것과 일치할 때만 채택, 없으면 그대로
+      if (shortCodeInts.size > 0) {
+        if (shortCodeInts.has(Math.floor(n))) addArea(n);
+      } else {
+        addArea(n);
+      }
+    }
   }
 
-  // ── Fallback 1: 약식표기 "40A5H" 류 (숫자 2~3 + 영문 + 숫자 + 영문)
-  //    이 경우는 정수부만 추출되므로 정밀도가 떨어짐 (뒤에 나오는 정밀값과 매칭 시도)
-  const shortCodePattern = /\b(\d{2,3})([A-Z]\d[A-Z]|[A-Z]\d)\b/g;
-  const shortCodeAreas = new Set<number>();
-  while ((m = shortCodePattern.exec(fullText)) !== null) {
-    const n = parseInt(m[1], 10);
-    if (n >= 20 && n <= 500) shortCodeAreas.add(n);
-  }
-
-  // Fallback 2: "전용면적" 라벨 직후 숫자
-  //    "주거전용면적 40.5800" 식의 표 구조에서 뽑기
-  //    라벨과 숫자 사이에 컬럼이 여러 개 낄 수 있으므로 조심
-  const lines = fullText.split('\n');
-  const areaLabelPattern = /(주거\s*전용\s*면적|전용\s*면적\s*기준)/;
-  const decimalPattern = /\b(\d{2,3}\.\d{2,4})\b/g;
-  for (let i = 0; i < lines.length; i++) {
-    if (!areaLabelPattern.test(lines[i])) continue;
-    // 같은 줄 또는 바로 다음 1~20줄에서 소숫점 숫자 수집
-    const windowEnd = Math.min(lines.length, i + 20);
-    for (let j = i; j < windowEnd; j++) {
-      let dm: RegExpExecArray | null;
-      decimalPattern.lastIndex = 0;
-      while ((dm = decimalPattern.exec(lines[j])) !== null) {
-        const n = parseFloat(dm[1]);
-        // 약식표기에서 추출한 정수부와 일치하는 값만 신뢰 (교차 검증)
-        if (shortCodeAreas.size > 0) {
-          const intPart = Math.floor(n);
-          if (shortCodeAreas.has(intPart)) addArea(n);
-        } else {
-          addArea(n);
+  // ── Step 5: 아무 것도 못 찾았으면 공급대상 섹션 근처의 모든 소숫점 (최후 수단)
+  if (areas.size === 0) {
+    log('no matches via structured strategies, falling back to proximity scan');
+    const lines = fullText.split('\n');
+    const triggers = ['공급대상', '주택형', '전용면적'];
+    for (let i = 0; i < lines.length; i++) {
+      if (!triggers.some(t => lines[i].includes(t))) continue;
+      const end = Math.min(lines.length, i + 30);
+      for (let j = i; j < end; j++) {
+        decimalRegex.lastIndex = 0;
+        let rm: RegExpExecArray | null;
+        while ((rm = decimalRegex.exec(lines[j])) !== null) {
+          const n = parseFloat(rm[1]);
+          if (Number.isFinite(n) && n >= 20 && n <= 200) addArea(n);
         }
       }
     }
   }
 
-  if (areas.size === 0 && shortCodeAreas.size > 0) {
-    // 정밀값을 못 찾았으면 정수부만이라도 반환
-    shortCodeAreas.forEach(n => addArea(n));
-  }
-
-  console.log('[extractExclusiveAreas] matched by fallback:', Array.from(areas.values()));
-  return Array.from(areas.values()).sort((a, b) => a - b);
+  const result = Array.from(areas.values()).sort((a, b) => a - b);
+  log('final result:', result);
+  return result;
 }
 
 /**
@@ -381,8 +419,11 @@ ${text}
 }
 
 주의:
-- exclusiveAreas는 공급대상 표에 나오는 모든 서로 다른 전용면적(m²)을 숫자 배열로
-- 소수점 포함 그대로 (예: 59.9821)
+- exclusiveAreas는 공급대상 표의 "주택형 전용면적기준" 컬럼 또는 "주거 전용면적" 컬럼에 나오는
+  모든 주택형의 면적을 빠짐없이 숫자 배열로 반환. 표에 10개 row가 있으면 10개 값 모두 포함.
+- 소수점 정확히 보존 (예: 40.5800, 42.6600, 61.1400, 66.4900)
+- 주거공용면적/계약면적/소계/대지지분 등 다른 컬럼은 절대 포함 금지
+- 66.28과 66.49처럼 소수점이 다르면 별개 값으로 취급
 - 없는 값은 빈 문자열 또는 0`;
   const res = await llmText(prompt, { maxTokens: 1200, jsonMode: true });
   return extractJson(res);
