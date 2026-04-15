@@ -244,8 +244,16 @@ export async function POST(req: NextRequest) {
       };
       regexAreas.forEach(addToMerged);
       llmAreas.forEach(addToMerged);
-      mergedAreas = Array.from(mergedMap.values()).sort((a, b) => a - b);
-      console.log('[parse-announcement-pdf] final exclusiveAreas (fallback):', mergedAreas);
+      const rawMerged = Array.from(mergedMap.values()).sort((a, b) => a - b);
+
+      // 정수 dedup — 소수부가 0인 값은 같은 floor를 가진 다른 값이 있으면 버림
+      // (예: [40, 40.58] → [40.58], [42, 42.66] → [42.66])
+      const hasDecimalSibling = (n: number): boolean => {
+        if (n !== Math.floor(n)) return false; // 이미 소수 있음
+        return rawMerged.some(o => o !== n && Math.floor(o) === n && o !== Math.floor(o));
+      };
+      mergedAreas = rawMerged.filter(n => !hasDecimalSibling(n));
+      console.log('[parse-announcement-pdf] final exclusiveAreas (fallback, int-deduped):', mergedAreas);
     }
 
     const totalSupplyUnits = supplyUnits.reduce((s, u) => s + u.totalUnits, 0);
@@ -330,10 +338,8 @@ function extractExclusiveAreasFromText(fullText: string): number[] {
       // 여러 주택형이 동일 정수부를 가질 수 있음 (예: 66.2800과 66.4900)
       // → 200자 윈도우 내의 모든 매칭 수집
       nearby.filter(n => n.dist < 200).forEach(n => addArea(n.val));
-    } else {
-      // 정밀값 못 찾으면 정수부만이라도 (임시)
-      addArea(sc.int);
     }
+    // 정밀값 못 찾으면 skip — 정수 추가는 소수값과 중복되므로 제거 (예: 40 + 40.58)
   }
 
   // ── Step 4: 0-패딩 패턴 "040.5800" 보조 수집 (이중 안전망)
@@ -394,17 +400,30 @@ function extractExclusiveAreasFromText(fullText: string): number[] {
  */
 function parseSupplyUnitsFromText(fullText: string): SupplyUnit[] {
   // 토큰화: 공백(newline/탭/스페이스)으로 분할
-  const tokens = fullText.split(/\s+/).filter(t => t.length > 0);
-  const shortCodeRe = /^(\d{2,3})([A-Z])(\d)([A-Z])$/;
-  const decimalRe = /^\d{2,3}\.\d{1,4}$/;
+  // 구두점 제거 후에도 다시 시도할 수 있도록 원본 보존
+  const tokens = fullText.split(/\s+/)
+    .map(t => t.replace(/[()[\]{}:;,]/g, '')) // 구두점 제거 — "40A5H," → "40A5H"
+    .filter(t => t.length > 0);
+  // 관대한 약식표기: 2~3자리 숫자 + [A-Z]{1,2} + \d? + [A-Z]{0,2}
+  // 예: 40A5H, 40A5, 40A, 40AB5H, 84B2A 등
+  const shortCodeRe = /^(\d{2,3})[A-Z]{1,2}\d?[A-Z]{0,2}$/;
+  const decimalRe = /^0?\d{2,3}\.\d{1,4}$/;
   const intOrDash = (t: string): number | null => {
     if (t === '-' || t === '–' || t === '—' || t === '−') return 0;
     if (/^\d{1,3}$/.test(t)) return parseInt(t, 10);
     return null;
   };
 
+  // 디버그: 약식표기 후보 먼저 수집
+  const shortCodeCandidates = tokens
+    .map((t, i) => ({ t, i }))
+    .filter(({ t }) => shortCodeRe.test(t));
+  console.log(`[parseSupplyUnits] shortCode candidates: ${shortCodeCandidates.length}`,
+    shortCodeCandidates.slice(0, 15).map(c => c.t));
+
   const units: SupplyUnit[] = [];
   const seen = new Set<string>(); // shortCode 중복 방지
+  const dropReasons: string[] = [];
 
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
@@ -415,11 +434,17 @@ function parseSupplyUnitsFromText(fullText: string): SupplyUnit[] {
     // 표가 아닌 본문에서 약식표기가 단독 등장한 경우를 걸러내기 위해,
     // 바로 다음 토큰이 전용면적(decimal) 이어야 함.
     const t1 = tokens[i + 1];
-    if (!t1 || !decimalRe.test(t1)) continue;
+    if (!t1 || !decimalRe.test(t1)) {
+      if (dropReasons.length < 10) dropReasons.push(`${tok}: next token "${t1}" not decimal`);
+      continue;
+    }
 
     const exclusiveArea = parseFloat(t1);
     // 약식표기 정수부와 전용면적 정수부가 대략 일치해야 함(±1 허용)
-    if (Math.abs(Math.floor(exclusiveArea) - parseInt(m[1], 10)) > 1) continue;
+    if (Math.abs(Math.floor(exclusiveArea) - parseInt(m[1], 10)) > 1) {
+      if (dropReasons.length < 10) dropReasons.push(`${tok}: int mismatch ${m[1]} vs ${exclusiveArea}`);
+      continue;
+    }
 
     // 이후 5개 decimal: 주거공용, 소계, 그밖의, 계약면적, 대지지분
     const decimals: number[] = [];
@@ -434,7 +459,10 @@ function parseSupplyUnitsFromText(fullText: string): SupplyUnit[] {
       // 공백 내 이상 토큰 (예: "(단위:㎡,") 만나면 중단
       break;
     }
-    if (decimals.length < 5) continue; // 계약면적까지 최소 5개 필요
+    if (decimals.length < 5) {
+      if (dropReasons.length < 10) dropReasons.push(`${tok}: only ${decimals.length} decimals found after`);
+      continue;
+    }
 
     const contractArea = decimals[4];
     // 6번째(대지지분)는 있을 수도 없을 수도 → decimals[5] 또는 skip
@@ -462,7 +490,10 @@ function parseSupplyUnitsFromText(fullText: string): SupplyUnit[] {
       ints.push(v);
       k++;
     }
-    if (ints.length < 8) continue;
+    if (ints.length < 8) {
+      if (dropReasons.length < 10) dropReasons.push(`${tok}: only ${ints.length} ints found (need 8)`);
+      continue;
+    }
 
     const [totalUnits, multiChild, newlywed, elderParent, firstTime, specialTotal, general, lowestFloorPriority] = ints;
 
@@ -470,11 +501,11 @@ function parseSupplyUnitsFromText(fullText: string): SupplyUnit[] {
     const expectedSpecial = multiChild + newlywed + elderParent + firstTime;
     const expectedTotal = specialTotal + general;
     if (expectedSpecial !== specialTotal) {
-      console.log(`[parseSupplyUnits] drop ${tok}: special sum mismatch ${expectedSpecial} vs ${specialTotal}`);
+      if (dropReasons.length < 10) dropReasons.push(`${tok}: special sum mismatch ${expectedSpecial} vs ${specialTotal} [${ints.join(',')}]`);
       continue;
     }
     if (expectedTotal !== totalUnits) {
-      console.log(`[parseSupplyUnits] drop ${tok}: total sum mismatch ${expectedTotal} vs ${totalUnits}`);
+      if (dropReasons.length < 10) dropReasons.push(`${tok}: total sum mismatch ${expectedTotal} vs ${totalUnits} [${ints.join(',')}]`);
       continue;
     }
 
@@ -501,6 +532,11 @@ function parseSupplyUnitsFromText(fullText: string): SupplyUnit[] {
     });
     seen.add(tok);
   }
+
+  if (dropReasons.length > 0) {
+    console.log(`[parseSupplyUnits] drops (${dropReasons.length}):`, dropReasons);
+  }
+  console.log(`[parseSupplyUnits] accepted ${units.length} units`);
 
   // 순번 기준 정렬
   units.sort((a, b) => a.no - b.no);
