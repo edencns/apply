@@ -79,12 +79,19 @@ export async function POST(req: NextRequest) {
     const allowedSpecialTypes = detected.length >= 2 ? detected : undefined;
     console.log('[parse-announcement-pdf] detected:', detected, 'applied whitelist:', allowedSpecialTypes || '(none)');
 
-    // 4개 병렬 호출 (토큰 분산)
+    // 4개 병렬 호출 — 하나 실패해도 나머지는 계속 진행
+    const safeCall = async <T>(name: string, fn: () => Promise<T>): Promise<T | null> => {
+      try { return await fn(); }
+      catch (err: any) {
+        console.error(`[parse-announcement-pdf] ${name} failed:`, err?.message || err);
+        return null;
+      }
+    };
     const [basicResult, generalResult, specialResult, documentsResult] = await Promise.all([
-      parseBasicInfo(basicText),
-      parseGeneralSupply(generalText),
-      parseSpecialSupply(specialText, allowedSpecialTypes),
-      parseDocuments(documentsText),
+      safeCall('parseBasicInfo', () => parseBasicInfo(basicText)),
+      safeCall('parseGeneralSupply', () => parseGeneralSupply(generalText)),
+      safeCall('parseSpecialSupply', () => parseSpecialSupply(specialText, allowedSpecialTypes)),
+      safeCall('parseDocuments', () => parseDocuments(documentsText)),
     ]);
 
     console.log('[parse-announcement-pdf] parse results:', {
@@ -399,33 +406,49 @@ function extractRelevantSections(fullText: string, keywords: string[], maxChars 
 /** 공고 기본정보 + 공급대상(면적 목록) */
 async function parseBasicInfo(text: string) {
   if (!text.trim()) return null;
-  const prompt = `다음은 아파트 입주자모집공고문 텍스트입니다. 기본정보와 공급대상 면적 목록을 JSON으로 추출하세요.
+  const prompt = `Extract Korean housing announcement basic info from TEXT into a FLAT JSON object.
 
+TEXT:
 ${text}
 
-반드시 아래 JSON 형식만 반환 (설명 없이):
+OUTPUT RULES (must follow exactly):
+- Return ONE flat JSON object with EXACTLY these 11 English keys and no others.
+- Do NOT nest Korean column headers as keys (no "비규제지역", "재당첨제한", "택지유형" as keys).
+- Do NOT create any nested objects except "exclusiveAreas" which is an array of numbers.
+- Values in Korean are OK, but keys are STRICTLY the English names below.
+- If a value is unknown use "" (empty string) or 0 for numeric fields.
+
+Required output schema (copy this structure exactly, only fill values):
 {
-  "announcementName": "정확한 단지명",
-  "housingType": "민영주택 또는 국민주택",
-  "region": "광역 시/도 (예: 경기도)",
-  "localRegion": "해당지역 시/군/구 (예: 안양시)",
-  "otherRegions": "기타지역 설명",
+  "announcementName": "",
+  "housingType": "",
+  "region": "",
+  "localRegion": "",
+  "otherRegions": "",
   "isRegulated": false,
-  "resaleRestriction": "전매제한 기간 또는 '없음'",
-  "rewinRestriction": "재당첨제한 또는 '없음'",
-  "announcementDate": "YYYY-MM-DD",
-  "exclusiveAreas": [59.9821, 74.9534, 84.9876],
-  "totalUnits": 500
+  "resaleRestriction": "",
+  "rewinRestriction": "",
+  "announcementDate": "",
+  "exclusiveAreas": [],
+  "totalUnits": 0
 }
 
-주의:
-- exclusiveAreas는 공급대상 표의 "주택형 전용면적기준" 컬럼 또는 "주거 전용면적" 컬럼에 나오는
-  모든 주택형의 면적을 빠짐없이 숫자 배열로 반환. 표에 10개 row가 있으면 10개 값 모두 포함.
-- 소수점 정확히 보존 (예: 40.5800, 42.6600, 61.1400, 66.4900)
-- 주거공용면적/계약면적/소계/대지지분 등 다른 컬럼은 절대 포함 금지
-- 66.28과 66.49처럼 소수점이 다르면 별개 값으로 취급
-- 없는 값은 빈 문자열 또는 0`;
-  const res = await llmText(prompt, { maxTokens: 1200, jsonMode: true });
+Guidance for specific fields:
+- announcementName: 단지명 (예: "안양역 푸르지오 더샵")
+- housingType: "민영주택" 또는 "국민주택"
+- region: 광역 시/도 (예: "경기도")
+- localRegion: 시/군/구 (예: "안양시")
+- otherRegions: 기타지역 설명 또는 ""
+- isRegulated: 규제지역이면 true, 아니면 false
+- resaleRestriction: "전매제한 ○○년" 또는 "없음"
+- rewinRestriction: "재당첨제한 ○○년" 또는 "없음"
+- announcementDate: "YYYY-MM-DD" (모집공고일)
+- exclusiveAreas: 공급대상 표의 "주거 전용면적" 컬럼 모든 값을 숫자 배열로 (예: [40.58, 42.66, 61.14, 66.49])
+  • 소수점 보존
+  • 주거공용면적 / 계약면적 / 소계 / 대지지분 은 제외
+  • 표에 10 row가 있으면 10개 숫자 반환
+- totalUnits: 공급규모 총 세대수 숫자`;
+  const res = await llmText(prompt, { maxTokens: 1800, jsonMode: true });
   return extractJson(res);
 }
 

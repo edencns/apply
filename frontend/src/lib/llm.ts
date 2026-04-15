@@ -35,6 +35,21 @@ function isRequestTooLarge(err: any): boolean {
   return status === 413 || msg.includes('Request too large') || msg.includes('too large');
 }
 
+function isJsonValidateFailed(err: any): boolean {
+  const code = err?.error?.code || err?.code || err?.response?.data?.error?.code;
+  const msg = String(err?.message || '');
+  return code === 'json_validate_failed' || msg.includes('json_validate_failed') || msg.includes('Failed to generate JSON');
+}
+
+/** Groq가 json_validate_failed로 400을 던질 때 — 실패 시 부분 텍스트를 복구 */
+function extractFailedGeneration(err: any): string | null {
+  const raw =
+    err?.error?.failed_generation ||
+    err?.failed_generation ||
+    err?.response?.data?.error?.failed_generation;
+  return typeof raw === 'string' ? raw : null;
+}
+
 /**
  * 키 × 모델 폴백 시퀀스로 시도
  * - 각 키에 대해 primary 모델 → 실패하면 다음 키
@@ -71,8 +86,9 @@ export async function llmText(
   const primary = opts?.model || TEXT_MODEL;
   let currentPrompt = prompt;
   let attempts = 0;
+  let jsonReminderAdded = false;
 
-  while (attempts < 3) {
+  while (attempts < 4) {
     try {
       return await callWithFallback(primary, async (client, model) => {
         const req: any = {
@@ -88,13 +104,32 @@ export async function llmText(
         return res.choices[0]?.message?.content || '';
       });
     } catch (err: any) {
-      if (isRequestTooLarge(err) && attempts < 2) {
-        // 프롬프트를 2/3로 축소하여 재시도 (앞부분 유지)
+      if (isRequestTooLarge(err) && attempts < 3) {
         const newLen = Math.floor(currentPrompt.length * 0.66);
         console.warn(`[llmText] request too large, shrinking prompt ${currentPrompt.length} → ${newLen}`);
         currentPrompt = currentPrompt.slice(0, newLen) + '\n…(이하 생략)';
         attempts++;
         continue;
+      }
+      // Groq JSON mode validation failure — failed_generation 부분을 먼저 구제 시도
+      if (isJsonValidateFailed(err)) {
+        const partial = extractFailedGeneration(err);
+        if (partial && attempts === 0) {
+          console.warn(`[llmText] json_validate_failed — recovering from failed_generation (${partial.length} chars)`);
+          // 복구된 텍스트를 반환 → 호출자의 extractJson이 가능한 부분을 추출
+          return partial;
+        }
+        if (!jsonReminderAdded && attempts < 3) {
+          console.warn('[llmText] json_validate_failed — retrying with strict reminder');
+          currentPrompt = currentPrompt +
+            '\n\nSTRICT REMINDER: Output must be ONE valid JSON object. ' +
+            'No nested objects beyond the schema. ' +
+            'No Korean text as keys — keys are strictly English as specified. ' +
+            'Close all braces. Output nothing before or after the JSON.';
+          jsonReminderAdded = true;
+          attempts++;
+          continue;
+        }
       }
       throw err;
     }
@@ -180,8 +215,47 @@ export function extractJson<T = any>(text: string): T | null {
       }
     }
     if (end > 0) {
-      try { return JSON.parse(raw.slice(0, end)); } catch { return null; }
+      try { return JSON.parse(raw.slice(0, end)); } catch { /* fall through */ }
     }
-    return null;
+    // 마지막 수단: 누락된 닫는 괄호 자동 추가 (truncation 복구)
+    try {
+      let depth2 = 0;
+      let inString2 = false;
+      let escape2 = false;
+      let lastSafe = -1; // 마지막으로 문자열 밖에서 안전하게 종료할 수 있는 위치
+      for (let i = 0; i < raw.length; i++) {
+        const ch = raw[i];
+        if (escape2) { escape2 = false; continue; }
+        if (ch === '\\') { escape2 = true; continue; }
+        if (ch === '"') { inString2 = !inString2; continue; }
+        if (inString2) continue;
+        if (ch === '{' || ch === '[') depth2++;
+        else if (ch === '}' || ch === ']') depth2--;
+        if (!inString2 && (ch === ',' || ch === '}' || ch === ']')) lastSafe = i;
+      }
+      // 문자열 안에서 잘린 경우 → 마지막 안전 위치까지만 사용
+      const trimmed = inString2 && lastSafe > 0 ? raw.slice(0, lastSafe + 1) : raw;
+      // 누락된 괄호 채우기
+      let closing = '';
+      let d = 0;
+      let inS = false;
+      let esc = false;
+      const stack: string[] = [];
+      for (let i = 0; i < trimmed.length; i++) {
+        const ch = trimmed[i];
+        if (esc) { esc = false; continue; }
+        if (ch === '\\') { esc = true; continue; }
+        if (ch === '"') { inS = !inS; continue; }
+        if (inS) continue;
+        if (ch === '{' || ch === '[') { stack.push(ch === '{' ? '}' : ']'); d++; }
+        else if (ch === '}' || ch === ']') { stack.pop(); d--; }
+      }
+      while (stack.length) closing += stack.pop();
+      // trailing 쉼표 제거
+      const cleanedTail = trimmed.replace(/,\s*$/, '');
+      return JSON.parse(cleanedTail + closing);
+    } catch {
+      return null;
+    }
   }
 }
