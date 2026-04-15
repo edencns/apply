@@ -907,7 +907,15 @@ export default function CheckerPage() {
     if (data.rewinRestriction) update.rewinRestriction = data.rewinRestriction;
     if (data.announcementDate) update.announcementDate = data.announcementDate;
     if (data.requiredDocuments) update.requiredDocuments = data.requiredDocuments;
-    if (Array.isArray(data.exclusiveAreas)) update.exclusiveAreas = data.exclusiveAreas;
+    if (Array.isArray(data.exclusiveAreas)) {
+      // 문자열/숫자 혼재 대응 + 숫자 변환 + 중복 제거 + 정렬
+      const normalized = Array.from(new Set(
+        data.exclusiveAreas
+          .map((v: any) => typeof v === 'number' ? v : parseFloat(String(v).replace(/[^\d.]/g, '')))
+          .filter((n: number) => Number.isFinite(n) && n > 20 && n < 500)
+      )).sort((a: any, b: any) => a - b) as number[];
+      update.exclusiveAreas = normalized;
+    }
     if (data.supplyTypes?.length) {
       update.supplyTypes = data.supplyTypes;
     }

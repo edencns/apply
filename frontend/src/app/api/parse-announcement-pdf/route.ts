@@ -186,8 +186,24 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // exclusiveAreas 폴백: LLM이 누락하거나 비정상 값을 반환한 경우 regex로 보강
+    const regexAreas = extractExclusiveAreasFromText(fullText);
+    console.log('[parse-announcement-pdf] regex exclusive areas:', regexAreas);
+
+    const llmAreasRaw = (basicResult as any)?.exclusiveAreas;
+    const llmAreas: number[] = Array.isArray(llmAreasRaw)
+      ? llmAreasRaw
+          .map((v: any) => (typeof v === 'number' ? v : parseFloat(String(v).replace(/[^\d.]/g, ''))))
+          .filter((n: number) => Number.isFinite(n) && n > 20 && n < 500)
+      : [];
+
+    // LLM 결과가 비었거나 너무 적으면 regex 결과로 보강
+    const mergedAreas = llmAreas.length >= 1 ? llmAreas : regexAreas;
+    console.log('[parse-announcement-pdf] final exclusiveAreas:', mergedAreas);
+
     const result = {
       ...(basicResult || {}),
+      exclusiveAreas: mergedAreas,
       supplyTypes,
       requiredDocuments: documentsResult || { common: [], perSupplyType: {} },
       totalPages: pdfData.numpages,
@@ -199,6 +215,56 @@ export async function POST(req: NextRequest) {
     console.error('parse-announcement-pdf error:', err);
     return NextResponse.json({ error: err.message || 'PDF 파싱 중 오류' }, { status: 500 });
   }
+}
+
+/**
+ * PDF 본문에서 전용면적 값 추출.
+ * — 공급대상 표에 나오는 "주택형" 또는 "전용면적(m²)" 컬럼값을 regex로 수집
+ * — 타입 접미사(A/B/C 등) 제거, 중복 제거, 20~500m² 범위 필터
+ */
+function extractExclusiveAreasFromText(fullText: string): number[] {
+  const areas = new Set<number>();
+
+  // 패턴 1: "74.9786A", "84.9534B" 처럼 숫자.숫자 + 선택적 영문 접미사
+  //         (주로 주택형 컬럼)
+  const typeCodePattern = /(\d{2,3}\.\d{2,4})[A-Za-z]?/g;
+  // 패턴 2: "전용면적 74.98m²" 같은 명시적 라벨
+  const labeledPattern = /전용\s*면적[^0-9]{0,10}(\d{2,3}(?:\.\d{1,4})?)/g;
+  // 패턴 3: 단독 숫자 + m²
+  const m2Pattern = /(\d{2,3}(?:\.\d{1,4})?)\s*(?:m²|㎡|m2)/g;
+
+  // 공급대상/주택형 섹션 근처만 스캔하여 노이즈 최소화
+  const lines = fullText.split('\n');
+  const relevantLines: string[] = [];
+  const triggers = ['공급대상', '공급 대상', '주택형', '전용면적', '전용 면적', '주택관리번호'];
+  for (let i = 0; i < lines.length; i++) {
+    if (triggers.some(t => lines[i].includes(t))) {
+      const end = Math.min(lines.length, i + 30);
+      for (let j = i; j < end; j++) relevantLines.push(lines[j]);
+    }
+  }
+  const scope = relevantLines.length > 0 ? relevantLines.join('\n') : fullText;
+
+  const collect = (re: RegExp, source: string) => {
+    let m: RegExpExecArray | null;
+    re.lastIndex = 0;
+    while ((m = re.exec(source)) !== null) {
+      const n = parseFloat(m[1]);
+      if (Number.isFinite(n) && n >= 20 && n <= 500) areas.add(n);
+    }
+  };
+  collect(typeCodePattern, scope);
+  collect(labeledPattern, scope);
+  collect(m2Pattern, scope);
+
+  // 스코프에서 못 찾았으면 전체 텍스트로 fallback
+  if (areas.size === 0) {
+    collect(typeCodePattern, fullText);
+    collect(labeledPattern, fullText);
+    collect(m2Pattern, fullText);
+  }
+
+  return Array.from(areas).sort((a, b) => a - b);
 }
 
 /**
