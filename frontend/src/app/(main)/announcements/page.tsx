@@ -46,13 +46,22 @@ export default function AnnouncementsPage() {
   });
   const [pdfParsing, setPdfParsing] = useState(false);
   const [pdfFilled, setPdfFilled] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
 
+  const [sitesError, setSitesError] = useState<string | null>(null);
   useEffect(() => {
-    sitesApi.list().then((r) => {
-      setSites(r.data);
-      if (r.data.length > 0) setSiteId(r.data[0].id);
-    }).catch(() => {});
+    sitesApi.list()
+      .then((r) => {
+        setSites(r.data);
+        if (r.data.length > 0) setSiteId(r.data[0].id);
+        else setSitesError("등록된 현장이 없습니다. 먼저 현장을 추가해 주세요.");
+      })
+      .catch((err) => {
+        console.error("[announcements] sites load failed", err);
+        setSitesError(err?.message || "현장 목록을 불러오지 못했습니다 (API 서버 연결 확인).");
+      });
   }, []);
 
   const loadAnnouncements = useCallback(async () => {
@@ -68,19 +77,39 @@ export default function AnnouncementsPage() {
 
   useEffect(() => { loadAnnouncements(); }, [loadAnnouncements]);
 
+  /** datetime-local ("YYYY-MM-DDTHH:mm") → "YYYY-MM-DDTHH:mm:00" (FastAPI 친화) */
+  const normalizeDateTime = (v: string): string | null => {
+    if (!v) return null;
+    // 이미 초 포함이면 그대로, 아니면 ":00" 추가
+    return /\d{2}:\d{2}:\d{2}/.test(v) ? v : `${v}:00`;
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!siteId) return;
+    setFormError(null);
+
+    // 1) 현장 선택 확인 (사이트가 하나도 로드되지 않았을 때 조용히 실패하던 버그)
+    if (!siteId) {
+      setFormError("현장이 선택되지 않았습니다. 먼저 현장을 추가하거나 선택해 주세요.");
+      return;
+    }
+    // 2) 제목 필수
+    if (!form.title.trim()) {
+      setFormError("공고명을 입력해 주세요.");
+      return;
+    }
+
+    setSubmitting(true);
     try {
       await api.post("/announcements/", {
         site_id: siteId,
-        title: form.title,
+        title: form.title.trim(),
         announcement_no: form.announcement_no || null,
-        application_start: form.application_start || null,
-        application_end: form.application_end || null,
-        winner_announce_date: form.winner_announce_date || null,
-        contract_start: form.contract_start || null,
-        contract_end: form.contract_end || null,
+        application_start: normalizeDateTime(form.application_start),
+        application_end: normalizeDateTime(form.application_end),
+        winner_announce_date: normalizeDateTime(form.winner_announce_date),
+        contract_start: normalizeDateTime(form.contract_start),
+        contract_end: normalizeDateTime(form.contract_end),
         eligibility_rules: {
           no_home_required: form.rules.no_home_required,
           region_priority: form.rules.region_priority,
@@ -91,10 +120,20 @@ export default function AnnouncementsPage() {
         },
       });
       setShowForm(false);
+      setPdfFilled([]);
       setForm({ title: "", announcement_no: "", application_start: "", application_end: "", winner_announce_date: "", contract_start: "", contract_end: "", rules: { ...DEFAULT_RULES }, regionInput: "" });
       loadAnnouncements();
-    } catch (e: any) {
-      alert(e.response?.data?.detail || "등록 실패");
+    } catch (err: any) {
+      // axios 에러 / 네트워크 에러 / 일반 에러 모두 커버
+      console.error("[announcements] create failed", err);
+      const detail =
+        err?.response?.data?.detail ||
+        (Array.isArray(err?.response?.data) ? JSON.stringify(err.response.data) : null) ||
+        err?.message ||
+        "등록 실패 — 서버 응답이 없습니다.";
+      setFormError(typeof detail === "string" ? detail : JSON.stringify(detail));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -170,6 +209,11 @@ export default function AnnouncementsPage() {
           {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       </div>
+      {sitesError && (
+        <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {sitesError}
+        </div>
+      )}
 
       {/* 공고 목록 */}
       {loading ? (
@@ -367,9 +411,27 @@ export default function AnnouncementsPage() {
                 </div>
               </div>
 
+              {formError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {formError}
+                </div>
+              )}
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowForm(false)} className="btn-secondary flex-1">취소</button>
-                <button type="submit" className="btn-primary flex-1">등록</button>
+                <button
+                  type="button"
+                  onClick={() => { setShowForm(false); setFormError(null); }}
+                  disabled={submitting}
+                  className="btn-secondary flex-1 disabled:opacity-50"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting || !siteId}
+                  className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {submitting ? (<><Loader2 className="w-4 h-4 animate-spin" /> 등록 중…</>) : "등록"}
+                </button>
               </div>
             </form>
           </div>
