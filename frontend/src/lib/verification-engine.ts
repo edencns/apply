@@ -102,12 +102,33 @@ export interface AnnouncementRequirements {
   supplyTypes?: ParsedSupplyType[]; // 공급유형별 상세
   /** 공급대상 전용면적 목록 (m²) — PDF에서 추출, 드롭다운 옵션으로 사용 */
   exclusiveAreas?: number[];
+  /** 주택형별 공급 세대수 상세 — PDF "공급대상" 표에서 파싱 */
+  supplyUnits?: SupplyUnit[];
+  /** 총 공급 세대수 (supplyUnits 합계) */
+  totalSupplyUnits?: number;
   localRegion?: string;    // 해당지역 (예: "천안시")
   otherRegions?: string;   // 기타지역 설명
   announcementDate?: string; // 공고일
   isRegulated?: boolean;   // 규제지역 여부
   resaleRestriction?: string; // 전매제한
   rewinRestriction?: string;  // 재당첨제한
+}
+
+/** 주택형(공급대상) 한 행 — 공고문 "공급대상 및 공급금액" 표에서 직접 파싱 */
+export interface SupplyUnit {
+  no: number;              // 01, 02, ... 주택형 순번
+  modelCode: string;       // "040.5800" (PDF 좌측 주택형 코드)
+  shortCode: string;       // "40A5H" (약식표기)
+  exclusiveArea: number;   // 전용면적 (40.58)
+  contractArea: number;    // 계약면적 (84.67)
+  totalUnits: number;      // 총공급 세대수
+  multiChild: number;      // 다자녀가구 특공
+  newlywed: number;        // 신혼부부 특공
+  elderParent: number;     // 노부모부양 특공
+  firstTime: number;       // 생애최초 특공
+  specialTotal: number;    // 특공 계
+  general: number;         // 일반공급
+  lowestFloorPriority: number; // 최하층 우선배정
 }
 
 /** PDF 파싱된 공급유형별 상세 */

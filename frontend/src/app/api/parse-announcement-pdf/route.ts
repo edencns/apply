@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { llmText, extractJson, hasLlmKey } from '@/lib/llm';
+import type { SupplyUnit } from '@/lib/verification-engine';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -194,6 +195,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 공급대상 표 파싱 — 주택형별 총공급·특공 4종·일반·최하층우선 세대수
+    const supplyUnits = parseSupplyUnitsFromText(fullText);
+    console.log('[parse-announcement-pdf] supplyUnits parsed:', supplyUnits.length);
+    if (supplyUnits.length > 0) {
+      console.log('[parse-announcement-pdf] supplyUnits sample:',
+        supplyUnits.slice(0, 3).map(u => ({
+          no: u.no, short: u.shortCode, excl: u.exclusiveArea, contract: u.contractArea,
+          total: u.totalUnits, mc: u.multiChild, nw: u.newlywed, ep: u.elderParent, ft: u.firstTime,
+          sp: u.specialTotal, gen: u.general,
+        }))
+      );
+    }
+
     // exclusiveAreas: LLM + regex 결과를 합집합으로 병합 (한쪽 누락 보강)
     const regexAreas = extractExclusiveAreasFromText(fullText);
     console.log('[parse-announcement-pdf] regex exclusive areas:', regexAreas);
@@ -217,12 +231,18 @@ export async function POST(req: NextRequest) {
     };
     regexAreas.forEach(addToMerged);
     llmAreas.forEach(addToMerged);
+    // 공급대상 표 파싱 결과의 전용면적도 병합 (가장 신뢰도 높음)
+    supplyUnits.forEach(u => addToMerged(u.exclusiveArea));
     const mergedAreas = Array.from(mergedMap.values()).sort((a, b) => a - b);
     console.log('[parse-announcement-pdf] final exclusiveAreas:', mergedAreas);
+
+    const totalSupplyUnits = supplyUnits.reduce((s, u) => s + u.totalUnits, 0);
 
     const result = {
       ...(basicResult || {}),
       exclusiveAreas: mergedAreas,
+      supplyUnits,
+      totalSupplyUnits: totalSupplyUnits || undefined,
       supplyTypes,
       requiredDocuments: documentsResult || { common: [], perSupplyType: {} },
       totalPages: pdfData.numpages,
@@ -341,6 +361,138 @@ function extractExclusiveAreasFromText(fullText: string): number[] {
   const result = Array.from(areas.values()).sort((a, b) => a - b);
   log('final result:', result);
   return result;
+}
+
+/**
+ * 공급대상 표 파싱 — 주택형별 공급 세대수 상세 추출.
+ *
+ * 전략: PDF "공급대상" 표의 약식표기(40A5H, 42A4H, 61C3H…)를 anchor로 사용.
+ * pdf-parse 결과는 라인 분할이 불균일하지만 공백 기준 토큰 순서는 비교적 안정적이므로,
+ * 전체 텍스트를 whitespace-tokenize 한 뒤 각 약식표기 토큰 직후의 14개 숫자를 읽는다.
+ *
+ * 토큰 순서 (행 1개 기준):
+ *   [shortCode] 전용면적 주거공용면적 소계 그밖의공용면적 계약면적 대지지분
+ *               총공급 다자녀 신혼 노부모 생애최초 특공계 일반 최하층
+ * "-"는 공란(0)을 의미.
+ *
+ * 검증:
+ *  - totalUnits === specialTotal + general
+ *  - specialTotal === multiChild + newlywed + elderParent + firstTime
+ *  이 둘 중 하나라도 어긋나면 해당 row는 버림(오파싱).
+ */
+function parseSupplyUnitsFromText(fullText: string): SupplyUnit[] {
+  // 토큰화: 공백(newline/탭/스페이스)으로 분할
+  const tokens = fullText.split(/\s+/).filter(t => t.length > 0);
+  const shortCodeRe = /^(\d{2,3})([A-Z])(\d)([A-Z])$/;
+  const decimalRe = /^\d{2,3}\.\d{1,4}$/;
+  const intOrDash = (t: string): number | null => {
+    if (t === '-' || t === '–' || t === '—' || t === '−') return 0;
+    if (/^\d{1,3}$/.test(t)) return parseInt(t, 10);
+    return null;
+  };
+
+  const units: SupplyUnit[] = [];
+  const seen = new Set<string>(); // shortCode 중복 방지
+
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i];
+    const m = tok.match(shortCodeRe);
+    if (!m) continue;
+    if (seen.has(tok)) continue;
+
+    // 표가 아닌 본문에서 약식표기가 단독 등장한 경우를 걸러내기 위해,
+    // 바로 다음 토큰이 전용면적(decimal) 이어야 함.
+    const t1 = tokens[i + 1];
+    if (!t1 || !decimalRe.test(t1)) continue;
+
+    const exclusiveArea = parseFloat(t1);
+    // 약식표기 정수부와 전용면적 정수부가 대략 일치해야 함(±1 허용)
+    if (Math.abs(Math.floor(exclusiveArea) - parseInt(m[1], 10)) > 1) continue;
+
+    // 이후 5개 decimal: 주거공용, 소계, 그밖의, 계약면적, 대지지분
+    const decimals: number[] = [];
+    let j = i + 1;
+    while (decimals.length < 6 && j < tokens.length) {
+      const t = tokens[j];
+      if (decimalRe.test(t)) {
+        decimals.push(parseFloat(t));
+        j++;
+        continue;
+      }
+      // 공백 내 이상 토큰 (예: "(단위:㎡,") 만나면 중단
+      break;
+    }
+    if (decimals.length < 5) continue; // 계약면적까지 최소 5개 필요
+
+    const contractArea = decimals[4];
+    // 6번째(대지지분)는 있을 수도 없을 수도 → decimals[5] 또는 skip
+
+    // 이후 8개의 정수/대시: 총공급, 다자녀, 신혼, 노부모, 생애최초, 특공계, 일반, 최하층
+    const ints: number[] = [];
+    let k = j;
+    // decimals가 5개(대지지분이 아직 남음)인 경우 → 대지지분을 먼저 건너뛰기
+    while (k < tokens.length && ints.length < 8) {
+      const t = tokens[k];
+      // 대지지분(decimal) 스킵 (decimals[5] 자리)
+      if (decimals.length === 5 && decimalRe.test(t)) {
+        decimals.push(parseFloat(t));
+        k++;
+        continue;
+      }
+      const v = intOrDash(t);
+      if (v === null) {
+        // 숫자/대시가 아니면 — 한번 더 다음 토큰을 본다 (줄바꿈 noise 대응)
+        // 단, 다시 shortCode 나오면 중단
+        if (shortCodeRe.test(t)) break;
+        k++;
+        continue;
+      }
+      ints.push(v);
+      k++;
+    }
+    if (ints.length < 8) continue;
+
+    const [totalUnits, multiChild, newlywed, elderParent, firstTime, specialTotal, general, lowestFloorPriority] = ints;
+
+    // 정합성 검증: 총공급 = 특공계 + 일반, 특공계 = 4종 합계
+    const expectedSpecial = multiChild + newlywed + elderParent + firstTime;
+    const expectedTotal = specialTotal + general;
+    if (expectedSpecial !== specialTotal) {
+      console.log(`[parseSupplyUnits] drop ${tok}: special sum mismatch ${expectedSpecial} vs ${specialTotal}`);
+      continue;
+    }
+    if (expectedTotal !== totalUnits) {
+      console.log(`[parseSupplyUnits] drop ${tok}: total sum mismatch ${expectedTotal} vs ${totalUnits}`);
+      continue;
+    }
+
+    // 순번/주택형 코드는 shortCode 앞쪽 2개 토큰에 있을 가능성 높음
+    const prev1 = tokens[i - 1]; // 주택형 코드 (040.5800 형태)
+    const prev2 = tokens[i - 2]; // 순번 (01, 02, …)
+    const modelCode = prev1 && /^0?\d{2,3}\.\d{1,4}[A-Z]?$/.test(prev1) ? prev1 : '';
+    const no = prev2 && /^\d{1,2}$/.test(prev2) ? parseInt(prev2, 10) : units.length + 1;
+
+    units.push({
+      no,
+      modelCode,
+      shortCode: tok,
+      exclusiveArea,
+      contractArea,
+      totalUnits,
+      multiChild,
+      newlywed,
+      elderParent,
+      firstTime,
+      specialTotal,
+      general,
+      lowestFloorPriority,
+    });
+    seen.add(tok);
+  }
+
+  // 순번 기준 정렬
+  units.sort((a, b) => a.no - b.no);
+  return units;
 }
 
 /**

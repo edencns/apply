@@ -6,6 +6,7 @@ import {
   type AnnouncementRequirements,
   type DocumentVerifiedData,
   type SupplyCondition,
+  type SupplyUnit,
   getDefaultAnnouncement,
   getDefaultDocuments,
 } from '@/lib/verification-engine';
@@ -509,6 +510,129 @@ function Tooltip({ children, content }: { children: React.ReactNode; content: Re
 }
 
 // ============ 전용면적 편집기 ============
+
+/** 공급대상 주택형 목록 — PDF 공급대상 표에서 파싱된 세대수 상세를 카드로 표시 */
+function SupplyUnitsPanel({
+  units,
+  selectedArea,
+  selectedSupplyType,
+  onSelectArea,
+}: {
+  units: SupplyUnit[];
+  selectedArea: string;
+  selectedSupplyType: string;
+  onSelectArea: (area: string) => void;
+}) {
+  if (!units || units.length === 0) return null;
+
+  const totals = units.reduce(
+    (acc, u) => ({
+      total: acc.total + u.totalUnits,
+      multiChild: acc.multiChild + u.multiChild,
+      newlywed: acc.newlywed + u.newlywed,
+      elderParent: acc.elderParent + u.elderParent,
+      firstTime: acc.firstTime + u.firstTime,
+      general: acc.general + u.general,
+      special: acc.special + u.specialTotal,
+    }),
+    { total: 0, multiChild: 0, newlywed: 0, elderParent: 0, firstTime: 0, general: 0, special: 0 },
+  );
+
+  // 특정 공급유형을 선택했을 때 해당 유형으로 배정이 있는 주택형만 available
+  const getAvailableCount = (u: SupplyUnit, type: string): number => {
+    const t = (type || '').replace(/\s+/g, '');
+    if (t === '일반공급') return u.general;
+    if (/다자녀/.test(t)) return u.multiChild;
+    if (/신혼부부|신혼/.test(t)) return u.newlywed;
+    if (/노부모/.test(t)) return u.elderParent;
+    if (/생애최초|생애/.test(t)) return u.firstTime;
+    return u.totalUnits;
+  };
+
+  return (
+    <div className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
+      <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center gap-2">
+          <span className="px-2 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-bold">
+            공급대상
+          </span>
+          <span className="text-xs font-bold text-indigo-900">
+            총 {totals.total}세대 · {units.length}개 주택형
+          </span>
+        </div>
+        <div className="flex items-center gap-1 text-[10px] text-gray-600 font-semibold flex-wrap justify-end">
+          <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">특공 {totals.special}</span>
+          <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">일반 {totals.general}</span>
+          {totals.multiChild > 0 && <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">다자녀 {totals.multiChild}</span>}
+          {totals.newlywed > 0 && <span className="px-1.5 py-0.5 rounded bg-pink-100 text-pink-700">신혼 {totals.newlywed}</span>}
+          {totals.elderParent > 0 && <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">노부모 {totals.elderParent}</span>}
+          {totals.firstTime > 0 && <span className="px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">생애최초 {totals.firstTime}</span>}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto -mx-1">
+        <table className="w-full text-[11px] border-collapse">
+          <thead>
+            <tr className="text-gray-500 border-b border-indigo-200">
+              <th className="text-left font-semibold px-1.5 py-1.5">#</th>
+              <th className="text-left font-semibold px-1.5 py-1.5">약식</th>
+              <th className="text-right font-semibold px-1.5 py-1.5">전용</th>
+              <th className="text-right font-semibold px-1.5 py-1.5">계약</th>
+              <th className="text-center font-semibold px-1.5 py-1.5">총</th>
+              <th className="text-center font-semibold px-1.5 py-1.5 text-amber-700">다자녀</th>
+              <th className="text-center font-semibold px-1.5 py-1.5 text-pink-700">신혼</th>
+              <th className="text-center font-semibold px-1.5 py-1.5 text-emerald-700">노부모</th>
+              <th className="text-center font-semibold px-1.5 py-1.5 text-violet-700">생애</th>
+              <th className="text-center font-semibold px-1.5 py-1.5 text-rose-700">특공</th>
+              <th className="text-center font-semibold px-1.5 py-1.5 text-blue-700">일반</th>
+              <th className="text-center font-semibold px-1.5 py-1.5 text-gray-500">최하층</th>
+            </tr>
+          </thead>
+          <tbody>
+            {units.map(u => {
+              const areaKey = String(u.exclusiveArea);
+              const active = Math.abs(Number(selectedArea) - u.exclusiveArea) < 0.01;
+              const available = getAvailableCount(u, selectedSupplyType);
+              const disabled = selectedSupplyType && available === 0;
+              return (
+                <tr
+                  key={u.shortCode}
+                  onClick={() => !disabled && onSelectArea(areaKey)}
+                  className={`border-b border-indigo-100 cursor-pointer transition-colors ${
+                    active
+                      ? 'bg-indigo-600 text-white'
+                      : disabled
+                        ? 'bg-gray-50 text-gray-400 cursor-not-allowed'
+                        : 'bg-white hover:bg-indigo-100/60 text-gray-700'
+                  }`}
+                >
+                  <td className="px-1.5 py-1.5 font-mono">{String(u.no).padStart(2, '0')}</td>
+                  <td className="px-1.5 py-1.5 font-mono">{u.shortCode}</td>
+                  <td className="px-1.5 py-1.5 text-right font-semibold">{u.exclusiveArea.toFixed(2)}</td>
+                  <td className="px-1.5 py-1.5 text-right">{u.contractArea.toFixed(2)}</td>
+                  <td className={`px-1.5 py-1.5 text-center font-bold ${active ? 'text-white' : 'text-gray-900'}`}>{u.totalUnits}</td>
+                  <td className="px-1.5 py-1.5 text-center">{u.multiChild || '-'}</td>
+                  <td className="px-1.5 py-1.5 text-center">{u.newlywed || '-'}</td>
+                  <td className="px-1.5 py-1.5 text-center">{u.elderParent || '-'}</td>
+                  <td className="px-1.5 py-1.5 text-center">{u.firstTime || '-'}</td>
+                  <td className="px-1.5 py-1.5 text-center font-semibold">{u.specialTotal || '-'}</td>
+                  <td className="px-1.5 py-1.5 text-center font-semibold">{u.general || '-'}</td>
+                  <td className="px-1.5 py-1.5 text-center">{u.lowestFloorPriority || '-'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {selectedSupplyType && (
+        <div className="mt-2 text-[10px] text-gray-500">
+          <span className="font-semibold text-gray-700">{selectedSupplyType}</span>
+          {' '}로 배정된 주택형만 클릭 가능 · 회색은 해당 공급유형 배정 없음
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ExclusiveAreaEditor({
   areas, selected, onSelect, onAdd, onRemove,
@@ -1600,6 +1724,16 @@ export default function CheckerPage() {
                   })}
                 </div>
               </div>
+            )}
+
+            {/* 공급대상 표 (PDF 파싱된 주택형별 세대수 상세) */}
+            {(announcement.supplyUnits && announcement.supplyUnits.length > 0) && (
+              <SupplyUnitsPanel
+                units={announcement.supplyUnits}
+                selectedArea={selectedArea}
+                selectedSupplyType={selectedSupplyType}
+                onSelectArea={(v) => { setSelectedArea(v); setInquired(false); }}
+              />
             )}
 
             {/* 전용면적 (수동 편집 가능) */}
