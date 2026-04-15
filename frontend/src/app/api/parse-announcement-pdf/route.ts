@@ -14,8 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-// @ts-ignore - pdf-parse v2는 타입 없음
-import pdfParse from 'pdf-parse';
+import { extractText, getDocumentProxy } from 'unpdf';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -142,9 +141,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'PDF 파일만 업로드 가능합니다.' }, { status: 400 });
     }
 
-    const buf = Buffer.from(await file.arrayBuffer());
-    const pdfData = await pdfParse(buf);
-    const fullText: string = pdfData.text || '';
+    const buf = new Uint8Array(await file.arrayBuffer());
+    const pdf = await getDocumentProxy(buf);
+    const { totalPages, text } = await extractText(pdf, { mergePages: true });
+    const fullText: string = Array.isArray(text) ? text.join('\n') : (text || '');
 
     if (!fullText.trim()) {
       return NextResponse.json({ error: '텍스트 추출 실패 — 이미지 기반 PDF일 수 있습니다.' }, { status: 422 });
@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
       rawTextPreview: fullText.slice(0, 500),
     };
 
-    return NextResponse.json({ success: true, data: parsed, totalPages: pdfData.numpages });
+    return NextResponse.json({ success: true, data: parsed, totalPages });
   } catch (err: any) {
     console.error('[parse-announcement-pdf]', err);
     return NextResponse.json({ error: err?.message || 'PDF 파싱 실패' }, { status: 500 });
