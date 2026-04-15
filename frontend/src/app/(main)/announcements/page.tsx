@@ -1,24 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { sitesApi, api } from "@/lib/api";
-import { localSites, localAnnouncements, activeAnnouncement, isNetworkError, LocalAnnouncement } from "@/lib/local-store";
-import { Plus, BookOpen, CalendarDays, ChevronRight, FileUp, Loader2, CheckCircle2, GitCompare, Users, FileCheck } from "lucide-react";
+import { localSites, localAnnouncements, isNetworkError } from "@/lib/local-store";
+import { Plus, BookOpen, CalendarDays, ChevronRight, FileUp, Loader2, CheckCircle2 } from "lucide-react";
 
 interface Announcement {
   id: number;
+  site_id?: number;
   title: string;
   announcement_no: string;
   status: string;
   application_start: string;
 }
-
-const STATUS_MAP: Record<string, { label: string; cls: string }> = {
-  draft:     { label: "준비 중",  cls: "badge-pending" },
-  published: { label: "공고 중",  cls: "badge-eligible" },
-  closed:    { label: "마감",    cls: "badge-ineligible" },
-};
 
 const DEFAULT_RULES = {
   no_home_required: true,
@@ -30,7 +24,6 @@ const DEFAULT_RULES = {
 };
 
 export default function AnnouncementsPage() {
-  const router = useRouter();
   const [sites, setSites] = useState<any[]>([]);
   const [siteId, setSiteId] = useState<number | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -82,22 +75,36 @@ export default function AnnouncementsPage() {
   useEffect(() => { reloadSites(); }, [reloadSites]);
 
   const loadAnnouncements = useCallback(async () => {
-    if (!siteId) return;
     setLoading(true);
     try {
-      const r = await api.get(`/announcements/site/${siteId}`);
-      setAnnouncements(r.data);
+      const r = await api.get(`/announcements/`);
+      // 전체 공고. 백엔드/로컬 어느쪽에서 불러오든 최신순으로 정렬
+      const data = Array.isArray(r.data) ? r.data : [];
+      // 로컬에 저장된 공고들도 함께 병합 (중복 id 제거)
+      const local = localAnnouncements.listAll();
+      const merged = [...data];
+      for (const l of local) {
+        if (!merged.some((a) => a.id === l.id)) merged.push(l as any);
+      }
+      setAnnouncements(
+        merged.sort((a: any, b: any) => {
+          const ad = a.created_at || a.application_start || "";
+          const bd = b.created_at || b.application_start || "";
+          return bd.localeCompare(ad);
+        }) as any,
+      );
     } catch (err: any) {
       if (isNetworkError(err)) {
-        setAnnouncements(localAnnouncements.listBySite(siteId) as any);
+        setAnnouncements(localAnnouncements.listAll() as any);
       } else {
         console.error("[announcements] load failed", err);
-        setAnnouncements([]);
+        // 실패 시에도 로컬만이라도 보여준다
+        setAnnouncements(localAnnouncements.listAll() as any);
       }
     } finally {
       setLoading(false);
     }
-  }, [siteId]);
+  }, []);
 
   useEffect(() => { loadAnnouncements(); }, [loadAnnouncements]);
 
@@ -222,21 +229,6 @@ export default function AnnouncementsPage() {
     }
   };
 
-  /** 이 공고를 "현재 작업 중"으로 설정하고 대상 페이지로 이동 */
-  const useAnnouncementIn = async (ann: Announcement, target: "compare" | "customers" | "documents") => {
-    // 로컬에 저장된 상세 정보가 있으면 스냅샷으로 같이 저장 → 다른 페이지에서 백엔드 없이도 맥락 유지
-    const snapshot = localAnnouncements.get(ann.id);
-    activeAnnouncement.set(
-      { id: ann.id, title: ann.title, announcement_no: ann.announcement_no },
-      snapshot ? "local" : "backend",
-      snapshot as LocalAnnouncement | null,
-    );
-    const qs = `?announcementId=${ann.id}`;
-    if (target === "compare") router.push(`/announcements/compare${qs}`);
-    else if (target === "customers") router.push(`/customers${qs}`);
-    else router.push(`/documents${qs}`);
-  };
-
   const addRegion = () => {
     if (!form.regionInput.trim()) return;
     setForm((p) => ({ ...p, rules: { ...p.rules, region_priority: [...p.rules.region_priority, p.regionInput.trim()] }, regionInput: "" }));
@@ -292,30 +284,22 @@ export default function AnnouncementsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">모집공고 관리</h1>
-          <p className="text-sm text-gray-500 mt-1">현장별 청약 공고 및 자격 기준 설정</p>
+          <p className="text-sm text-gray-500 mt-1">
+            등록한 공고는 자동으로 공고 비교 · 고객 관리 · 서류 검수 · 당첨자 · 방문 계약에 연동됩니다
+          </p>
         </div>
         <button onClick={() => setShowForm(true)} className="btn-primary flex items-center gap-2">
           <Plus className="w-4 h-4" /> 공고 등록
         </button>
       </div>
 
-      {/* 현장 선택 */}
-      <div className="flex gap-3 mb-5">
-        <select
-          value={siteId || ""}
-          onChange={(e) => setSiteId(Number(e.target.value))}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-      </div>
       {sitesError && (
         <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           {sitesError}
         </div>
       )}
 
-      {/* 공고 목록 */}
+      {/* 공고 목록 — 전체 */}
       {loading ? (
         <div className="card text-center py-10 text-gray-400">불러오는 중...</div>
       ) : announcements.length === 0 ? (
@@ -325,67 +309,34 @@ export default function AnnouncementsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {announcements.map((ann) => {
-            const s = STATUS_MAP[ann.status] || STATUS_MAP.draft;
-            return (
-              <div key={ann.id} className="card hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <BookOpen className="w-5 h-5 text-orange-500" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-gray-900 truncate">{ann.title}</span>
-                        <span className={s.cls}>{s.label}</span>
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
-                        {ann.announcement_no && <span>공고번호: {ann.announcement_no}</span>}
-                        {ann.application_start && (
-                          <span className="flex items-center gap-1">
-                            <CalendarDays className="w-3 h-3" />
-                            {new Date(ann.application_start).toLocaleDateString("ko-KR")}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+          {announcements.map((ann) => (
+            <a
+              key={ann.id}
+              href={`/announcements/${ann.id}`}
+              className="card hover:shadow-md hover:border-blue-300 transition-all block group"
+            >
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-orange-100 transition-colors">
+                    <BookOpen className="w-5 h-5 text-orange-500" />
                   </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <a
-                      href={`/announcements/${ann.id}`}
-                      className="inline-flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 px-2.5 py-1.5 rounded-md hover:bg-gray-50"
-                    >
-                      상세 <ChevronRight className="w-3 h-3" />
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => useAnnouncementIn(ann, "compare")}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded-md transition-colors"
-                      title="이 공고를 공고 비교 화면에서 열기"
-                    >
-                      <GitCompare className="w-3 h-3" /> 공고 비교
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => useAnnouncementIn(ann, "customers")}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-md transition-colors"
-                      title="이 공고의 고객 관리로 이동"
-                    >
-                      <Users className="w-3 h-3" /> 고객 관리
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => useAnnouncementIn(ann, "documents")}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 px-2.5 py-1.5 rounded-md transition-colors"
-                      title="이 공고의 서류 검수로 이동"
-                    >
-                      <FileCheck className="w-3 h-3" /> 서류 검수
-                    </button>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-gray-900 truncate">{ann.title}</div>
+                    <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
+                      {ann.announcement_no && <span>공고번호: {ann.announcement_no}</span>}
+                      {ann.application_start && (
+                        <span className="flex items-center gap-1">
+                          <CalendarDays className="w-3 h-3" />
+                          {new Date(ann.application_start).toLocaleDateString("ko-KR")}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
+                <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 transition-colors flex-shrink-0" />
               </div>
-            );
-          })}
+            </a>
+          ))}
         </div>
       )}
 
