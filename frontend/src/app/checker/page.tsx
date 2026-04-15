@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import Link from 'next/link';
 import {
   type AnnouncementRequirements,
   type DocumentVerifiedData,
@@ -8,6 +9,16 @@ import {
   getDefaultAnnouncement,
   getDefaultDocuments,
 } from '@/lib/verification-engine';
+import {
+  saveProject,
+  loadProject,
+  saveCurrentApplicantDraft,
+  loadCurrentApplicantDraft,
+  upsertApplicant,
+  newApplicantId,
+  loadAllApplicants,
+  type SavedApplicant,
+} from '@/lib/applicant-storage';
 
 // ============ 아이콘 ============
 
@@ -232,6 +243,139 @@ function DocumentOcrSection({ onDocumentParsed }: { onDocumentParsed: (docType: 
   );
 }
 
+// ============ 서류 수기 입력 폼 ============
+
+function ManualEntryForm({
+  documents,
+  onChange,
+}: {
+  documents: DocumentVerifiedData;
+  onChange: (partial: Partial<DocumentVerifiedData>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full px-4 py-2.5 flex items-center justify-between text-xs font-bold text-gray-600 bg-gray-50 hover:bg-gray-100 transition-colors"
+      >
+        <span className="flex items-center gap-2">
+          ✍️ 수기 입력 (OCR 실패 시 / 직접 검증)
+        </span>
+        <svg
+          className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}
+          fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+      {open && (
+        <div className="p-4 space-y-4">
+          {/* 주민등록등본 */}
+          <ManualSection title="주민등록등본">
+            <ManualField label="세대주명">
+              <input type="text" value={documents.등본_세대주}
+                onChange={(e) => onChange({ 등본_세대주: e.target.value })}
+                className="w-full px-2 py-1 text-xs border border-gray-200 rounded-md" />
+            </ManualField>
+            <ManualField label="세대주 여부">
+              <Toggle checked={documents.등본_세대주여부}
+                onChange={(v) => onChange({ 등본_세대주여부: v })}
+                label={documents.등본_세대주여부 ? '세대주' : '세대원'} />
+            </ManualField>
+            <ManualField label="세대원 수">
+              <input type="number" value={documents.등본_세대원수 || ''}
+                onChange={(e) => onChange({ 등본_세대원수: parseInt(e.target.value) || 0 })}
+                className="w-full px-2 py-1 text-xs border border-gray-200 rounded-md" />
+            </ManualField>
+            <ManualField label="주소" wide>
+              <input type="text" value={documents.등본_주소}
+                onChange={(e) => onChange({ 등본_주소: e.target.value })}
+                className="w-full px-2 py-1 text-xs border border-gray-200 rounded-md" />
+            </ManualField>
+          </ManualSection>
+
+          {/* 청약통장 */}
+          <ManualSection title="청약통장확인서">
+            <ManualField label="가입일">
+              <input type="date" value={documents.통장_가입일}
+                onChange={(e) => onChange({ 통장_가입일: e.target.value })}
+                className="w-full px-2 py-1 text-xs border border-gray-200 rounded-md" />
+            </ManualField>
+            <ManualField label="납입 횟수">
+              <input type="number" value={documents.통장_납입횟수 || ''}
+                onChange={(e) => onChange({ 통장_납입횟수: parseInt(e.target.value) || 0 })}
+                className="w-full px-2 py-1 text-xs border border-gray-200 rounded-md" />
+            </ManualField>
+            <ManualField label="예치금 (만원)">
+              <input type="number" value={documents.통장_예치금 || ''}
+                onChange={(e) => onChange({ 통장_예치금: parseInt(e.target.value) || 0 })}
+                className="w-full px-2 py-1 text-xs border border-gray-200 rounded-md" />
+            </ManualField>
+          </ManualSection>
+
+          {/* 가족관계 / 혼인 */}
+          <ManualSection title="가족관계 · 혼인">
+            <ManualField label="가족 구성원 수">
+              <input type="number" value={documents.가족_구성원수 || ''}
+                onChange={(e) => onChange({ 가족_구성원수: parseInt(e.target.value) || 0 })}
+                className="w-full px-2 py-1 text-xs border border-gray-200 rounded-md" />
+            </ManualField>
+            <ManualField label="자녀 수">
+              <input type="number" value={documents.가족_자녀수 || ''}
+                onChange={(e) => onChange({ 가족_자녀수: parseInt(e.target.value) || 0 })}
+                className="w-full px-2 py-1 text-xs border border-gray-200 rounded-md" />
+            </ManualField>
+            <ManualField label="혼인일">
+              <input type="date" value={documents.혼인_혼인일}
+                onChange={(e) => onChange({ 혼인_혼인일: e.target.value })}
+                className="w-full px-2 py-1 text-xs border border-gray-200 rounded-md" />
+            </ManualField>
+          </ManualSection>
+
+          {/* 소득 / 주택소유 */}
+          <ManualSection title="소득 · 주택소유">
+            <ManualField label="월평균 소득 (만원)">
+              <input type="number" value={documents.소득_월평균 || ''}
+                onChange={(e) => onChange({ 소득_월평균: parseInt(e.target.value) || 0 })}
+                className="w-full px-2 py-1 text-xs border border-gray-200 rounded-md" />
+            </ManualField>
+            <ManualField label="주택 소유 여부">
+              <Toggle checked={documents.등기_주택소유여부}
+                onChange={(v) => onChange({ 등기_주택소유여부: v, 등기_소유주택수: v ? Math.max(1, documents.등기_소유주택수 || 1) : 0 })}
+                label={documents.등기_주택소유여부 ? '소유' : '무주택'} />
+            </ManualField>
+            <ManualField label="소유 주택 수">
+              <input type="number" value={documents.등기_소유주택수 || ''}
+                onChange={(e) => onChange({ 등기_소유주택수: parseInt(e.target.value) || 0 })}
+                className="w-full px-2 py-1 text-xs border border-gray-200 rounded-md" />
+            </ManualField>
+          </ManualSection>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ManualSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">{title}</div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">{children}</div>
+    </div>
+  );
+}
+
+function ManualField({ label, children, wide }: { label: string; children: React.ReactNode; wide?: boolean }) {
+  return (
+    <div className={wide ? 'sm:col-span-3' : ''}>
+      <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">{label}</label>
+      {children}
+    </div>
+  );
+}
+
 // ============ 공고 PDF 업로드 ============
 
 function PdfAnnouncementUpload({ onResult }: { onResult: (data: any) => void }) {
@@ -301,6 +445,49 @@ function PdfAnnouncementUpload({ onResult }: { onResult: (data: any) => void }) 
   );
 }
 
+// ============ 단계 인디케이터 ============
+
+function StepIndicator({ currentStep }: { currentStep: 1 | 2 | 3 | 4 }) {
+  const steps = [
+    { n: 1, label: '공고 업로드', desc: 'PDF 분석' },
+    { n: 2, label: '공급유형 · 면적', desc: '검수 대상 선택' },
+    { n: 3, label: '서류 업로드', desc: 'OCR / 수기 입력' },
+    { n: 4, label: '검수 결과', desc: '적합 / 부적합 판정' },
+  ];
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+      <div className="flex items-center justify-between gap-2">
+        {steps.map((s, i) => {
+          const done = currentStep > s.n;
+          const active = currentStep === s.n;
+          return (
+            <div key={s.n} className="flex items-center flex-1">
+              <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-black flex-shrink-0 transition-all ${
+                  done ? 'bg-emerald-500 text-white' :
+                  active ? 'bg-blue-600 text-white ring-4 ring-blue-100' :
+                  'bg-gray-100 text-gray-400'
+                }`}>
+                  {done ? <CheckIcon className="w-4 h-4" /> : s.n}
+                </div>
+                <div className="min-w-0 hidden sm:block">
+                  <div className={`text-xs font-bold truncate ${
+                    done ? 'text-emerald-700' : active ? 'text-blue-700' : 'text-gray-400'
+                  }`}>{s.label}</div>
+                  <div className="text-[10px] text-gray-400 truncate">{s.desc}</div>
+                </div>
+              </div>
+              {i < steps.length - 1 && (
+                <div className={`h-0.5 flex-1 mx-2 rounded ${done ? 'bg-emerald-300' : 'bg-gray-200'}`} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ============ 메인 페이지 ============
 
 // ============ 툴팁 ============
@@ -318,6 +505,122 @@ function Tooltip({ children, content }: { children: React.ReactNode; content: Re
         </div>
       )}
     </span>
+  );
+}
+
+// ============ 전용면적 편집기 ============
+
+function ExclusiveAreaEditor({
+  areas, selected, onSelect, onAdd, onRemove,
+}: {
+  areas: number[];
+  selected: string;
+  onSelect: (v: string) => void;
+  onAdd: (v: number) => void;
+  onRemove: (v: number) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [newVal, setNewVal] = useState('');
+
+  const commitAdd = () => {
+    const n = parseFloat(newVal.replace(/[^\d.]/g, ''));
+    if (Number.isFinite(n)) {
+      onAdd(n);
+      onSelect(String(n));
+    }
+    setNewVal('');
+    setAdding(false);
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="block text-xs font-semibold text-gray-500">
+          전용면적 <span className="text-gray-400 font-normal">({areas.length}개)</span>
+        </label>
+        <button
+          type="button"
+          onClick={() => setAdding(v => !v)}
+          className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+        >
+          <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" width={12} height={12}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          수동 추가
+        </button>
+      </div>
+
+      {adding && (
+        <div className="flex items-center gap-2 mb-2 p-2 rounded-lg bg-blue-50 border border-blue-200">
+          <input
+            type="text"
+            autoFocus
+            value={newVal}
+            onChange={(e) => setNewVal(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitAdd();
+              if (e.key === 'Escape') { setAdding(false); setNewVal(''); }
+            }}
+            placeholder="예: 74.98"
+            className="flex-1 px-2 py-1 text-xs bg-white border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+          <span className="text-xs text-blue-600 font-semibold">m²</span>
+          <button
+            type="button"
+            onClick={commitAdd}
+            className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-blue-600 text-white hover:bg-blue-700"
+          >
+            추가
+          </button>
+          <button
+            type="button"
+            onClick={() => { setAdding(false); setNewVal(''); }}
+            className="px-2 py-1 rounded-md text-[11px] font-semibold text-gray-500 hover:bg-white"
+          >
+            취소
+          </button>
+        </div>
+      )}
+
+      {areas.length === 0 ? (
+        <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
+          PDF 파싱에서 전용면적이 추출되지 않았습니다. 위 "수동 추가"로 직접 입력해주세요.
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {areas.map(a => {
+            const key = String(a);
+            const active = selected === key;
+            return (
+              <div
+                key={key}
+                className={`group inline-flex items-center gap-1 rounded-lg border text-xs font-semibold transition-all overflow-hidden ${
+                  active ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-700 hover:border-blue-300'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelect(key)}
+                  className="px-2.5 py-1.5"
+                >
+                  {a}m²
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onRemove(a); }}
+                  title="삭제"
+                  className={`pr-1.5 pl-0.5 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity ${
+                    active ? 'text-white/80 hover:text-white' : 'text-gray-400 hover:text-red-500'
+                  }`}
+                >
+                  <XIcon className="w-3 h-3" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -507,18 +810,78 @@ function buildCriterionRows(
 
 // ============ 기준 좌측 패널 ============
 
+function EditableRow({
+  label,
+  value,
+  suffix,
+  type = 'number',
+  onCommit,
+}: {
+  label: string;
+  value: string | number;
+  suffix: string;
+  type?: 'number' | 'text';
+  onCommit: (v: any) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(value ?? ''));
+  useEffect(() => { setDraft(String(value ?? '')); }, [value]);
+  const commit = () => {
+    setEditing(false);
+    if (type === 'number') {
+      const n = parseFloat(draft);
+      onCommit(Number.isFinite(n) ? n : 0);
+    } else {
+      onCommit(draft);
+    }
+  };
+  return (
+    <div className="px-4 py-2.5 flex justify-between items-center text-xs group">
+      <span className="text-gray-500">{label}</span>
+      {editing ? (
+        <div className="flex items-center gap-1">
+          <input
+            type={type}
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commit();
+              if (e.key === 'Escape') { setDraft(String(value ?? '')); setEditing(false); }
+            }}
+            className="w-16 px-1.5 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 text-right"
+          />
+          <span className="text-gray-500">{suffix}</span>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="font-semibold text-gray-800 hover:text-blue-600 hover:underline decoration-dotted"
+          title="클릭하여 수정"
+        >
+          {value}{suffix && ` ${suffix}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function CriteriaPane({
   announcement,
   supplyTypeKey,
   area,
   condition,
   incomeTable,
+  onConditionOverride,
 }: {
   announcement: AnnouncementRequirements;
   supplyTypeKey: string;
   area: number;
   condition: SupplyCondition | null;
   incomeTable?: Record<string, Record<string, number>>;
+  onConditionOverride: (patch: Partial<SupplyCondition>) => void;
 }) {
   if (!condition) {
     return (
@@ -554,51 +917,72 @@ function CriteriaPane({
       </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-        <div className="px-4 py-2.5 text-xs font-bold text-gray-600 bg-gray-50 border-b border-gray-100">
-          자격 기준값
+        <div className="px-4 py-2.5 text-xs font-bold text-gray-600 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+          <span>자격 기준값</span>
+          <span className="text-[10px] text-gray-400 font-normal">✏️ 숫자 클릭하여 수동 보정 가능</span>
         </div>
         <div className="divide-y divide-gray-100">
-          {condition.minSubscriptionMonths > 0 && (
-            <div className="px-4 py-2.5 flex justify-between text-xs">
-              <span className="text-gray-500">청약통장 가입기간</span>
-              <span className="font-semibold text-gray-800">{condition.minSubscriptionMonths}개월 이상</span>
-            </div>
-          )}
-          {condition.minDepositCount > 0 && (
-            <div className="px-4 py-2.5 flex justify-between text-xs">
-              <span className="text-gray-500">납입 횟수</span>
-              <span className="font-semibold text-gray-800">{condition.minDepositCount}회 이상</span>
-            </div>
-          )}
+          <EditableRow
+            label="청약통장 가입기간"
+            value={condition.minSubscriptionMonths || 0}
+            suffix="개월 이상"
+            onCommit={(v) => onConditionOverride({ minSubscriptionMonths: v })}
+          />
+          <EditableRow
+            label="납입 횟수"
+            value={condition.minDepositCount || 0}
+            suffix="회 이상"
+            onCommit={(v) => onConditionOverride({ minDepositCount: v })}
+          />
           {deposit && (
-            <div className="px-4 py-2.5 flex justify-between text-xs">
-              <span className="text-gray-500">예치금 ({deposit.key}m² 기준)</span>
-              <span className="font-semibold text-gray-800">{deposit.value}만원 이상</span>
-            </div>
+            <EditableRow
+              label={`예치금 (${deposit.key}m² 기준)`}
+              value={deposit.value || 0}
+              suffix="만원 이상"
+              onCommit={(v) => onConditionOverride({
+                depositByArea: { ...(condition.depositByArea || {}), [deposit.key]: v }
+              })}
+            />
           )}
-          {condition.requireHomeless && (
-            <div className="px-4 py-2.5 flex justify-between text-xs">
-              <span className="text-gray-500">무주택 요건</span>
-              <span className="font-semibold text-gray-800">무주택세대구성원</span>
-            </div>
+          <div className="px-4 py-2.5 flex justify-between items-center text-xs">
+            <span className="text-gray-500">무주택 요건</span>
+            <button
+              type="button"
+              onClick={() => onConditionOverride({ requireHomeless: !condition.requireHomeless })}
+              className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+                condition.requireHomeless ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              {condition.requireHomeless ? '무주택 필수' : '제한 없음'}
+            </button>
+          </div>
+          <div className="px-4 py-2.5 flex justify-between items-center text-xs">
+            <span className="text-gray-500">세대주 요건</span>
+            <button
+              type="button"
+              onClick={() => onConditionOverride({ requireHouseholdHead: !condition.requireHouseholdHead })}
+              className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+                condition.requireHouseholdHead ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              {condition.requireHouseholdHead ? '세대주 필수' : '제한 없음'}
+            </button>
+          </div>
+          {(!!condition.maxMarriageYears || supplyTypeKey.includes('신혼')) && (
+            <EditableRow
+              label="혼인 기간 (최대)"
+              value={condition.maxMarriageYears || 0}
+              suffix="년 이내"
+              onCommit={(v) => onConditionOverride({ maxMarriageYears: v })}
+            />
           )}
-          {condition.requireHouseholdHead && (
-            <div className="px-4 py-2.5 flex justify-between text-xs">
-              <span className="text-gray-500">세대주 요건</span>
-              <span className="font-semibold text-gray-800">세대주 필수</span>
-            </div>
-          )}
-          {!!condition.maxMarriageYears && condition.maxMarriageYears > 0 && (
-            <div className="px-4 py-2.5 flex justify-between text-xs">
-              <span className="text-gray-500">혼인 기간</span>
-              <span className="font-semibold text-gray-800">{condition.maxMarriageYears}년 이내</span>
-            </div>
-          )}
-          {!!condition.minChildren && condition.minChildren > 0 && (
-            <div className="px-4 py-2.5 flex justify-between text-xs">
-              <span className="text-gray-500">자녀 수</span>
-              <span className="font-semibold text-gray-800">{condition.minChildren}명 이상</span>
-            </div>
+          {(!!condition.minChildren || supplyTypeKey.includes('다자녀')) && (
+            <EditableRow
+              label="자녀 수 (최소)"
+              value={condition.minChildren || 0}
+              suffix="명 이상"
+              onCommit={(v) => onConditionOverride({ minChildren: v })}
+            />
           )}
           {condition.incomeLimitPercent && (
             <div className="px-4 py-2.5 flex justify-between text-xs">
@@ -727,15 +1111,21 @@ function RequiredDocumentsList({
 function ComparisonPane({
   documents,
   onDocumentParsed,
+  onDocumentsChange,
   rows,
   requiredDocuments,
   supplyType,
+  onSaveApplicant,
+  currentApplicantId,
 }: {
   documents: DocumentVerifiedData;
   onDocumentParsed: (docType: string, data: any) => void;
+  onDocumentsChange: (partial: Partial<DocumentVerifiedData>) => void;
   rows: CriterionRow[];
   requiredDocuments?: any;
   supplyType: string;
+  onSaveApplicant: () => void;
+  currentApplicantId: string;
 }) {
   const matchCount = rows.filter(r => r.status === 'match').length;
   const failCount = rows.filter(r => r.status === 'fail').length;
@@ -750,6 +1140,7 @@ function ComparisonPane({
         submittedDocs={documents.제출서류목록 || []}
       />
       <DocumentOcrSection onDocumentParsed={onDocumentParsed} />
+      <ManualEntryForm documents={documents} onChange={onDocumentsChange} />
 
       {rows.length > 0 && (
         <div className={`rounded-2xl border-2 p-4 text-center ${
@@ -771,6 +1162,20 @@ function ComparisonPane({
           <div className="text-xs text-gray-500 mt-1">
             {matchCount} 충족 · {failCount} 미달 · {naCount} 미확인
           </div>
+          <button
+            type="button"
+            onClick={onSaveApplicant}
+            className={`mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              verdict === 'pass' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' :
+              verdict === 'fail' ? 'bg-red-600 hover:bg-red-700 text-white' :
+              'bg-gray-800 hover:bg-gray-900 text-white'
+            }`}
+          >
+            <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" width={14} height={14}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            {currentApplicantId ? '당첨자 정보 업데이트' : '당첨자로 저장'}
+          </button>
         </div>
       )}
 
@@ -827,13 +1232,75 @@ export default function CheckerPage() {
   const [selectedSupplyType, setSelectedSupplyType] = useState<string>('');
   const [selectedArea, setSelectedArea] = useState<string>('');
   const [inquired, setInquired] = useState(false);
+  const [applicantName, setApplicantName] = useState('');
+  const [applicantMemo, setApplicantMemo] = useState('');
+  const [currentApplicantId, setCurrentApplicantId] = useState<string>('');
+  const [saveToast, setSaveToast] = useState('');
+
+  // 최초 마운트 시 저장된 공고 + 작성 중 초안 복원
+  useEffect(() => {
+    const savedProject = loadProject();
+    if (savedProject) {
+      setAnnouncement(savedProject.announcement);
+    }
+    // /applicants 페이지에서 '편집' 클릭 시 — 해당 당첨자를 로드
+    let loadedFromEdit = false;
+    try {
+      const editingId = typeof window !== 'undefined' ? localStorage.getItem('checker:editing') : null;
+      if (editingId) {
+        const target = loadAllApplicants().find(a => a.id === editingId);
+        if (target) {
+          setDocuments(target.documents);
+          setSelectedSupplyType(target.supplyType);
+          setSelectedArea(String(target.area));
+          setInquired(true);
+          setApplicantName(target.name);
+          setApplicantMemo(target.memo);
+          setCurrentApplicantId(target.id);
+          loadedFromEdit = true;
+        }
+        localStorage.removeItem('checker:editing');
+      }
+    } catch {}
+    if (loadedFromEdit) return;
+    const draft = loadCurrentApplicantDraft();
+    if (draft) {
+      if (draft.documents) setDocuments(draft.documents);
+      if (draft.supplyType) setSelectedSupplyType(draft.supplyType);
+      if (draft.area) setSelectedArea(draft.area);
+      if (draft.inquired) setInquired(draft.inquired);
+      if (draft.name) setApplicantName(draft.name);
+      if (draft.memo) setApplicantMemo(draft.memo);
+    }
+  }, []);
 
   const updateAnnouncement = useCallback((partial: Partial<AnnouncementRequirements>) => {
-    setAnnouncement(prev => ({ ...prev, ...partial }));
+    setAnnouncement(prev => {
+      const next = { ...prev, ...partial };
+      // 변경될 때마다 저장
+      saveProject(next);
+      return next;
+    });
   }, []);
   const updateDocuments = useCallback((partial: Partial<DocumentVerifiedData>) => {
     setDocuments(prev => ({ ...prev, ...partial }));
   }, []);
+
+  // 작성 초안 자동 저장 (디바운스 간단 구현)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      saveCurrentApplicantDraft({
+        projectId: announcement.complexName,
+        supplyType: selectedSupplyType,
+        area: selectedArea,
+        inquired,
+        documents,
+        name: applicantName,
+        memo: applicantMemo,
+      });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [announcement.complexName, selectedSupplyType, selectedArea, inquired, documents, applicantName, applicantMemo]);
 
   const supplyTypeList = announcement.supplyTypes || [];
   const areaList = announcement.exclusiveAreas || [];
@@ -853,6 +1320,99 @@ export default function CheckerPage() {
       currentSupplyType?.incomeTable,
     );
   }, [matchedCondition, selectedArea, documents, selectedSupplyType, currentSupplyType]);
+
+  // 현재 단계 계산
+  const currentStep: 1 | 2 | 3 | 4 = useMemo(() => {
+    if (!announcement.complexName && supplyTypeList.length === 0) return 1;
+    if (!inquired) return 2;
+    if (criterionRows.every(r => r.status === 'na')) return 3;
+    return 4;
+  }, [announcement.complexName, supplyTypeList.length, inquired, criterionRows]);
+
+  // 전용면적 추가/삭제
+  const addExclusiveArea = useCallback((val: number) => {
+    if (!Number.isFinite(val) || val <= 20 || val >= 500) return;
+    const cur = announcement.exclusiveAreas || [];
+    if (cur.some(a => Math.abs(a - val) < 0.01)) return; // 중복
+    updateAnnouncement({ exclusiveAreas: [...cur, val].sort((a, b) => a - b) });
+  }, [announcement.exclusiveAreas, updateAnnouncement]);
+
+  const removeExclusiveArea = useCallback((val: number) => {
+    const cur = announcement.exclusiveAreas || [];
+    updateAnnouncement({ exclusiveAreas: cur.filter(a => Math.abs(a - val) >= 0.01) });
+    if (selectedArea && Math.abs(Number(selectedArea) - val) < 0.01) {
+      setSelectedArea('');
+      setInquired(false);
+    }
+  }, [announcement.exclusiveAreas, updateAnnouncement, selectedArea]);
+
+  // 기준값 수동 보정 — 현재 matchedCondition을 수정
+  const overrideCondition = useCallback((patch: Partial<SupplyCondition>) => {
+    if (!currentSupplyType || !matchedCondition) return;
+    const newConditions = (currentSupplyType.conditions || []).map(c =>
+      c === matchedCondition ? { ...c, ...patch } : c
+    );
+    const newSupplyTypes = supplyTypeList.map(st =>
+      st.type === currentSupplyType.type ? { ...st, conditions: newConditions } : st
+    );
+    updateAnnouncement({ supplyTypes: newSupplyTypes });
+  }, [currentSupplyType, matchedCondition, supplyTypeList, updateAnnouncement]);
+
+  // 당첨자 저장
+  const saveCurrentApplicant = useCallback(() => {
+    if (!announcement.complexName) {
+      setSaveToast('공고가 선택되지 않았습니다.');
+      setTimeout(() => setSaveToast(''), 2500);
+      return;
+    }
+    if (!selectedSupplyType || !selectedArea) {
+      setSaveToast('공급유형과 전용면적을 먼저 선택하세요.');
+      setTimeout(() => setSaveToast(''), 2500);
+      return;
+    }
+    const matchCount = criterionRows.filter(r => r.status === 'match').length;
+    const failCount = criterionRows.filter(r => r.status === 'fail').length;
+    const naCount = criterionRows.filter(r => r.status === 'na').length;
+    const verdict: SavedApplicant['verdict'] =
+      failCount > 0 ? 'fail' :
+      naCount === criterionRows.length ? 'pending' :
+      matchCount === criterionRows.length ? 'pass' : 'partial';
+    const failReasons = criterionRows.filter(r => r.status === 'fail').map(r => r.label);
+    const id = currentApplicantId || newApplicantId();
+    const now = new Date().toISOString();
+    const applicant: SavedApplicant = {
+      id,
+      projectId: announcement.complexName,
+      projectName: announcement.complexName,
+      name: applicantName || '미입력',
+      supplyType: selectedSupplyType,
+      area: Number(selectedArea),
+      documents,
+      verdict,
+      matchCount,
+      failCount,
+      naCount,
+      failReasons,
+      memo: applicantMemo,
+      createdAt: now,
+      updatedAt: now,
+    };
+    upsertApplicant(applicant);
+    setCurrentApplicantId(id);
+    setSaveToast(currentApplicantId ? '당첨자 정보가 수정되었습니다.' : '당첨자가 저장되었습니다.');
+    setTimeout(() => setSaveToast(''), 2500);
+  }, [announcement.complexName, selectedSupplyType, selectedArea, criterionRows, currentApplicantId, applicantName, applicantMemo, documents]);
+
+  // 새 당첨자 시작
+  const startNewApplicant = useCallback(() => {
+    setDocuments(getDefaultDocuments());
+    setApplicantName('');
+    setApplicantMemo('');
+    setCurrentApplicantId('');
+    setInquired(false);
+    setSaveToast('새 당첨자 입력 모드');
+    setTimeout(() => setSaveToast(''), 2000);
+  }, []);
 
   const onDocumentParsed = useCallback((docType: string, data: any) => {
     if (docType === '주민등록등본') updateDocuments({
@@ -943,12 +1503,33 @@ export default function CheckerPage() {
               <p className="text-xs text-gray-400">공고 자격조건 · 제출 서류 자동 대조</p>
             </div>
           </div>
+          <nav className="flex items-center gap-2">
+            <Link
+              href="/applicants"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100"
+            >
+              <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" width={14} height={14}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+              </svg>
+              당첨자 현황
+            </Link>
+          </nav>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-5 space-y-5">
+        {/* 단계 표시 */}
+        <StepIndicator currentStep={currentStep} />
+
         {/* 1단계: PDF 업로드 */}
         <PdfAnnouncementUpload onResult={handlePdfResult} />
+
+        {/* 저장 토스트 */}
+        {saveToast && (
+          <div className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-xl bg-gray-900 text-white text-xs font-semibold shadow-2xl">
+            {saveToast}
+          </div>
+        )}
 
         {/* 2단계: 고정 정보 + 드롭박스 + 조회 버튼 */}
         {(announcement.complexName || supplyTypeList.length > 0) && (
@@ -1021,20 +1602,35 @@ export default function CheckerPage() {
               </div>
             )}
 
-            {/* 전용면적 + 조회 */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+            {/* 전용면적 (수동 편집 가능) */}
+            <ExclusiveAreaEditor
+              areas={areaList}
+              selected={selectedArea}
+              onSelect={(v) => { setSelectedArea(v); setInquired(false); }}
+              onAdd={addExclusiveArea}
+              onRemove={removeExclusiveArea}
+            />
+
+            {/* 당첨자 정보 + 조회 */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end pt-2 border-t border-gray-100">
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">전용면적</label>
-                <Select
-                  value={selectedArea}
-                  onChange={(v) => { setSelectedArea(v); setInquired(false); }}
-                  options={[
-                    { value: '', label: '선택하세요' },
-                    ...areaList.map(a => ({ value: String(a), label: `${a}m²` })),
-                  ]}
-                />
+                <label className="block text-xs font-semibold text-gray-500 mb-1">당첨자명 (선택)</label>
+                <Input value={applicantName} onChange={setApplicantName} placeholder="홍길동" />
               </div>
-              <div className="sm:col-span-2 flex justify-end">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">메모 (선택)</label>
+                <Input value={applicantMemo} onChange={setApplicantMemo} placeholder="특이사항" />
+              </div>
+              <div className="flex justify-end gap-2">
+                {currentApplicantId && (
+                  <button
+                    type="button"
+                    onClick={startNewApplicant}
+                    className="px-3 py-2 rounded-xl text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                  >
+                    새 당첨자
+                  </button>
+                )}
                 <button
                   type="button"
                   disabled={!canInquire}
@@ -1068,6 +1664,7 @@ export default function CheckerPage() {
                 area={Number(selectedArea)}
                 condition={matchedCondition}
                 incomeTable={currentSupplyType?.incomeTable}
+                onConditionOverride={overrideCondition}
               />
             </div>
             <div>
@@ -1077,9 +1674,12 @@ export default function CheckerPage() {
               <ComparisonPane
                 documents={documents}
                 onDocumentParsed={onDocumentParsed}
+                onDocumentsChange={updateDocuments}
                 rows={criterionRows}
                 requiredDocuments={announcement.requiredDocuments}
                 supplyType={selectedSupplyType}
+                onSaveApplicant={saveCurrentApplicant}
+                currentApplicantId={currentApplicantId}
               />
             </div>
           </div>
