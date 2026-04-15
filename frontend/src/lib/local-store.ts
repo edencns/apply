@@ -82,6 +82,9 @@ export const localAnnouncements = {
   listAll(): LocalAnnouncement[] {
     return read<LocalAnnouncement>(ANNOUNCEMENTS_KEY);
   },
+  get(id: number): LocalAnnouncement | null {
+    return read<LocalAnnouncement>(ANNOUNCEMENTS_KEY).find((a) => a.id === id) || null;
+  },
   create(input: Omit<LocalAnnouncement, "id" | "status" | "created_at"> & { status?: "draft" | "published" | "closed" }): LocalAnnouncement {
     const items = read<LocalAnnouncement>(ANNOUNCEMENTS_KEY);
     const ann: LocalAnnouncement = {
