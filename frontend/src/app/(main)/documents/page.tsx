@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { documentsApi, eligibilityApi, customersApi } from "@/lib/api";
+import { ActiveAnnouncementBanner } from "@/components/ActiveAnnouncementBanner";
 import {
   Upload, FileText, CheckCircle, XCircle, AlertTriangle,
   RefreshCw, Plus, X, BookOpen, ChevronDown, ChevronUp
@@ -187,6 +188,7 @@ export default function DocumentsPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
+      <ActiveAnnouncementBanner />
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">서류 검수 및 적격 판정</h1>

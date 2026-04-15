@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { sitesApi, api } from "@/lib/api";
-import { localSites, localAnnouncements, isNetworkError } from "@/lib/local-store";
-import { Plus, BookOpen, CalendarDays, ChevronRight, FileUp, Loader2, CheckCircle2 } from "lucide-react";
+import { localSites, localAnnouncements, activeAnnouncement, isNetworkError, LocalAnnouncement } from "@/lib/local-store";
+import { Plus, BookOpen, CalendarDays, ChevronRight, FileUp, Loader2, CheckCircle2, GitCompare, Users, FileCheck } from "lucide-react";
 
 interface Announcement {
   id: number;
@@ -29,6 +30,7 @@ const DEFAULT_RULES = {
 };
 
 export default function AnnouncementsPage() {
+  const router = useRouter();
   const [sites, setSites] = useState<any[]>([]);
   const [siteId, setSiteId] = useState<number | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -218,6 +220,21 @@ export default function AnnouncementsPage() {
     }
   };
 
+  /** 이 공고를 "현재 작업 중"으로 설정하고 대상 페이지로 이동 */
+  const useAnnouncementIn = async (ann: Announcement, target: "compare" | "customers" | "documents") => {
+    // 로컬에 저장된 상세 정보가 있으면 스냅샷으로 같이 저장 → 다른 페이지에서 백엔드 없이도 맥락 유지
+    const snapshot = localAnnouncements.get(ann.id);
+    activeAnnouncement.set(
+      { id: ann.id, title: ann.title, announcement_no: ann.announcement_no },
+      snapshot ? "local" : "backend",
+      snapshot as LocalAnnouncement | null,
+    );
+    const qs = `?announcementId=${ann.id}`;
+    if (target === "compare") router.push(`/announcements/compare${qs}`);
+    else if (target === "customers") router.push(`/customers${qs}`);
+    else router.push(`/documents${qs}`);
+  };
+
   const addRegion = () => {
     if (!form.regionInput.trim()) return;
     setForm((p) => ({ ...p, rules: { ...p.rules, region_priority: [...p.rules.region_priority, p.regionInput.trim()] }, regionInput: "" }));
@@ -310,31 +327,58 @@ export default function AnnouncementsPage() {
             const s = STATUS_MAP[ann.status] || STATUS_MAP.draft;
             return (
               <div key={ann.id} className="card hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center flex-shrink-0">
                       <BookOpen className="w-5 h-5 text-orange-500" />
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-900">{ann.title}</span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-gray-900 truncate">{ann.title}</span>
                         <span className={s.cls}>{s.label}</span>
                       </div>
-                      {ann.announcement_no && (
-                        <span className="text-xs text-gray-400">공고번호: {ann.announcement_no}</span>
-                      )}
+                      <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
+                        {ann.announcement_no && <span>공고번호: {ann.announcement_no}</span>}
+                        {ann.application_start && (
+                          <span className="flex items-center gap-1">
+                            <CalendarDays className="w-3 h-3" />
+                            {new Date(ann.application_start).toLocaleDateString("ko-KR")}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    {ann.application_start && (
-                      <div className="flex items-center gap-1 text-sm text-gray-500">
-                        <CalendarDays className="w-4 h-4" />
-                        {new Date(ann.application_start).toLocaleDateString("ko-KR")}
-                      </div>
-                    )}
-                    <a href={`/announcements/${ann.id}`} className="text-blue-600 hover:underline flex items-center gap-1 text-sm">
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <a
+                      href={`/announcements/${ann.id}`}
+                      className="inline-flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 px-2.5 py-1.5 rounded-md hover:bg-gray-50"
+                    >
                       상세 <ChevronRight className="w-3 h-3" />
                     </a>
+                    <button
+                      type="button"
+                      onClick={() => useAnnouncementIn(ann, "compare")}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded-md transition-colors"
+                      title="이 공고를 공고 비교 화면에서 열기"
+                    >
+                      <GitCompare className="w-3 h-3" /> 공고 비교
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => useAnnouncementIn(ann, "customers")}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-md transition-colors"
+                      title="이 공고의 고객 관리로 이동"
+                    >
+                      <Users className="w-3 h-3" /> 고객 관리
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => useAnnouncementIn(ann, "documents")}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 px-2.5 py-1.5 rounded-md transition-colors"
+                      title="이 공고의 서류 검수로 이동"
+                    >
+                      <FileCheck className="w-3 h-3" /> 서류 검수
+                    </button>
                   </div>
                 </div>
               </div>

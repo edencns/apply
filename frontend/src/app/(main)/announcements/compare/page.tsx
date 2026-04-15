@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Building2, CalendarDays, MapPin, Users, FileText, Shield,
   ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, XCircle,
-  ArrowLeft, Banknote, Scale, Baby, Heart, UserCheck,
+  ArrowLeft, Banknote, Scale, Baby, Heart, UserCheck, Sparkles,
 } from "lucide-react";
-import { announcements, AptAnnouncement } from "./data";
+import { announcements as staticAnnouncements, AptAnnouncement } from "./data";
+import { api } from "@/lib/api";
+import { localAnnouncements, isNetworkError, LocalAnnouncement } from "@/lib/local-store";
 
 type Tab = "overview" | "eligibility" | "special" | "documents" | "income";
 
@@ -521,11 +524,135 @@ function DocumentsTab({ apt }: { apt: AptAnnouncement }) {
   );
 }
 
-export default function ComparePage() {
-  const [selectedId, setSelectedId] = useState(announcements[0].id);
+/** 등록된 공고(LocalAnnouncement 또는 backend)를 compare 페이지의 AptAnnouncement shape로 어댑팅.
+ *  알 수 없는 필드는 "—" 또는 빈 배열로 채우고, 자동 추출되지 않았음을 알리는 노트를 추가한다.
+ */
+function adaptToAptAnnouncement(ann: any): AptAnnouncement {
+  const rules = ann?.eligibility_rules || {};
+  const regionPriority: string[] = rules.region_priority || [];
+  const specialTypes: string[] = rules.special_supply_types || [];
+
+  const fmtDate = (s?: string | null) => {
+    if (!s) return "—";
+    try {
+      const d = new Date(s);
+      if (Number.isNaN(d.getTime())) return String(s);
+      return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+    } catch { return String(s); }
+  };
+
+  return {
+    id: `registered-${ann.id}`,
+    name: ann.title,
+    shortName: ann.title,
+    location: regionPriority[0] || "—",
+    totalUnits: 0,
+    generalUnits: 0,
+    specialUnits: 0,
+    moveIn: "—",
+    regulation: "비규제",
+    landType: "민간택지",
+    priceCapApplied: false,
+    resaleRestriction: "없음",
+    reWinRestriction: "없음",
+    residenceObligation: "없음",
+    schedule: {
+      announcement: "—",
+      specialApply: fmtDate(ann.application_start),
+      general1st: fmtDate(ann.application_start),
+      general2nd: fmtDate(ann.application_end),
+      winnerAnnounce: fmtDate(ann.winner_announce_date),
+      docSubmit: "—",
+      contract: `${fmtDate(ann.contract_start)}${ann.contract_end ? ` ~ ${fmtDate(ann.contract_end)}` : ""}`,
+    },
+    types: [],
+    region: {
+      priority: regionPriority[0] || "—",
+      other: regionPriority.slice(1).join(", ") || "—",
+    },
+    subscription: {
+      period1st: rules.min_subscription_period ? `${rules.min_subscription_period}개월 이상` : "—",
+      deposit: [],
+    },
+    specialSupply: {
+      institution: specialTypes.includes("기관추천") ? 1 : 0,
+      multiChild: specialTypes.includes("다자녀가구") ? 1 : 0,
+      newlywed: specialTypes.includes("신혼부부") ? 1 : 0,
+      seniorParent: specialTypes.includes("노부모부양") ? 1 : 0,
+      firstLife: specialTypes.includes("생애최초") ? 1 : 0,
+    },
+    multiChildCriteria: [],
+    newlywedIncome: { single100: "—", dual120: "—", single140: "—", dual160: "—" },
+    firstLifeIncome: { pct130: "—", pct160: "—" },
+    assetLimit: "—",
+    generalPointSystem: { ratio: "—", maxPoints: 0, items: [] },
+    requiredDocs: {
+      common: rules.no_home_required ? ["주민등록등본", "주민등록초본 (무주택 확인)", "혼인관계증명서"] : ["주민등록등본", "주민등록초본"],
+      multiChild: [],
+      newlywed: specialTypes.includes("신혼부부") ? ["혼인관계증명서 (상세)", "건강보험 자격득실 확인서", "소득금액증명원"] : [],
+      seniorParent: [],
+      firstLife: specialTypes.includes("생애최초") ? ["소득금액증명원", "재직·사업 증빙", "근로/사업소득세 납부증명원"] : [],
+      generalPoint: [],
+    },
+    notes: [
+      "PDF 자동 추출은 일정·자격 기준·특별공급 유형만 지원합니다.",
+      "단지 세부 정보(공급세대수, 소득기준, 가점제 등)는 공고문에서 수동으로 확인해 주세요.",
+    ],
+  };
+}
+
+function ComparePageInner() {
+  const searchParams = useSearchParams();
+  const registeredId = searchParams?.get("id");
+
+  const [registeredApts, setRegisteredApts] = useState<AptAnnouncement[]>([]);
+  const [loadingRegistered, setLoadingRegistered] = useState(false);
+  const [selectedId, setSelectedId] = useState<string>(staticAnnouncements[0].id);
   const [tab, setTab] = useState<Tab>("overview");
 
-  const selected = announcements.find((a) => a.id === selectedId)!;
+  // 마운트 시 localStorage에 저장된 모든 공고를 사이드바에 추가 (선택적으로 query param의 것을 하이라이트)
+  useEffect(() => {
+    setLoadingRegistered(true);
+    let cancelled = false;
+    (async () => {
+      const adapted: AptAnnouncement[] = [];
+
+      // 1) query param에 id가 있으면 그 공고를 우선 로드 (backend → local fallback)
+      if (registeredId) {
+        const idNum = Number(registeredId);
+        let loaded: any = null;
+        try {
+          const r = await api.get(`/announcements/${idNum}`);
+          loaded = r.data;
+        } catch (err: any) {
+          if (isNetworkError(err) || err?.response?.status === 404) {
+            loaded = localAnnouncements.get(idNum);
+          }
+        }
+        if (loaded) adapted.push(adaptToAptAnnouncement(loaded));
+      }
+
+      // 2) localStorage의 나머지 공고들도 추가
+      const localAll = localAnnouncements.listAll();
+      for (const la of localAll) {
+        if (adapted.some((a) => a.id === `registered-${la.id}`)) continue;
+        adapted.push(adaptToAptAnnouncement(la));
+      }
+
+      if (!cancelled) {
+        setRegisteredApts(adapted);
+        // query param으로 온 공고가 있으면 자동 선택
+        if (registeredId && adapted.length > 0) {
+          setSelectedId(adapted[0].id);
+        }
+        setLoadingRegistered(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [registeredId]);
+
+  const allApts = [...registeredApts, ...staticAnnouncements];
+  const selected = allApts.find((a) => a.id === selectedId) || staticAnnouncements[0];
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -535,14 +662,34 @@ export default function ComparePage() {
           <ArrowLeft className="w-3.5 h-3.5" /> 모집공고 목록
         </a>
         <h1 className="text-2xl font-bold text-gray-900">공고문 비교 분석</h1>
-        <p className="text-sm text-gray-500 mt-1">6개 아파트의 청약 조건, 특별공급, 소득기준, 필요서류를 한눈에 비교</p>
+        <p className="text-sm text-gray-500 mt-1">
+          {registeredApts.length > 0
+            ? `내가 등록한 공고 ${registeredApts.length}건 + 참고용 샘플 ${staticAnnouncements.length}건 비교`
+            : `${staticAnnouncements.length}개 아파트의 청약 조건, 특별공급, 소득기준, 필요서류를 한눈에 비교`}
+        </p>
       </div>
 
       <div className="flex gap-6">
         {/* Left: Apartment Selection */}
         <div className="w-64 flex-shrink-0 space-y-2">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">단지 선택</p>
-          {announcements.map((apt) => (
+          {registeredApts.length > 0 && (
+            <>
+              <p className="text-xs font-medium text-blue-600 uppercase tracking-wider mb-2 flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> 내가 등록한 공고
+              </p>
+              {registeredApts.map((apt) => (
+                <AptCard
+                  key={apt.id}
+                  apt={apt}
+                  selected={apt.id === selectedId}
+                  onClick={() => setSelectedId(apt.id)}
+                />
+              ))}
+              <div className="h-px bg-gray-200 my-3" />
+            </>
+          )}
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">참고용 샘플</p>
+          {staticAnnouncements.map((apt) => (
             <AptCard
               key={apt.id}
               apt={apt}
@@ -583,5 +730,13 @@ export default function ComparePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ComparePage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-gray-400">불러오는 중...</div>}>
+      <ComparePageInner />
+    </Suspense>
   );
 }

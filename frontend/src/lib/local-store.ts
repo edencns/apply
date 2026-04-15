@@ -33,6 +33,7 @@ export interface LocalAnnouncement {
 
 const SITES_KEY = "apply:sites";
 const ANNOUNCEMENTS_KEY = "apply:announcements";
+const ACTIVE_ANN_KEY = "apply:activeAnnouncement";
 
 function read<T>(key: string): T[] {
   if (typeof window === "undefined") return [];
@@ -104,6 +105,45 @@ export const localAnnouncements = {
     items.push(ann);
     write(ANNOUNCEMENTS_KEY, items);
     return ann;
+  },
+};
+
+// ─── Active Announcement (현재 작업 중인 공고) ────────────
+/** 다른 페이지(고객 관리, 서류 검수, 공고 비교)에서 끌어다 쓰기 위해 현재 선택된 공고를 보관 */
+export interface ActiveAnnouncementSnapshot {
+  id: number;
+  title: string;
+  announcement_no?: string | null;
+  source: "backend" | "local";
+  snapshot: LocalAnnouncement | null;
+  selected_at: string;
+}
+
+export const activeAnnouncement = {
+  set(ann: { id: number; title: string; announcement_no?: string | null }, source: "backend" | "local" = "local", snapshot: LocalAnnouncement | null = null) {
+    if (typeof window === "undefined") return;
+    const payload: ActiveAnnouncementSnapshot = {
+      id: ann.id,
+      title: ann.title,
+      announcement_no: ann.announcement_no ?? null,
+      source,
+      snapshot,
+      selected_at: new Date().toISOString(),
+    };
+    window.localStorage.setItem(ACTIVE_ANN_KEY, JSON.stringify(payload));
+  },
+  get(): ActiveAnnouncementSnapshot | null {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(ACTIVE_ANN_KEY);
+      return raw ? (JSON.parse(raw) as ActiveAnnouncementSnapshot) : null;
+    } catch {
+      return null;
+    }
+  },
+  clear() {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(ACTIVE_ANN_KEY);
   },
 };
 

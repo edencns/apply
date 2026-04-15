@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { customersApi, sitesApi, eligibilityApi } from "@/lib/api";
+import { ActiveAnnouncementBanner } from "@/components/ActiveAnnouncementBanner";
 import { UserPlus, Search, ChevronRight, Calculator, FileSpreadsheet, Loader2, Download } from "lucide-react";
 
 interface Customer {
@@ -193,6 +194,7 @@ export default function CustomersPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <ActiveAnnouncementBanner />
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">고객 관리</h1>
