@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { sitesApi, api } from "@/lib/api";
+import { localSites, localAnnouncements, isNetworkError } from "@/lib/local-store";
 import { Plus, BookOpen, CalendarDays, ChevronRight, FileUp, Loader2, CheckCircle2 } from "lucide-react";
 
 interface Announcement {
@@ -60,11 +61,18 @@ export default function AnnouncementsPage() {
         setSiteId(r.data[0].id);
         setSitesError(null);
       }
-      // 빈 목록은 에러 아님 — handleCreate에서 자동 생성
       return r.data;
     } catch (err: any) {
+      if (isNetworkError(err)) {
+        // 백엔드 연결 불가 → 로컬 저장소 사용
+        const local = localSites.list();
+        setSites(local);
+        if (local.length > 0) setSiteId(local[0].id);
+        setSitesError(null);
+        return local;
+      }
       console.error("[announcements] sites load failed", err);
-      setSitesError(err?.message || "현장 목록을 불러오지 못했습니다 (API 서버 연결 확인).");
+      setSitesError(err?.message || "현장 목록을 불러오지 못했습니다.");
       return null;
     }
   }, []);
@@ -77,6 +85,13 @@ export default function AnnouncementsPage() {
     try {
       const r = await api.get(`/announcements/site/${siteId}`);
       setAnnouncements(r.data);
+    } catch (err: any) {
+      if (isNetworkError(err)) {
+        setAnnouncements(localAnnouncements.listBySite(siteId) as any);
+      } else {
+        console.error("[announcements] load failed", err);
+        setAnnouncements([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -103,35 +118,15 @@ export default function AnnouncementsPage() {
 
     setSubmitting(true);
     try {
-      // 1) 현장이 없으면 공고명으로 즉석 생성
-      let useSiteId = siteId;
-      if (!useSiteId) {
-        // 혹시 새로고침 없이 이미 생긴 현장이 있는지 한 번 더 확인
-        try {
-          const latest = await sitesApi.list();
-          if (latest.data.length > 0) {
-            useSiteId = latest.data[0].id;
-            setSites(latest.data);
-            setSiteId(useSiteId);
-            setSitesError(null);
-          }
-        } catch { /* 다음 단계에서 create 시도 */ }
-
-        if (!useSiteId) {
-          const created = await sitesApi.create({
-            name: form.title.trim(),
-            address: "미입력",
-            total_units: 0,
-          });
-          useSiteId = (created.data as { id: number }).id;
-          // 드롭다운 갱신 (실패해도 현재 흐름엔 영향 없음)
-          reloadSites().catch(() => {});
-        }
-      }
-
-      // 2) 공고 생성
-      await api.post("/announcements/", {
-        site_id: useSiteId,
+      const eligibilityRules = {
+        no_home_required: form.rules.no_home_required,
+        region_priority: form.rules.region_priority,
+        min_region_residence_months: form.rules.min_region_residence_months,
+        income_limit: form.rules.income_limit ? Number(form.rules.income_limit) : null,
+        min_subscription_period: form.rules.min_subscription_period,
+        special_supply_types: form.rules.special_supply_types,
+      };
+      const annPayload = {
         title: form.title.trim(),
         announcement_no: form.announcement_no || null,
         application_start: normalizeDateTime(form.application_start),
@@ -139,27 +134,84 @@ export default function AnnouncementsPage() {
         winner_announce_date: normalizeDateTime(form.winner_announce_date),
         contract_start: normalizeDateTime(form.contract_start),
         contract_end: normalizeDateTime(form.contract_end),
-        eligibility_rules: {
-          no_home_required: form.rules.no_home_required,
-          region_priority: form.rules.region_priority,
-          min_region_residence_months: form.rules.min_region_residence_months,
-          income_limit: form.rules.income_limit ? Number(form.rules.income_limit) : null,
-          min_subscription_period: form.rules.min_subscription_period,
-          special_supply_types: form.rules.special_supply_types,
-        },
-      });
+      };
+
+      // ─── 1) 백엔드 경로 ─────────────────────────────
+      let useSiteId = siteId;
+      let usedLocal = false;
+
+      try {
+        // 현장이 없으면 공고명으로 즉석 생성 (백엔드)
+        if (!useSiteId) {
+          try {
+            const latest = await sitesApi.list();
+            if (latest.data.length > 0) {
+              useSiteId = latest.data[0].id;
+              setSites(latest.data);
+              setSiteId(useSiteId);
+              setSitesError(null);
+            }
+          } catch (e) {
+            if (isNetworkError(e)) throw e; // 네트워크 에러면 로컬 경로로 점프
+          }
+
+          if (!useSiteId) {
+            const created = await sitesApi.create({
+              name: form.title.trim(),
+              address: "미입력",
+              total_units: 0,
+            });
+            useSiteId = (created.data as { id: number }).id;
+            reloadSites().catch(() => {});
+          }
+        }
+
+        await api.post("/announcements/", {
+          site_id: useSiteId,
+          ...annPayload,
+          eligibility_rules: eligibilityRules,
+        });
+      } catch (backendErr: any) {
+        if (!isNetworkError(backendErr)) throw backendErr;
+
+        // ─── 2) 네트워크 에러 → 로컬 저장소 경로 ────────
+        usedLocal = true;
+        let localSiteId = useSiteId;
+        if (!localSiteId) {
+          const existing = localSites.list();
+          if (existing.length > 0) {
+            localSiteId = existing[0].id;
+          } else {
+            const s = localSites.create({ name: form.title.trim() });
+            localSiteId = s.id;
+          }
+          setSites(localSites.list());
+          setSiteId(localSiteId);
+          setSitesError(null);
+        }
+        localAnnouncements.create({
+          site_id: localSiteId,
+          ...annPayload,
+          eligibility_rules: eligibilityRules,
+        });
+      }
+
       setShowForm(false);
       setPdfFilled([]);
       setForm({ title: "", announcement_no: "", application_start: "", application_end: "", winner_announce_date: "", contract_start: "", contract_end: "", rules: { ...DEFAULT_RULES }, regionInput: "" });
-      loadAnnouncements();
+      if (usedLocal) {
+        // 로컬 저장 후에도 동일한 loadAnnouncements 경로가 자동으로 local fallback을 탄다
+        loadAnnouncements();
+      } else {
+        loadAnnouncements();
+      }
     } catch (err: any) {
-      // axios 에러 / 네트워크 에러 / 일반 에러 모두 커버
       console.error("[announcements] create failed", err);
       const detail =
         err?.response?.data?.detail ||
         (Array.isArray(err?.response?.data) ? JSON.stringify(err.response.data) : null) ||
         err?.message ||
-        "등록 실패 — 서버 응답이 없습니다.";
+        "등록 실패";
       setFormError(typeof detail === "string" ? detail : JSON.stringify(detail));
     } finally {
       setSubmitting(false);
