@@ -82,9 +82,18 @@ function AptCard({ apt, selected, onClick }: { apt: AptAnnouncement; selected: b
         </div>
         <Badge text={apt.regulation} cls={REG_COLOR[apt.regulation]} />
       </div>
-      <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
+      <div className="mt-2 flex flex-col gap-1 text-xs text-gray-500">
         <span>{apt.totalUnits}세대</span>
-        <span>{apt.moveIn}</span>
+        {apt.schedule.docSubmit && apt.schedule.docSubmit !== "—" && (
+          <span className="flex items-center gap-1">
+            <FileText className="w-3 h-3" /> 서류 {apt.schedule.docSubmit}
+          </span>
+        )}
+        {apt.schedule.contract && apt.schedule.contract !== "—" && (
+          <span className="flex items-center gap-1">
+            <CalendarDays className="w-3 h-3" /> 계약 {apt.schedule.contract}
+          </span>
+        )}
       </div>
     </button>
   );

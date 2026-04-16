@@ -3,10 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { sitesApi, api } from "@/lib/api";
 import { localSites, localAnnouncements, isNetworkError } from "@/lib/local-store";
-import { Plus, BookOpen, CalendarDays, ChevronRight, FileUp, Loader2, CheckCircle2, Trash2 } from "lucide-react";
+import { Plus, BookOpen, CalendarDays, ChevronRight, FileUp, Loader2, CheckCircle2, Trash2, FileText, PenTool } from "lucide-react";
+import { announcements as sampleAnnouncements } from "./compare/data";
 
 interface Announcement {
-  id: number;
+  id: number | string;
   site_id?: number;
   title: string;
   announcement_no: string;
@@ -14,6 +15,12 @@ interface Announcement {
   application_start: string;
   contract_end?: string | null;
   created_at?: string;
+  _isSample?: boolean;       // 샘플 공고 표시용
+  _docSubmit?: string;        // 서류접수 일정
+  _contract?: string;         // 계약체결 일정
+  _location?: string;         // 위치
+  _totalUnits?: number;       // 총 세대수
+  _regulation?: string;       // 규제지역
 }
 
 type TabKey = "active" | "done";
@@ -68,7 +75,7 @@ export default function AnnouncementsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
-  const [deleting, setDeleting] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<number | string | null>(null);
 
   const [sitesError, setSitesError] = useState<string | null>(null);
 
@@ -97,6 +104,22 @@ export default function AnnouncementsPage() {
 
   useEffect(() => { reloadSites(); }, [reloadSites]);
 
+  /** 샘플 공고를 Announcement 형태로 변환 */
+  const sampleAsAnnouncements: Announcement[] = sampleAnnouncements.map((s) => ({
+    id: `sample-${s.id}`,
+    title: s.shortName,
+    announcement_no: "",
+    status: "published",
+    application_start: s.schedule.specialApply || "",
+    contract_end: null,
+    _isSample: true,
+    _docSubmit: s.schedule.docSubmit,
+    _contract: s.schedule.contract,
+    _location: s.location,
+    _totalUnits: s.totalUnits,
+    _regulation: s.regulation,
+  }));
+
   const loadAnnouncements = useCallback(async () => {
     setLoading(true);
     try {
@@ -107,6 +130,10 @@ export default function AnnouncementsPage() {
       for (const l of local) {
         if (!merged.some((a) => a.id === l.id)) merged.push(l as any);
       }
+      // 샘플 공고 추가
+      for (const s of sampleAsAnnouncements) {
+        merged.push(s as any);
+      }
       setAnnouncements(
         merged.sort((a: any, b: any) => {
           const ad = a.created_at || a.application_start || "";
@@ -116,10 +143,12 @@ export default function AnnouncementsPage() {
       );
     } catch (err: any) {
       if (isNetworkError(err)) {
-        setAnnouncements(localAnnouncements.listAll() as any);
+        const local = localAnnouncements.listAll() as any[];
+        setAnnouncements([...local, ...sampleAsAnnouncements] as any);
       } else {
         console.error("[announcements] load failed", err);
-        setAnnouncements(localAnnouncements.listAll() as any);
+        const local = localAnnouncements.listAll() as any[];
+        setAnnouncements([...local, ...sampleAsAnnouncements] as any);
       }
     } finally {
       setLoading(false);
@@ -144,7 +173,7 @@ export default function AnnouncementsPage() {
         if (!isNetworkError(err) && err?.response?.status !== 404) throw err;
       }
       // 로컬에서도 삭제
-      localAnnouncements.remove(ann.id);
+      if (typeof ann.id === "number") localAnnouncements.remove(ann.id);
       setAnnouncements((prev) => prev.filter((a) => a.id !== ann.id));
     } catch (err: any) {
       alert(err?.message || "삭제 실패");
@@ -392,26 +421,63 @@ export default function AnnouncementsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {visibleAnns.map((ann) => (
+          {visibleAnns.map((ann) => {
+            const isSample = !!(ann as any)._isSample;
+            const linkHref = isSample
+              ? `/announcements/compare?id=${String(ann.id).replace("sample-", "")}`
+              : `/announcements/${ann.id}`;
+
+            return (
             <div
               key={ann.id}
-              className="card hover:shadow-md hover:border-blue-300 transition-all group"
+              className={`card hover:shadow-md transition-all group ${isSample ? "hover:border-indigo-300 border-l-4 border-l-indigo-200" : "hover:border-blue-300"}`}
             >
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <a
-                  href={`/announcements/${ann.id}`}
+                  href={linkHref}
                   className="flex items-center gap-3 min-w-0 flex-1"
                 >
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${
-                    tab === "done" ? "bg-gray-100 group-hover:bg-gray-200" : "bg-orange-50 group-hover:bg-orange-100"
+                    isSample ? "bg-indigo-50 group-hover:bg-indigo-100"
+                    : tab === "done" ? "bg-gray-100 group-hover:bg-gray-200"
+                    : "bg-orange-50 group-hover:bg-orange-100"
                   }`}>
-                    <BookOpen className={`w-5 h-5 ${tab === "done" ? "text-gray-400" : "text-orange-500"}`} />
+                    <BookOpen className={`w-5 h-5 ${
+                      isSample ? "text-indigo-500" : tab === "done" ? "text-gray-400" : "text-orange-500"
+                    }`} />
                   </div>
                   <div className="min-w-0">
-                    <div className="font-semibold text-gray-900 truncate">{ann.title}</div>
-                    <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-900 truncate">{ann.title}</span>
+                      {isSample && (ann as any)._regulation && (
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                          (ann as any)._regulation === "투기과열" ? "bg-red-100 text-red-700"
+                          : (ann as any)._regulation === "청약과열" ? "bg-orange-100 text-orange-700"
+                          : "bg-green-100 text-green-700"
+                        }`}>{(ann as any)._regulation}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5 flex-wrap">
+                      {isSample && (ann as any)._location && (
+                        <span className="text-gray-500">{(ann as any)._location}</span>
+                      )}
+                      {isSample && (ann as any)._totalUnits > 0 && (
+                        <span>{(ann as any)._totalUnits}세대</span>
+                      )}
                       {ann.announcement_no && <span>공고번호: {ann.announcement_no}</span>}
-                      {ann.application_start && (
+                      {/* 서류접수/계약체결 날짜 (샘플) */}
+                      {isSample && (ann as any)._docSubmit && (
+                        <span className="flex items-center gap-1">
+                          <FileText className="w-3 h-3" /> 서류 {(ann as any)._docSubmit}
+                        </span>
+                      )}
+                      {isSample && (ann as any)._contract && (
+                        <span className="flex items-center gap-1">
+                          <PenTool className="w-3 h-3" /> 계약 {(ann as any)._contract}
+                        </span>
+                      )}
+                      {/* 청약접수일 (내가 등록한 공고) */}
+                      {!isSample && ann.application_start && (
                         <span className="flex items-center gap-1">
                           <CalendarDays className="w-3 h-3" />
                           {new Date(ann.application_start).toLocaleDateString("ko-KR")}
@@ -426,25 +492,28 @@ export default function AnnouncementsPage() {
                   </div>
                 </a>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDelete(ann); }}
-                    disabled={deleting === ann.id}
-                    className="p-2 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
-                    title="삭제"
-                  >
-                    {deleting === ann.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="w-4 h-4" />
-                    )}
-                  </button>
-                  <a href={`/announcements/${ann.id}`} className="flex-shrink-0">
+                  {!isSample && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDelete(ann); }}
+                      disabled={deleting === ann.id}
+                      className="p-2 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      title="삭제"
+                    >
+                      {deleting === ann.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </button>
+                  )}
+                  <a href={linkHref} className="flex-shrink-0">
                     <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 transition-colors" />
                   </a>
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
