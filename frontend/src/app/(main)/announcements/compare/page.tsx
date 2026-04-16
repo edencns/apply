@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import {
   Building2, CalendarDays, MapPin, Users, FileText, Shield,
   ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, XCircle,
-  ArrowLeft, Banknote, Scale, Baby, Heart, UserCheck, Sparkles,
+  ArrowLeft, Banknote, Scale, Baby, Heart, UserCheck,
 } from "lucide-react";
 import { announcements as staticAnnouncements, AptAnnouncement } from "./data";
 import { api } from "@/lib/api";
@@ -606,18 +606,16 @@ function ComparePageInner() {
   const registeredId = searchParams?.get("id");
 
   const [registeredApts, setRegisteredApts] = useState<AptAnnouncement[]>([]);
-  const [loadingRegistered, setLoadingRegistered] = useState(false);
   const [selectedId, setSelectedId] = useState<string>(staticAnnouncements[0].id);
   const [tab, setTab] = useState<Tab>("overview");
 
-  // 마운트 시 localStorage에 저장된 모든 공고를 사이드바에 추가 (선택적으로 query param의 것을 하이라이트)
+  // 마운트 시 등록된 공고를 모두 로드하여 샘플과 합침
   useEffect(() => {
-    setLoadingRegistered(true);
     let cancelled = false;
     (async () => {
       const adapted: AptAnnouncement[] = [];
 
-      // 1) query param에 id가 있으면 그 공고를 우선 로드 (backend → local fallback)
+      // 1) query param에 id가 있으면 우선 로드
       if (registeredId) {
         const idNum = Number(registeredId);
         let loaded: any = null;
@@ -632,7 +630,7 @@ function ComparePageInner() {
         if (loaded) adapted.push(adaptToAptAnnouncement(loaded));
       }
 
-      // 2) localStorage의 나머지 공고들도 추가
+      // 2) 로컬 공고 전부 추가
       const localAll = localAnnouncements.listAll();
       for (const la of localAll) {
         if (adapted.some((a) => a.id === `registered-${la.id}`)) continue;
@@ -641,18 +639,17 @@ function ComparePageInner() {
 
       if (!cancelled) {
         setRegisteredApts(adapted);
-        // query param으로 온 공고가 있으면 자동 선택
         if (registeredId && adapted.length > 0) {
           setSelectedId(adapted[0].id);
         }
-        setLoadingRegistered(false);
       }
     })();
     return () => { cancelled = true; };
   }, [registeredId]);
 
+  // 등록된 공고 + 샘플 모두 하나의 플랫 리스트
   const allApts = [...registeredApts, ...staticAnnouncements];
-  const selected = allApts.find((a) => a.id === selectedId) || staticAnnouncements[0];
+  const selected = allApts.find((a) => a.id === selectedId) || allApts[0] || staticAnnouncements[0];
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -663,33 +660,14 @@ function ComparePageInner() {
         </a>
         <h1 className="text-2xl font-bold text-gray-900">공고문 비교 분석</h1>
         <p className="text-sm text-gray-500 mt-1">
-          {registeredApts.length > 0
-            ? `내가 등록한 공고 ${registeredApts.length}건 + 참고용 샘플 ${staticAnnouncements.length}건 비교`
-            : `${staticAnnouncements.length}개 아파트의 청약 조건, 특별공급, 소득기준, 필요서류를 한눈에 비교`}
+          총 {allApts.length}개 공고의 청약 조건, 특별공급, 소득기준, 필요서류를 한눈에 비교
         </p>
       </div>
 
       <div className="flex gap-6">
-        {/* Left: Apartment Selection */}
+        {/* Left: 전체 공고 리스트 (플랫) */}
         <div className="w-64 flex-shrink-0 space-y-2">
-          {registeredApts.length > 0 && (
-            <>
-              <p className="text-xs font-medium text-blue-600 uppercase tracking-wider mb-2 flex items-center gap-1">
-                <Sparkles className="w-3 h-3" /> 내가 등록한 공고
-              </p>
-              {registeredApts.map((apt) => (
-                <AptCard
-                  key={apt.id}
-                  apt={apt}
-                  selected={apt.id === selectedId}
-                  onClick={() => setSelectedId(apt.id)}
-                />
-              ))}
-              <div className="h-px bg-gray-200 my-3" />
-            </>
-          )}
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">참고용 샘플</p>
-          {staticAnnouncements.map((apt) => (
+          {allApts.map((apt) => (
             <AptCard
               key={apt.id}
               apt={apt}
@@ -697,6 +675,9 @@ function ComparePageInner() {
               onClick={() => setSelectedId(apt.id)}
             />
           ))}
+          {allApts.length === 0 && (
+            <p className="text-xs text-gray-400 text-center py-8">등록된 공고가 없습니다</p>
+          )}
         </div>
 
         {/* Right: Detail */}

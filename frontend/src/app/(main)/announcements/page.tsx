@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { sitesApi, api } from "@/lib/api";
 import { localSites, localAnnouncements, isNetworkError } from "@/lib/local-store";
-import { Plus, BookOpen, CalendarDays, ChevronRight, FileUp, Loader2, CheckCircle2 } from "lucide-react";
+import { Plus, BookOpen, CalendarDays, ChevronRight, FileUp, Loader2, CheckCircle2, Trash2 } from "lucide-react";
 
 interface Announcement {
   id: number;
@@ -12,7 +12,11 @@ interface Announcement {
   announcement_no: string;
   status: string;
   application_start: string;
+  contract_end?: string | null;
+  created_at?: string;
 }
+
+type TabKey = "active" | "done";
 
 const DEFAULT_RULES = {
   no_home_required: true,
@@ -21,7 +25,25 @@ const DEFAULT_RULES = {
   income_limit: "",
   min_subscription_period: 0,
   special_supply_types: [] as string[],
+  // LLM 확장 필드
+  supply_types_detail: null as any[] | null,
+  exclusive_areas: null as any[] | null,
+  required_documents: null as Record<string, string[]> | null,
+  income_table: null as Record<string, Record<string, number>> | null,
+  asset_limit: "" as string,
+  car_value_limit: "" as string,
 };
+
+/** 공고가 완료 상태인지 판별 */
+function isDone(ann: Announcement): boolean {
+  if (ann.status === "closed") return true;
+  if (ann.contract_end) {
+    try {
+      return new Date(ann.contract_end).getTime() < Date.now();
+    } catch { return false; }
+  }
+  return false;
+}
 
 export default function AnnouncementsPage() {
   const [sites, setSites] = useState<any[]>([]);
@@ -29,6 +51,7 @@ export default function AnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [tab, setTab] = useState<TabKey>("active");
   const [form, setForm] = useState({
     title: "",
     announcement_no: "",
@@ -45,6 +68,7 @@ export default function AnnouncementsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
+  const [deleting, setDeleting] = useState<number | null>(null);
 
   const [sitesError, setSitesError] = useState<string | null>(null);
 
@@ -59,7 +83,6 @@ export default function AnnouncementsPage() {
       return r.data;
     } catch (err: any) {
       if (isNetworkError(err)) {
-        // 백엔드 연결 불가 → 로컬 저장소 사용
         const local = localSites.list();
         setSites(local);
         if (local.length > 0) setSiteId(local[0].id);
@@ -78,9 +101,7 @@ export default function AnnouncementsPage() {
     setLoading(true);
     try {
       const r = await api.get(`/announcements/`);
-      // 전체 공고. 백엔드/로컬 어느쪽에서 불러오든 최신순으로 정렬
       const data = Array.isArray(r.data) ? r.data : [];
-      // 로컬에 저장된 공고들도 함께 병합 (중복 id 제거)
       const local = localAnnouncements.listAll();
       const merged = [...data];
       for (const l of local) {
@@ -98,7 +119,6 @@ export default function AnnouncementsPage() {
         setAnnouncements(localAnnouncements.listAll() as any);
       } else {
         console.error("[announcements] load failed", err);
-        // 실패 시에도 로컬만이라도 보여준다
         setAnnouncements(localAnnouncements.listAll() as any);
       }
     } finally {
@@ -108,18 +128,35 @@ export default function AnnouncementsPage() {
 
   useEffect(() => { loadAnnouncements(); }, [loadAnnouncements]);
 
-  /** datetime-local ("YYYY-MM-DDTHH:mm") → "YYYY-MM-DDTHH:mm:00" (FastAPI 친화) */
   const normalizeDateTime = (v: string): string | null => {
     if (!v) return null;
-    // 이미 초 포함이면 그대로, 아니면 ":00" 추가
     return /\d{2}:\d{2}:\d{2}/.test(v) ? v : `${v}:00`;
+  };
+
+  /** 공고 삭제 */
+  const handleDelete = async (ann: Announcement) => {
+    if (!confirm(`"${ann.title}" 공고를 삭제하시겠습니까?\n삭제하면 복구할 수 없습니다.`)) return;
+    setDeleting(ann.id);
+    try {
+      try {
+        await api.delete(`/announcements/${ann.id}`);
+      } catch (err: any) {
+        if (!isNetworkError(err) && err?.response?.status !== 404) throw err;
+      }
+      // 로컬에서도 삭제
+      localAnnouncements.remove(ann.id);
+      setAnnouncements((prev) => prev.filter((a) => a.id !== ann.id));
+    } catch (err: any) {
+      alert(err?.message || "삭제 실패");
+    } finally {
+      setDeleting(null);
+    }
   };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
-    // 제목 필수
     if (!form.title.trim()) {
       setFormError("공고명을 입력해 주세요.");
       return;
@@ -127,7 +164,7 @@ export default function AnnouncementsPage() {
 
     setSubmitting(true);
     try {
-      const eligibilityRules = {
+      const eligibilityRules: Record<string, any> = {
         no_home_required: form.rules.no_home_required,
         region_priority: form.rules.region_priority,
         min_region_residence_months: form.rules.min_region_residence_months,
@@ -135,6 +172,12 @@ export default function AnnouncementsPage() {
         min_subscription_period: form.rules.min_subscription_period,
         special_supply_types: form.rules.special_supply_types,
       };
+      if (form.rules.supply_types_detail) eligibilityRules.supply_types_detail = form.rules.supply_types_detail;
+      if (form.rules.exclusive_areas) eligibilityRules.exclusive_areas = form.rules.exclusive_areas;
+      if (form.rules.required_documents) eligibilityRules.required_documents = form.rules.required_documents;
+      if (form.rules.income_table) eligibilityRules.income_table = form.rules.income_table;
+      if (form.rules.asset_limit) eligibilityRules.asset_limit = form.rules.asset_limit;
+      if (form.rules.car_value_limit) eligibilityRules.car_value_limit = form.rules.car_value_limit;
       const annPayload = {
         title: form.title.trim(),
         announcement_no: form.announcement_no || null,
@@ -145,12 +188,10 @@ export default function AnnouncementsPage() {
         contract_end: normalizeDateTime(form.contract_end),
       };
 
-      // ─── 1) 백엔드 경로 ─────────────────────────────
       let useSiteId = siteId;
       let usedLocal = false;
 
       try {
-        // 현장이 없으면 공고명으로 즉석 생성 (백엔드)
         if (!useSiteId) {
           try {
             const latest = await sitesApi.list();
@@ -161,7 +202,7 @@ export default function AnnouncementsPage() {
               setSitesError(null);
             }
           } catch (e) {
-            if (isNetworkError(e)) throw e; // 네트워크 에러면 로컬 경로로 점프
+            if (isNetworkError(e)) throw e;
           }
 
           if (!useSiteId) {
@@ -179,12 +220,11 @@ export default function AnnouncementsPage() {
           site_id: useSiteId,
           ...annPayload,
           eligibility_rules: eligibilityRules,
-          status: "published", // 등록 즉시 공고 비교/고객/서류 검수에 노출
+          status: "published",
         });
       } catch (backendErr: any) {
         if (!isNetworkError(backendErr)) throw backendErr;
 
-        // ─── 2) 네트워크 에러 → 로컬 저장소 경로 ────────
         usedLocal = true;
         let localSiteId = useSiteId;
         if (!localSiteId) {
@@ -203,19 +243,14 @@ export default function AnnouncementsPage() {
           site_id: localSiteId,
           ...annPayload,
           eligibility_rules: eligibilityRules,
-          status: "published", // 등록 즉시 공고 비교/고객/서류 검수에 노출
+          status: "published",
         });
       }
 
       setShowForm(false);
       setPdfFilled([]);
       setForm({ title: "", announcement_no: "", application_start: "", application_end: "", winner_announce_date: "", contract_start: "", contract_end: "", rules: { ...DEFAULT_RULES }, regionInput: "" });
-      if (usedLocal) {
-        // 로컬 저장 후에도 동일한 loadAnnouncements 경로가 자동으로 local fallback을 탄다
-        loadAnnouncements();
-      } else {
-        loadAnnouncements();
-      }
+      loadAnnouncements();
     } catch (err: any) {
       console.error("[announcements] create failed", err);
       const detail =
@@ -264,12 +299,32 @@ export default function AnnouncementsPage() {
         if (d.minSubscriptionMonths) { next.rules.min_subscription_period = d.minSubscriptionMonths; filled.push("통장 납입 기간"); }
         if (Array.isArray(d.specialTypes) && d.specialTypes.length > 0) { next.rules.special_supply_types = d.specialTypes; filled.push(`특별공급(${d.specialTypes.length}종)`); }
         if (d.region && p.rules.region_priority.length === 0) {
-          // 시/도 단위만 추출
           const firstRegion = d.region.split(/\s+/)[0];
           if (firstRegion) { next.rules.region_priority = [firstRegion]; filled.push("지역 우선순위"); }
         }
+        // ── LLM 확장 필드 저장 ──
+        if (d.supplyTypes && Array.isArray(d.supplyTypes) && d.supplyTypes.length > 0) {
+          next.rules.supply_types_detail = d.supplyTypes;
+          filled.push(`공급유형 상세(${d.supplyTypes.length}종)`);
+        }
+        if (d.exclusiveAreas && Array.isArray(d.exclusiveAreas) && d.exclusiveAreas.length > 0) {
+          next.rules.exclusive_areas = d.exclusiveAreas;
+          filled.push(`전용면적(${d.exclusiveAreas.length}종)`);
+        }
+        if (d.requiredDocuments && typeof d.requiredDocuments === "object") {
+          next.rules.required_documents = d.requiredDocuments;
+          filled.push("제출서류 목록");
+        }
+        if (d.incomeTable && typeof d.incomeTable === "object") {
+          next.rules.income_table = d.incomeTable;
+          filled.push("소득기준표");
+        }
+        if (d.assetLimit) { next.rules.asset_limit = d.assetLimit; filled.push("자산한도"); }
+        if (d.carValueLimit) { next.rules.car_value_limit = d.carValueLimit; filled.push("자동차가액 한도"); }
         return next;
       });
+      if (json.llmUsed) filled.push("✅ AI 분석 완료");
+      else filled.push("⚠️ 기본 파싱만 적용");
       setPdfFilled(filled);
     } catch (err: any) {
       alert(err.message || "PDF 파싱 실패");
@@ -278,6 +333,11 @@ export default function AnnouncementsPage() {
       if (pdfInputRef.current) pdfInputRef.current.value = "";
     }
   };
+
+  // ── 탭별 필터 ──
+  const activeAnns = announcements.filter((a) => !isDone(a));
+  const doneAnns = announcements.filter((a) => isDone(a));
+  const visibleAnns = tab === "active" ? activeAnns : doneAnns;
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -299,26 +359,53 @@ export default function AnnouncementsPage() {
         </div>
       )}
 
-      {/* 공고 목록 — 전체 */}
+      {/* 진행 중 / 완료 탭 */}
+      <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1">
+        {([
+          { key: "active" as TabKey, label: "진행 중", count: activeAnns.length },
+          { key: "done" as TabKey, label: "완료", count: doneAnns.length },
+        ]).map(({ key, label, count }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all flex-1 ${
+              tab === key
+                ? "bg-white text-blue-700 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {label}
+            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+              tab === key ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-500"
+            }`}>{count}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* 공고 목록 */}
       {loading ? (
         <div className="card text-center py-10 text-gray-400">불러오는 중...</div>
-      ) : announcements.length === 0 ? (
+      ) : visibleAnns.length === 0 ? (
         <div className="card text-center py-16 text-gray-400">
           <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>등록된 모집공고가 없습니다</p>
+          <p>{tab === "active" ? "진행 중인 공고가 없습니다" : "완료된 공고가 없습니다"}</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {announcements.map((ann) => (
-            <a
+          {visibleAnns.map((ann) => (
+            <div
               key={ann.id}
-              href={`/announcements/${ann.id}`}
-              className="card hover:shadow-md hover:border-blue-300 transition-all block group"
+              className="card hover:shadow-md hover:border-blue-300 transition-all group"
             >
               <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-orange-100 transition-colors">
-                    <BookOpen className="w-5 h-5 text-orange-500" />
+                <a
+                  href={`/announcements/${ann.id}`}
+                  className="flex items-center gap-3 min-w-0 flex-1"
+                >
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${
+                    tab === "done" ? "bg-gray-100 group-hover:bg-gray-200" : "bg-orange-50 group-hover:bg-orange-100"
+                  }`}>
+                    <BookOpen className={`w-5 h-5 ${tab === "done" ? "text-gray-400" : "text-orange-500"}`} />
                   </div>
                   <div className="min-w-0">
                     <div className="font-semibold text-gray-900 truncate">{ann.title}</div>
@@ -330,12 +417,33 @@ export default function AnnouncementsPage() {
                           {new Date(ann.application_start).toLocaleDateString("ko-KR")}
                         </span>
                       )}
+                      {tab === "done" && (
+                        <span className="inline-flex items-center gap-1 text-green-600">
+                          <CheckCircle2 className="w-3 h-3" /> 완료
+                        </span>
+                      )}
                     </div>
                   </div>
+                </a>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDelete(ann); }}
+                    disabled={deleting === ann.id}
+                    className="p-2 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                    title="삭제"
+                  >
+                    {deleting === ann.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                  </button>
+                  <a href={`/announcements/${ann.id}`} className="flex-shrink-0">
+                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 transition-colors" />
+                  </a>
                 </div>
-                <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 transition-colors flex-shrink-0" />
               </div>
-            </a>
+            </div>
           ))}
         </div>
       )}

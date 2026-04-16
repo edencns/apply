@@ -109,6 +109,18 @@ export const localAnnouncements = {
     write(ANNOUNCEMENTS_KEY, items);
     return ann;
   },
+  remove(id: number) {
+    const items = read<LocalAnnouncement>(ANNOUNCEMENTS_KEY).filter((a) => a.id !== id);
+    write(ANNOUNCEMENTS_KEY, items);
+  },
+  update(id: number, patch: Partial<LocalAnnouncement>) {
+    const items = read<LocalAnnouncement>(ANNOUNCEMENTS_KEY);
+    const idx = items.findIndex((a) => a.id === id);
+    if (idx >= 0) {
+      items[idx] = { ...items[idx], ...patch };
+      write(ANNOUNCEMENTS_KEY, items);
+    }
+  },
 };
 
 // ─── Customers ─────────────────────────────────────────
