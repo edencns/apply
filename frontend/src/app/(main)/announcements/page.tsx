@@ -134,6 +134,17 @@ export default function AnnouncementsPage() {
     } catch { return ""; }
   }
 
+  /** "YYYY.MM.DD~YYYY.MM.DD" → 같은 연도면 "YYYY.MM.DD~MM.DD" */
+  function fmtRange(start: string, end: string): string {
+    if (!start) return "";
+    if (!end || end === start) return start;
+    // 같은 연도면 뒤쪽 연도 생략
+    const [sy] = start.split(".");
+    const [ey, ...rest] = end.split(".");
+    if (sy === ey) return `${start}~${rest.join(".")}`;
+    return `${start}~${end}`;
+  }
+
   /** 등록된 공고(backend/local)에도 표시용 메타 추가 */
   function enrichRegistered(ann: any): any {
     const rules = ann.eligibility_rules || {};
@@ -145,16 +156,14 @@ export default function AnnouncementsPage() {
     const totalUnits = rules.total_units || areasSum;
     // 규제지역
     const regulation = rules.regulation || (rules.no_home_required ? "비규제" : null);
-    // 서류접수 날짜: eligibility_rules.doc_submit_start/end에서 가져옴
+    // 서류접수 날짜
     const docStart = fmtShortDate(rules.doc_submit_start);
     const docEnd = fmtShortDate(rules.doc_submit_end);
-    const docSubmit = docStart
-      ? (docEnd && docEnd !== docStart ? `${docStart}~${docEnd}` : docStart)
-      : "";
+    const docSubmit = fmtRange(docStart, docEnd);
     // 계약 날짜
     const conStart = fmtShortDate(ann.contract_start);
     const conEnd = fmtShortDate(ann.contract_end);
-    const contractDate = conStart ? (conEnd ? `${conStart}~${conEnd}` : conStart) : "";
+    const contractDate = fmtRange(conStart, conEnd);
 
     return {
       ...ann,
@@ -206,17 +215,14 @@ export default function AnnouncementsPage() {
 
   useEffect(() => { loadAnnouncements(); }, [loadAnnouncements]);
 
-  // 브라우저 뒤로가기(bfcache) 시 최신 상태로 다시 로드
+  // 브라우저 뒤로가기(bfcache) 시 — 캐시된 옛 번들이 보이지 않도록 강제 새로고침
   useEffect(() => {
-    const onPageShow = (e: PageTransitionEvent) => { if (e.persisted) loadAnnouncements(); };
-    const onFocus = () => loadAnnouncements();
-    window.addEventListener("pageshow", onPageShow);
-    window.addEventListener("focus", onFocus);
-    return () => {
-      window.removeEventListener("pageshow", onPageShow);
-      window.removeEventListener("focus", onFocus);
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) window.location.reload();
     };
-  }, [loadAnnouncements]);
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
 
   const normalizeDateTime = (v: string): string | null => {
     if (!v) return null;
