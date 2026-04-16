@@ -32,6 +32,8 @@ interface ParsedAnnouncement {
   applicationStart?: string;
   applicationEnd?: string;
   winnerAnnounceDate?: string;
+  docSubmitStart?: string;
+  docSubmitEnd?: string;
   contractStart?: string;
   contractEnd?: string;
   region?: string;
@@ -119,6 +121,8 @@ interface Schedule {
   applicationStart?: string;
   applicationEnd?: string;
   winnerAnnounceDate?: string;
+  docSubmitStart?: string;
+  docSubmitEnd?: string;
   contractStart?: string;
   contractEnd?: string;
 }
@@ -130,7 +134,7 @@ function parseScheduleTable(text: string, allDates: DateMatch[]): Schedule {
   const headerEnd = (headerMatch.index || 0) + headerMatch[0].length;
 
   const zoneStart = headerEnd;
-  const zoneEnd = headerEnd + 900;
+  const zoneEnd = headerEnd + 1200;
   const zoneDates = allDates.filter(d => d.offset >= zoneStart && d.offset < zoneEnd);
   if (zoneDates.length < 4) return {};
 
@@ -141,11 +145,19 @@ function parseScheduleTable(text: string, allDates: DateMatch[]): Schedule {
   sched.applicationEnd = d[3] || d[2] || d[1];
   sched.winnerAnnounceDate = d[4];
 
+  // d[5] 이후: 서류접수(start/end) + 계약(start/end)
+  // 전형적 구조: [서류시작, 서류끝, 계약시작, 계약끝] (4개)
+  // 또는 [서류시작, 서류끝, 계약시작] (3개)
+  // 또는 [계약시작, 계약끝] (2개 — 서류접수 생략)
   const tail = d.slice(5);
   if (tail.length >= 4) {
+    sched.docSubmitStart = tail[0];
+    sched.docSubmitEnd = tail[1];
     sched.contractStart = tail[2];
     sched.contractEnd = tail[3];
   } else if (tail.length === 3) {
+    sched.docSubmitStart = tail[0];
+    sched.docSubmitEnd = tail[0]; // 서류접수 1일만
     sched.contractStart = tail[1];
     sched.contractEnd = tail[2];
   } else if (tail.length === 2) {
@@ -200,10 +212,19 @@ function extractAnnouncementNo(text: string, filename: string): string | undefin
 }
 
 function extractRegion(text: string): string | undefined {
-  const m = text.match(/공급위치\s*[:：]?\s*([가-힣\d\s\-·]+?)(?:\n|번지|일대|$)/);
-  if (m) return m[1].trim().slice(0, 60);
-  const m2 = text.match(/([가-힣]+(?:특별시|광역시|특별자치시|도)\s+[가-힣]+(?:시|군|구)(?:\s+[가-힣]+(?:구|동|읍|면))?)/);
-  return m2?.[1];
+  // 1) "공급위치" 또는 "대지위치" 근처에서 전체 주소 추출
+  const locRe = /(?:공급위치|대지위치|공급\s*위치|건설\s*위치)\s*[:：]?\s*([가-힣\d\s\-·,()（）]+?)(?:\n|\r|일원|일대|외\s*\d)/;
+  const m = text.match(locRe);
+  if (m) {
+    const raw = m[1].replace(/\s+/g, ' ').trim().slice(0, 80);
+    if (raw.length >= 5) return raw;
+  }
+  // 2) "~시 ~구 ~동" 또는 "~도 ~시 ~구" 패턴
+  const m2 = text.match(/([가-힣]+(?:특별시|광역시|특별자치시|도)\s+[가-힣]+(?:시|군|구)(?:\s+[가-힣]+(?:구|동|읍|면|로|길)[\d\-]*)?)/);
+  if (m2) return m2[1].trim();
+  // 3) 짧은 시/구/동 패턴
+  const m3 = text.match(/([가-힣]+(?:시|군)\s+[가-힣]+(?:구|동)(?:\s+[가-힣\d]+)?)/);
+  return m3?.[1]?.trim();
 }
 
 function extractMinSubscription(text: string): number | undefined {
@@ -546,6 +567,10 @@ export async function POST(req: NextRequest) {
       || findDateNearKeyword(fullText, allDates, ['2순위 접수', '접수 마감', '청약 마감']) || undefined;
     const winDate = schedule.winnerAnnounceDate
       || findDateNearKeyword(fullText, allDates, ['당첨자발표일', '당첨자발표', '당첨자 발표']) || undefined;
+    const docStart = schedule.docSubmitStart
+      || findDateNearKeyword(fullText, allDates, ['서류접수', '서류 접수', '서류제출', '서류 제출', '적격심사', '적격 심사'], 300) || undefined;
+    const docEnd = schedule.docSubmitEnd
+      || findDateNearKeyword(fullText, allDates, ['서류접수', '서류 접수', '서류제출', '서류 제출'], 500) || undefined;
     const conStart = schedule.contractStart
       || findDateNearKeyword(fullText, allDates, ['계약체결', '계약 체결', '계약기간', '계약 기간']) || undefined;
     const conEnd = schedule.contractEnd || undefined;
@@ -586,6 +611,8 @@ export async function POST(req: NextRequest) {
       applicationStart: appStart ? withTime(appStart, applyH(applyOpen)) : undefined,
       applicationEnd: appEnd ? withTime(appEnd, applyH(applyClose)) : undefined,
       winnerAnnounceDate: winDate ? withTime(winDate, null) : undefined,
+      docSubmitStart: docStart ? withTime(docStart, null) : undefined,
+      docSubmitEnd: docEnd ? withTime(docEnd, null) : undefined,
       contractStart: conStart ? withTime(conStart, null) : undefined,
       contractEnd: conEnd ? withTime(conEnd, null) : undefined,
       region: extractRegion(fullText),

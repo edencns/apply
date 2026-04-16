@@ -142,6 +142,8 @@ export default function AnnouncementDetailPage() {
   const supplyTypesDetail: any[] = rules.supply_types_detail || [];
   const incomeTable: Record<string, any> = rules.income_table || {};
   const requiredDocuments: Record<string, string[]> = rules.required_documents || {};
+  const docSubmitStart: string | null = rules.doc_submit_start || null;
+  const docSubmitEnd: string | null = rules.doc_submit_end || null;
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -175,7 +177,6 @@ export default function AnnouncementDetailPage() {
               )}
             </div>
             <div className="flex items-center gap-4 text-sm text-gray-500 flex-wrap">
-              {ann.announcement_no && <span>공고번호: {ann.announcement_no}</span>}
               {regionFull && (
                 <span className="flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5" /> {regionFull}
@@ -200,7 +201,7 @@ export default function AnnouncementDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <ScheduleItem icon={Clock} label="청약 접수" value={formatDateRange(ann.application_start, ann.application_end)} />
           <ScheduleItem icon={BadgeCheck} label="당첨자 발표" value={formatDate(ann.winner_announce_date)} />
-          <ScheduleItem icon={FileText} label="서류 접수" value={ann.winner_announce_date ? `${formatDate(ann.winner_announce_date)} ~` : "—"} />
+          <ScheduleItem icon={FileText} label="서류 접수" value={formatDateRange(docSubmitStart, docSubmitEnd)} />
           <ScheduleItem icon={PenTool} label="계약 체결" value={formatDateRange(ann.contract_start, ann.contract_end)} />
         </div>
       </section>

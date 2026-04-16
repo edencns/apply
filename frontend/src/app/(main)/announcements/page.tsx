@@ -40,6 +40,8 @@ const DEFAULT_RULES = {
   income_table: null as Record<string, Record<string, number>> | null,
   asset_limit: "" as string,
   car_value_limit: "" as string,
+  doc_submit_start: "" as string,
+  doc_submit_end: "" as string,
 };
 
 /** 공고가 완료 상태인지 판별 */
@@ -139,14 +141,17 @@ export default function AnnouncementsPage() {
     // exclusive_areas에서 세대수 합산
     const areas: any[] = rules.exclusive_areas || [];
     const totalUnits = areas.reduce((s: number, a: any) => s + (a.totalUnits || 0), 0);
-    // 규제지역 — noHomeRequired가 true면 일반적으로 비규제지역이 많음 (추후 PDF 파싱에서 정확히 추출 예정)
+    // 규제지역
     const regulation = rules.regulation || (rules.no_home_required ? "비규제" : null);
-    // 서류접수 날짜: winner_announce_date 이후 ~ contract_start 이전 구간
-    const winDate = fmtShortDate(ann.winner_announce_date);
+    // 서류접수 날짜: eligibility_rules.doc_submit_start/end에서 가져옴
+    const docStart = fmtShortDate(rules.doc_submit_start);
+    const docEnd = fmtShortDate(rules.doc_submit_end);
+    const docSubmit = docStart
+      ? (docEnd && docEnd !== docStart ? `${docStart}~${docEnd}` : docStart)
+      : "";
+    // 계약 날짜
     const conStart = fmtShortDate(ann.contract_start);
     const conEnd = fmtShortDate(ann.contract_end);
-    // 서류접수는 당첨자발표 ~ 계약시작 사이, 공고에 명시적 필드 없으면 당첨발표일 표시
-    const docSubmit = winDate ? `${winDate}~` : "";
     const contractDate = conStart ? (conEnd ? `${conStart}~${conEnd}` : conStart) : "";
 
     return {
@@ -276,6 +281,8 @@ export default function AnnouncementsPage() {
       if (form.rules.income_table) eligibilityRules.income_table = form.rules.income_table;
       if (form.rules.asset_limit) eligibilityRules.asset_limit = form.rules.asset_limit;
       if (form.rules.car_value_limit) eligibilityRules.car_value_limit = form.rules.car_value_limit;
+      if (form.rules.doc_submit_start) eligibilityRules.doc_submit_start = form.rules.doc_submit_start;
+      if (form.rules.doc_submit_end) eligibilityRules.doc_submit_end = form.rules.doc_submit_end;
       const annPayload = {
         title: form.title.trim(),
         announcement_no: form.announcement_no || null,
@@ -393,6 +400,10 @@ export default function AnnouncementsPage() {
         if (d.applicationEnd && !p.application_end) { next.application_end = d.applicationEnd; filled.push("청약 접수 종료일"); }
         if (d.winnerAnnounceDate && !p.winner_announce_date) { next.winner_announce_date = d.winnerAnnounceDate; filled.push("당첨자 발표일"); }
         if (d.contractStart && !p.contract_start) { next.contract_start = d.contractStart; filled.push("계약 시작일"); }
+        if (d.contractEnd) { next.contract_end = d.contractEnd; filled.push("계약 종료일"); }
+        // 서류접수 날짜는 eligibility_rules에 저장
+        if (d.docSubmitStart) { next.rules.doc_submit_start = d.docSubmitStart; filled.push("서류접수 시작일"); }
+        if (d.docSubmitEnd) { next.rules.doc_submit_end = d.docSubmitEnd; filled.push("서류접수 종료일"); }
         if (typeof d.noHomeRequired === "boolean") { next.rules.no_home_required = d.noHomeRequired; filled.push("무주택 필수"); }
         if (d.minSubscriptionMonths) { next.rules.min_subscription_period = d.minSubscriptionMonths; filled.push("통장 납입 기간"); }
         if (Array.isArray(d.specialTypes) && d.specialTypes.length > 0) { next.rules.special_supply_types = d.specialTypes; filled.push(`특별공급(${d.specialTypes.length}종)`); }
@@ -537,7 +548,6 @@ export default function AnnouncementsPage() {
                       {totalUnits > 0 && (
                         <span>{totalUnits}세대</span>
                       )}
-                      {ann.announcement_no && <span>공고번호: {ann.announcement_no}</span>}
                       {docSubmit && (
                         <span className="flex items-center gap-1">
                           <FileText className="w-3 h-3" /> 서류 {docSubmit}
