@@ -28,6 +28,7 @@ type TabKey = "active" | "done";
 const DEFAULT_RULES = {
   no_home_required: true,
   region_priority: [] as string[],
+  region_full: "" as string,
   min_region_residence_months: 12,
   income_limit: "",
   min_subscription_period: 0,
@@ -120,18 +121,41 @@ export default function AnnouncementsPage() {
     _regulation: s.regulation,
   }));
 
+  /** 날짜 문자열 → "YYYY.MM.DD" 형식 */
+  function fmtShortDate(s?: string | null): string {
+    if (!s) return "";
+    try {
+      const d = new Date(s);
+      if (Number.isNaN(d.getTime())) return "";
+      return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+    } catch { return ""; }
+  }
+
   /** 등록된 공고(backend/local)에도 표시용 메타 추가 */
   function enrichRegistered(ann: any): any {
     const rules = ann.eligibility_rules || {};
-    const region = rules.region_priority?.[0] || null;
+    // 전체 주소: region_full > region_priority 조합
+    const location = rules.region_full || (rules.region_priority || []).join(" ") || null;
     // exclusive_areas에서 세대수 합산
     const areas: any[] = rules.exclusive_areas || [];
     const totalUnits = areas.reduce((s: number, a: any) => s + (a.totalUnits || 0), 0);
+    // 규제지역 — noHomeRequired가 true면 일반적으로 비규제지역이 많음 (추후 PDF 파싱에서 정확히 추출 예정)
+    const regulation = rules.regulation || (rules.no_home_required ? "비규제" : null);
+    // 서류접수 날짜: winner_announce_date 이후 ~ contract_start 이전 구간
+    const winDate = fmtShortDate(ann.winner_announce_date);
+    const conStart = fmtShortDate(ann.contract_start);
+    const conEnd = fmtShortDate(ann.contract_end);
+    // 서류접수는 당첨자발표 ~ 계약시작 사이, 공고에 명시적 필드 없으면 당첨발표일 표시
+    const docSubmit = winDate ? `${winDate}~` : "";
+    const contractDate = conStart ? (conEnd ? `${conStart}~${conEnd}` : conStart) : "";
+
     return {
       ...ann,
-      _location: region,
+      _location: location,
       _totalUnits: totalUnits,
-      _regulation: null, // 등록 공고는 규제 정보를 아직 파싱 안 함
+      _regulation: regulation,
+      _docSubmit: docSubmit || null,
+      _contract: contractDate || null,
     };
   }
 
@@ -228,6 +252,7 @@ export default function AnnouncementsPage() {
       const eligibilityRules: Record<string, any> = {
         no_home_required: form.rules.no_home_required,
         region_priority: form.rules.region_priority,
+        region_full: form.rules.region_full || "",
         min_region_residence_months: form.rules.min_region_residence_months,
         income_limit: form.rules.income_limit ? Number(form.rules.income_limit) : null,
         min_subscription_period: form.rules.min_subscription_period,
@@ -359,9 +384,12 @@ export default function AnnouncementsPage() {
         if (typeof d.noHomeRequired === "boolean") { next.rules.no_home_required = d.noHomeRequired; filled.push("무주택 필수"); }
         if (d.minSubscriptionMonths) { next.rules.min_subscription_period = d.minSubscriptionMonths; filled.push("통장 납입 기간"); }
         if (Array.isArray(d.specialTypes) && d.specialTypes.length > 0) { next.rules.special_supply_types = d.specialTypes; filled.push(`특별공급(${d.specialTypes.length}종)`); }
-        if (d.region && p.rules.region_priority.length === 0) {
-          const firstRegion = d.region.split(/\s+/)[0];
-          if (firstRegion) { next.rules.region_priority = [firstRegion]; filled.push("지역 우선순위"); }
+        if (d.region) {
+          next.rules.region_full = d.region; // 전체 주소 저장
+          if (p.rules.region_priority.length === 0) {
+            const firstRegion = d.region.split(/\s+/)[0];
+            if (firstRegion) { next.rules.region_priority = [firstRegion]; filled.push("지역 우선순위"); }
+          }
         }
         // ── LLM 확장 필드 저장 ──
         if (d.supplyTypes && Array.isArray(d.supplyTypes) && d.supplyTypes.length > 0) {
