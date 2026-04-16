@@ -42,6 +42,7 @@ const DEFAULT_RULES = {
   car_value_limit: "" as string,
   doc_submit_start: "" as string,
   doc_submit_end: "" as string,
+  total_units: 0 as number,
 };
 
 /** 공고가 완료 상태인지 판별 */
@@ -138,9 +139,10 @@ export default function AnnouncementsPage() {
     const rules = ann.eligibility_rules || {};
     // 전체 주소: region_full > region_priority 조합
     const location = rules.region_full || (rules.region_priority || []).join(" ") || null;
-    // exclusive_areas에서 세대수 합산
+    // 세대수: PDF에서 직접 추출한 값 우선, 없으면 exclusive_areas 합산
     const areas: any[] = rules.exclusive_areas || [];
-    const totalUnits = areas.reduce((s: number, a: any) => s + (a.totalUnits || 0), 0);
+    const areasSum = areas.reduce((s: number, a: any) => s + (a.totalUnits || 0), 0);
+    const totalUnits = rules.total_units || areasSum;
     // 규제지역
     const regulation = rules.regulation || (rules.no_home_required ? "비규제" : null);
     // 서류접수 날짜: eligibility_rules.doc_submit_start/end에서 가져옴
@@ -283,6 +285,7 @@ export default function AnnouncementsPage() {
       if (form.rules.car_value_limit) eligibilityRules.car_value_limit = form.rules.car_value_limit;
       if (form.rules.doc_submit_start) eligibilityRules.doc_submit_start = form.rules.doc_submit_start;
       if (form.rules.doc_submit_end) eligibilityRules.doc_submit_end = form.rules.doc_submit_end;
+      if (form.rules.total_units) eligibilityRules.total_units = form.rules.total_units;
       const annPayload = {
         title: form.title.trim(),
         announcement_no: form.announcement_no || null,
@@ -404,6 +407,7 @@ export default function AnnouncementsPage() {
         // 서류접수 날짜는 eligibility_rules에 저장
         if (d.docSubmitStart) { next.rules.doc_submit_start = d.docSubmitStart; filled.push("서류접수 시작일"); }
         if (d.docSubmitEnd) { next.rules.doc_submit_end = d.docSubmitEnd; filled.push("서류접수 종료일"); }
+        if (d.totalUnits) { next.rules.total_units = d.totalUnits; filled.push(`총 ${d.totalUnits}세대`); }
         if (typeof d.noHomeRequired === "boolean") { next.rules.no_home_required = d.noHomeRequired; filled.push("무주택 필수"); }
         if (d.minSubscriptionMonths) { next.rules.min_subscription_period = d.minSubscriptionMonths; filled.push("통장 납입 기간"); }
         if (Array.isArray(d.specialTypes) && d.specialTypes.length > 0) { next.rules.special_supply_types = d.specialTypes; filled.push(`특별공급(${d.specialTypes.length}종)`); }

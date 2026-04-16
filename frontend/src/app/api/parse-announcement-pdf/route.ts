@@ -37,6 +37,7 @@ interface ParsedAnnouncement {
   contractStart?: string;
   contractEnd?: string;
   region?: string;
+  totalUnits?: number;
   noHomeRequired?: boolean;
   minSubscriptionMonths?: number;
   specialTypes?: string[];
@@ -212,37 +213,35 @@ function extractAnnouncementNo(text: string, filename: string): string | undefin
 }
 
 function extractRegion(text: string): string | undefined {
-  // 1) "공급위치" 또는 "대지위치" 키워드 뒤에서 주소 전체 추출
-  //    키워드 뒤 최대 200자 범위에서, 줄바꿈을 포함하여 주소 캡처
+  /**
+   * "도 시 구 동" 까지만 깔끔하게 추출.
+   * 번지·지번·공급규모 등은 포함하지 않는다.
+   */
+  // 후처리: 동/읍/면/리 뒤의 숫자·번지 등 제거
+  function trimAddress(raw: string): string {
+    return raw
+      .replace(/\s+/g, ' ')
+      .replace(/\d[\d\-]*\s*번지.*/, '')       // "395-1번지 ■ …" 제거
+      .replace(/\d[\d\-]*\s*$/, '')             // 끝에 붙은 숫자 제거
+      .replace(/[■●▶※·,.].*/, '')              // 특수문자 이후 제거
+      .trim();
+  }
+
+  // 1) "공급위치" / "대지위치" 키워드 뒤에서 추출
   const kwRe = /(?:공급\s*위치|대지\s*위치|건설\s*위치)\s*[:：]?\s*/g;
   let kwMatch: RegExpExecArray | null;
   while ((kwMatch = kwRe.exec(text)) !== null) {
-    const after = text.slice(kwMatch.index + kwMatch[0].length, kwMatch.index + kwMatch[0].length + 200);
-    // 주소 패턴: "경기도 안양시 만안구 안양동 123-4 일원" 등
-    // 한글, 숫자, 공백, 하이픈, 쉼표, 점 등 허용, "일원/일대/번지" 포함까지 캡처
-    const addrMatch = after.match(/^([가-힣][가-힣\d\s\-·,.()（）번지호로길]+?)(?:\s*일원|\s*일대|\s*외\s*\d|\s*\n\s*\n|\s*주택형|\s*공급규모|\s*구\s*분)/);
-    if (addrMatch) {
-      const raw = addrMatch[1].replace(/\s+/g, ' ').replace(/[,.]$/, '').trim();
-      if (raw.length >= 5) return raw.slice(0, 100);
-    }
-    // 줄바꿈이 바로 온 경우: 다음 줄까지 이어서 읽기
-    const lines = after.split(/\n/).map(l => l.trim()).filter(Boolean);
-    if (lines.length > 0) {
-      // 첫 줄 + 다음 줄(주소 연속인 경우)
-      let addr = lines[0];
-      if (lines.length > 1 && /^[가-힣\d]/.test(lines[1]) && !/주택|공급|구\s*분|면적/.test(lines[1])) {
-        addr += ' ' + lines[1];
-      }
-      const cleaned = addr.replace(/\s+/g, ' ').replace(/[,.]$/, '').trim().slice(0, 100);
-      if (cleaned.length >= 5 && /[시군구동읍면리로길]/.test(cleaned)) return cleaned;
-    }
+    const after = text.slice(kwMatch.index + kwMatch[0].length, kwMatch.index + kwMatch[0].length + 120);
+    const firstLine = after.split(/\n/)[0].trim();
+    const cleaned = trimAddress(firstLine);
+    if (cleaned.length >= 5 && /[시군구동읍면리]/.test(cleaned)) return cleaned;
   }
   // 2) "~도 ~시 ~구 ~동" 풀패턴
-  const m2 = text.match(/([가-힣]+(?:특별시|광역시|특별자치시|도)\s+[가-힣]+(?:시|군)\s+[가-힣]+(?:구|군)(?:\s+[가-힣]+(?:동|읍|면|리|로|길)[\d\-]*)?)/);
+  const m2 = text.match(/([가-힣]+(?:특별시|광역시|특별자치시|도)\s+[가-힣]+(?:시|군)\s+[가-힣]+(?:구|군)(?:\s+[가-힣]+(?:동|읍|면|리))?)/);
   if (m2) return m2[1].trim();
   // 3) "~시 ~구 ~동" 패턴
-  const m3 = text.match(/([가-힣]+(?:시|군)\s+[가-힣]+(?:구)\s+[가-힣]+(?:동|읍|면|리|로|길)[\d\-\s]*)/);
-  if (m3) return m3[1].replace(/\s+/g, ' ').trim();
+  const m3 = text.match(/([가-힣]+(?:시|군)\s+[가-힣]+구\s+[가-힣]+(?:동|읍|면|리))/);
+  if (m3) return m3[1].trim();
   // 4) 짧은 패턴
   const m4 = text.match(/([가-힣]+(?:시|군)\s+[가-힣]+(?:구|동))/);
   return m4?.[1]?.trim();
@@ -251,6 +250,16 @@ function extractRegion(text: string): string | undefined {
 function extractMinSubscription(text: string): number | undefined {
   const m = text.match(/(?:청약통장|가입기간|가입\s*후)\D{0,20}(\d{1,3})\s*개월/);
   if (m) return parseInt(m[1], 10);
+  return undefined;
+}
+
+function extractTotalUnits(text: string): number | undefined {
+  // "총 55세대", "총 123 세대", "합계 55세대" 등
+  const m = text.match(/(?:총|합계)\s*(\d{1,5})\s*세대/);
+  if (m) return parseInt(m[1], 10);
+  // "일반분양 총 55세대"
+  const m2 = text.match(/일반\s*분양\s*총?\s*(\d{1,5})\s*세대/);
+  if (m2) return parseInt(m2[1], 10);
   return undefined;
 }
 
@@ -637,6 +646,7 @@ export async function POST(req: NextRequest) {
       contractStart: conStart ? withTime(conStart, null) : undefined,
       contractEnd: conEnd ? withTime(conEnd, null) : undefined,
       region: extractRegion(fullText),
+      totalUnits: extractTotalUnits(fullText),
       noHomeRequired: /무주택\s*세대구성원/.test(fullText),
       minSubscriptionMonths: extractMinSubscription(fullText),
       specialTypes: mergedSpecialTypes,

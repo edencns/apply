@@ -138,7 +138,8 @@ export default function AnnouncementDetailPage() {
   const regionFull: string = rules.region_full || regionPriority.join(" ") || "";
   const regulation: string = rules.regulation || (rules.no_home_required ? "비규제" : "");
   const exclusiveAreas: any[] = rules.exclusive_areas || [];
-  const totalUnits = exclusiveAreas.reduce((s: number, a: any) => s + (a.totalUnits || 0), 0);
+  const areasSum = exclusiveAreas.reduce((s: number, a: any) => s + (a.totalUnits || 0), 0);
+  const totalUnits = rules.total_units || areasSum;
   const supplyTypesDetail: any[] = rules.supply_types_detail || [];
   const incomeTable: Record<string, any> = rules.income_table || {};
   const requiredDocuments: Record<string, string[]> = rules.required_documents || {};
