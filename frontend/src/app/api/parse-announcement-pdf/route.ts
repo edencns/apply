@@ -212,19 +212,40 @@ function extractAnnouncementNo(text: string, filename: string): string | undefin
 }
 
 function extractRegion(text: string): string | undefined {
-  // 1) "공급위치" 또는 "대지위치" 근처에서 전체 주소 추출
-  const locRe = /(?:공급위치|대지위치|공급\s*위치|건설\s*위치)\s*[:：]?\s*([가-힣\d\s\-·,()（）]+?)(?:\n|\r|일원|일대|외\s*\d)/;
-  const m = text.match(locRe);
-  if (m) {
-    const raw = m[1].replace(/\s+/g, ' ').trim().slice(0, 80);
-    if (raw.length >= 5) return raw;
+  // 1) "공급위치" 또는 "대지위치" 키워드 뒤에서 주소 전체 추출
+  //    키워드 뒤 최대 200자 범위에서, 줄바꿈을 포함하여 주소 캡처
+  const kwRe = /(?:공급\s*위치|대지\s*위치|건설\s*위치)\s*[:：]?\s*/g;
+  let kwMatch: RegExpExecArray | null;
+  while ((kwMatch = kwRe.exec(text)) !== null) {
+    const after = text.slice(kwMatch.index + kwMatch[0].length, kwMatch.index + kwMatch[0].length + 200);
+    // 주소 패턴: "경기도 안양시 만안구 안양동 123-4 일원" 등
+    // 한글, 숫자, 공백, 하이픈, 쉼표, 점 등 허용, "일원/일대/번지" 포함까지 캡처
+    const addrMatch = after.match(/^([가-힣][가-힣\d\s\-·,.()（）번지호로길]+?)(?:\s*일원|\s*일대|\s*외\s*\d|\s*\n\s*\n|\s*주택형|\s*공급규모|\s*구\s*분)/);
+    if (addrMatch) {
+      const raw = addrMatch[1].replace(/\s+/g, ' ').replace(/[,.]$/, '').trim();
+      if (raw.length >= 5) return raw.slice(0, 100);
+    }
+    // 줄바꿈이 바로 온 경우: 다음 줄까지 이어서 읽기
+    const lines = after.split(/\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length > 0) {
+      // 첫 줄 + 다음 줄(주소 연속인 경우)
+      let addr = lines[0];
+      if (lines.length > 1 && /^[가-힣\d]/.test(lines[1]) && !/주택|공급|구\s*분|면적/.test(lines[1])) {
+        addr += ' ' + lines[1];
+      }
+      const cleaned = addr.replace(/\s+/g, ' ').replace(/[,.]$/, '').trim().slice(0, 100);
+      if (cleaned.length >= 5 && /[시군구동읍면리로길]/.test(cleaned)) return cleaned;
+    }
   }
-  // 2) "~시 ~구 ~동" 또는 "~도 ~시 ~구" 패턴
-  const m2 = text.match(/([가-힣]+(?:특별시|광역시|특별자치시|도)\s+[가-힣]+(?:시|군|구)(?:\s+[가-힣]+(?:구|동|읍|면|로|길)[\d\-]*)?)/);
+  // 2) "~도 ~시 ~구 ~동" 풀패턴
+  const m2 = text.match(/([가-힣]+(?:특별시|광역시|특별자치시|도)\s+[가-힣]+(?:시|군)\s+[가-힣]+(?:구|군)(?:\s+[가-힣]+(?:동|읍|면|리|로|길)[\d\-]*)?)/);
   if (m2) return m2[1].trim();
-  // 3) 짧은 시/구/동 패턴
-  const m3 = text.match(/([가-힣]+(?:시|군)\s+[가-힣]+(?:구|동)(?:\s+[가-힣\d]+)?)/);
-  return m3?.[1]?.trim();
+  // 3) "~시 ~구 ~동" 패턴
+  const m3 = text.match(/([가-힣]+(?:시|군)\s+[가-힣]+(?:구)\s+[가-힣]+(?:동|읍|면|리|로|길)[\d\-\s]*)/);
+  if (m3) return m3[1].replace(/\s+/g, ' ').trim();
+  // 4) 짧은 패턴
+  const m4 = text.match(/([가-힣]+(?:시|군)\s+[가-힣]+(?:구|동))/);
+  return m4?.[1]?.trim();
 }
 
 function extractMinSubscription(text: string): number | undefined {
