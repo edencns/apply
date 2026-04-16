@@ -516,9 +516,7 @@ export default function AnnouncementsPage() {
         <div className="space-y-3">
           {visibleAnns.map((ann) => {
             const isSample = !!(ann as any)._isSample;
-            const linkHref = isSample
-              ? `/announcements/compare?id=${String(ann.id).replace("sample-", "")}`
-              : `/announcements/${ann.id}`;
+            const linkHref = `/announcements/${ann.id}`;
             const regulation = (ann as any)._regulation || (ann as any).eligibility_rules?.regulation || null;
             const location = (ann as any)._location || null;
             const totalUnits = (ann as any)._totalUnits || 0;

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { localAnnouncements, isNetworkError } from "@/lib/local-store";
+import { announcements as sampleAnnouncements, AptAnnouncement } from "../compare/data";
 import {
   ArrowLeft, Building2, CalendarDays, MapPin, Users, Shield, Heart,
   FileText, Loader2, AlertCircle, Banknote, Scale,
@@ -126,10 +127,12 @@ function OverviewTab({ ann, rules }: { ann: AnnouncementDetail; rules: Record<st
             <p className="text-xs text-gray-500 mb-1">위치</p>
             <p className="text-sm">{regionFull}</p>
           </div>
-          <div>
-            <p className="text-xs text-gray-500 mb-1">규제지역</p>
-            <Badge text={regulation} cls={REG_COLOR[regulation] || "bg-gray-100 text-gray-700"} />
-          </div>
+          {rules._moveIn && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">입주 예정</p>
+              <p className="text-sm">{rules._moveIn}</p>
+            </div>
+          )}
           <div>
             <p className="text-xs text-gray-500 mb-1">총 세대수</p>
             <p className="text-sm font-semibold">{totalUnits > 0 ? `${totalUnits}세대` : "—"}
@@ -139,6 +142,24 @@ function OverviewTab({ ann, rules }: { ann: AnnouncementDetail; rules: Record<st
             </p>
           </div>
         </div>
+
+        {/* 규제 현황 — 샘플 데이터에 있을 때 */}
+        {(rules._resaleRestriction || rules._reWinRestriction || rules._residenceObligation || rules._priceCapApplied !== undefined) && (
+          <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+            {rules._resaleRestriction && <YesNo value={rules._resaleRestriction} label="전매제한" />}
+            {rules._reWinRestriction && <YesNo value={rules._reWinRestriction} label="재당첨 제한" />}
+            {rules._residenceObligation && <YesNo value={rules._residenceObligation} label="거주의무" />}
+            {rules._priceCapApplied !== undefined && (
+              <div className="flex items-center gap-1.5 text-sm">
+                {rules._priceCapApplied ? (
+                  <><AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" /><span className="text-amber-700">분양가상한제 적용</span></>
+                ) : (
+                  <><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /><span className="text-green-700">분양가상한제 미적용</span></>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </Section>
 
       {exclusiveAreas.length > 0 && (
@@ -174,12 +195,20 @@ function OverviewTab({ ann, rules }: { ann: AnnouncementDetail; rules: Record<st
 
       <Section title="공급 일정">
         <div className="space-y-2">
-          {[
+          {(rules._schedule ? [
+            { label: "공고일", value: rules._schedule.announcement },
+            { label: "특별공급 접수", value: rules._schedule.specialApply },
+            { label: "일반 1순위", value: rules._schedule.general1st },
+            { label: "일반 2순위", value: rules._schedule.general2nd },
+            { label: "당첨자 발표", value: rules._schedule.winnerAnnounce },
+            { label: "서류 제출", value: rules._schedule.docSubmit },
+            { label: "계약 체결", value: rules._schedule.contract },
+          ] : [
             { label: "청약 접수", value: fmtRange(ann.application_start, ann.application_end) },
             { label: "당첨자 발표", value: fmtDate(ann.winner_announce_date) },
             { label: "서류 제출", value: fmtRange(rules.doc_submit_start, rules.doc_submit_end) },
             { label: "계약 체결", value: fmtRange(ann.contract_start, ann.contract_end) },
-          ].map((item) => (
+          ]).map((item) => (
             <div key={item.label} className="flex items-center justify-between text-sm">
               <span className="text-gray-500">{item.label}</span>
               <span className="font-medium">{item.value}</span>
@@ -226,6 +255,28 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
         </div>
       </Section>
 
+      {rules._generalPointSystem && (
+        <Section title="일반공급 가점제/추첨제">
+          <div className="mb-3 bg-indigo-50 rounded-lg p-3">
+            <p className="text-xs font-medium text-indigo-700">적용 비율</p>
+            <p className="text-sm text-indigo-900 mt-0.5 font-semibold">{rules._generalPointSystem.ratio}</p>
+          </div>
+          {rules._generalPointSystem.items?.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-2">가점 항목 (최대 {rules._generalPointSystem.maxPoints}점)</p>
+              <div className="space-y-1.5">
+                {rules._generalPointSystem.items.map((item: string, i: number) => (
+                  <div key={i} className="flex items-center gap-2 text-sm">
+                    <div className="w-5 h-5 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">{i + 1}</div>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Section>
+      )}
+
       <Section title="규제 현황">
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-gray-50 rounded-lg p-3">
@@ -236,6 +287,18 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
             <p className="text-xs text-gray-500">무주택 요건</p>
             <p className="text-sm font-medium mt-1">{rules.no_home_required ? "필수" : "해당 없음"}</p>
           </div>
+          {rules._landType && (
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-xs text-gray-500">택지유형</p>
+              <p className="text-sm font-medium mt-1">{rules._landType}</p>
+            </div>
+          )}
+          {rules._resaleRestriction && (
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-xs text-gray-500">전매제한</p>
+              <p className="text-sm font-medium mt-1">{rules._resaleRestriction}</p>
+            </div>
+          )}
         </div>
       </Section>
     </div>
@@ -269,7 +332,45 @@ function SpecialTab({ rules }: { rules: Record<string, any> }) {
 
   return (
     <div className="space-y-4">
-      {specialTypes.length > 0 && (
+      {/* 세대수 배분 (샘플 데이터에 있을 때) */}
+      {rules._specialSupply && (() => {
+        const sp = rules._specialSupply;
+        const items = [
+          { label: "기관추천", value: sp.institution, color: "bg-purple-500" },
+          { label: "다자녀", value: sp.multiChild, color: "bg-pink-500" },
+          { label: "신혼부부", value: sp.newlywed, color: "bg-red-500" },
+          { label: "노부모부양", value: sp.seniorParent, color: "bg-amber-500" },
+          { label: "생애최초", value: sp.firstLife, color: "bg-emerald-500" },
+        ];
+        const total = items.reduce((s, i) => s + i.value, 0);
+        return (
+          <Section title="특별공급 세대수 배분">
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-gray-600">총 특별공급</span>
+                <span className="text-lg font-bold">{total}세대</span>
+              </div>
+              <div className="flex h-3 rounded-full overflow-hidden">
+                {items.map((item) => (
+                  <div key={item.label} className={`${item.color}`} style={{ width: `${total > 0 ? (item.value / total) * 100 : 0}%` }} />
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {items.map((item) => (
+                <div key={item.label} className="flex items-center gap-2.5 p-2 rounded-lg bg-gray-50">
+                  <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
+                  <span className="text-sm text-gray-700 flex-1">{item.label}</span>
+                  <span className="text-sm font-bold">{item.value}세대</span>
+                </div>
+              ))}
+            </div>
+          </Section>
+        );
+      })()}
+
+      {/* 유형 목록 (세대수 배분 데이터 없을 때) */}
+      {!rules._specialSupply && specialTypes.length > 0 && (
         <Section title="특별공급 유형">
           <div className="flex flex-wrap gap-2">
             {specialTypes.map((t) => (
@@ -362,10 +463,13 @@ function SpecialTab({ rules }: { rules: Record<string, any> }) {
 function IncomeTab({ rules }: { rules: Record<string, any> }) {
   const incomeTable: Record<string, any> = rules.income_table || {};
   const hasIncome = Object.keys(incomeTable).length > 0;
+  const nwIncome = rules._newlywedIncome;
+  const flIncome = rules._firstLifeIncome;
 
   return (
     <div className="space-y-4">
-      {hasIncome ? (
+      {/* LLM 파싱된 소득기준표 */}
+      {hasIncome && (
         <Section title="소득기준표 (도시근로자 월평균소득)">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -396,7 +500,51 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
             </table>
           </div>
         </Section>
-      ) : (
+      )}
+
+      {/* 샘플: 신혼부부 소득기준 */}
+      {nwIncome && (
+        <Section title="신혼부부 소득기준 (3인이하 가구 기준)">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-gray-200"><th className="text-left py-2 text-xs font-medium text-gray-500">구분</th><th className="text-right py-2 text-xs font-medium text-gray-500">소득 상한</th></tr></thead>
+            <tbody>
+              {[
+                { label: "우선공급 (외벌이 100%)", sub: "신생아우선 + 우선공급", value: nwIncome.single100, color: "text-blue-700" },
+                { label: "우선공급 (맞벌이 120%)", sub: "부부 모두 소득 시", value: nwIncome.dual120, color: "text-blue-700" },
+                { label: "일반공급 (외벌이 140%)", sub: "소득초과~140%", value: nwIncome.single140, color: "" },
+                { label: "일반공급 (맞벌이 160%)", sub: "부부 모두 소득 시", value: nwIncome.dual160, color: "" },
+              ].map((r) => (
+                <tr key={r.label} className="border-b border-gray-50">
+                  <td className="py-2.5"><p className="font-medium">{r.label}</p><p className="text-xs text-gray-400">{r.sub}</p></td>
+                  <td className={`py-2.5 text-right font-medium ${r.color}`}>{r.value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      )}
+
+      {/* 샘플: 생애최초 소득기준 */}
+      {flIncome && (
+        <Section title="생애최초 소득기준 (3인이하 가구 기준)">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-gray-200"><th className="text-left py-2 text-xs font-medium text-gray-500">구분</th><th className="text-right py-2 text-xs font-medium text-gray-500">소득 상한</th></tr></thead>
+            <tbody>
+              {[
+                { label: "우선공급 (130% 이하)", sub: "신생아우선 + 우선공급", value: flIncome.pct130 },
+                { label: "일반공급 (160% 이하)", sub: "신생아일반 + 일반공급", value: flIncome.pct160 },
+              ].map((r) => (
+                <tr key={r.label} className="border-b border-gray-50">
+                  <td className="py-2.5"><p className="font-medium">{r.label}</p><p className="text-xs text-gray-400">{r.sub}</p></td>
+                  <td className="py-2.5 text-right font-medium text-emerald-700">{r.value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      )}
+
+      {!hasIncome && !nwIncome && !flIncome && (
         <div className="text-center py-10 text-gray-400">
           <Banknote className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p>소득기준표가 아직 추출되지 않았습니다</p>
@@ -470,12 +618,106 @@ function DocumentsTab({ rules }: { rules: Record<string, any> }) {
   );
 }
 
+/* ─── Sample → Detail Adapter ────────────────────────── */
+
+function sampleToDetail(apt: AptAnnouncement): AnnouncementDetail {
+  return {
+    id: 0,
+    title: apt.name,
+    status: "published",
+    application_start: apt.schedule.specialApply || null,
+    application_end: apt.schedule.general2nd || null,
+    winner_announce_date: apt.schedule.winnerAnnounce || null,
+    contract_start: apt.schedule.contract?.split("~")[0]?.split(" ")[0] || null,
+    contract_end: apt.schedule.contract?.split("~")[1]?.trim() || null,
+    eligibility_rules: {
+      region_full: apt.location,
+      region_priority: [apt.region.priority, apt.region.other].filter(Boolean),
+      regulation: apt.regulation,
+      no_home_required: true,
+      total_units: apt.totalUnits,
+      min_subscription_period: parseInt(apt.subscription.period1st) || 0,
+      special_supply_types: [
+        apt.specialSupply.institution > 0 ? "기관추천" : null,
+        apt.specialSupply.multiChild > 0 ? "다자녀가구" : null,
+        apt.specialSupply.newlywed > 0 ? "신혼부부" : null,
+        apt.specialSupply.seniorParent > 0 ? "노부모부양" : null,
+        apt.specialSupply.firstLife > 0 ? "생애최초" : null,
+      ].filter(Boolean),
+      exclusive_areas: apt.types.map((t) => ({
+        area: t.name,
+        squareMeters: t.area,
+        totalUnits: t.units,
+        price: t.priceRange || null,
+      })),
+      doc_submit_start: apt.schedule.docSubmit?.split("~")[0]?.split(" ")[0] || null,
+      doc_submit_end: apt.schedule.docSubmit?.split("~")[1]?.trim() || null,
+      asset_limit: apt.assetLimit,
+      // 특별공급 상세 조건을 supply_types_detail에 매핑
+      supply_types_detail: [
+        apt.specialSupply.multiChild > 0 ? {
+          type: "다자녀가구",
+          requireHomeless: true,
+          conditions: apt.multiChildCriteria,
+        } : null,
+        apt.specialSupply.newlywed > 0 ? {
+          type: "신혼부부",
+          requireHomeless: true,
+          maxMarriageYears: 7,
+          incomeLimitPercent: 100,
+          incomeLimitDualPercent: 120,
+        } : null,
+        apt.specialSupply.seniorParent > 0 ? {
+          type: "노부모부양",
+          requireHomeless: true,
+          conditions: ["만65세 이상 직계존속 3년 이상 부양"],
+        } : null,
+        apt.specialSupply.firstLife > 0 ? {
+          type: "생애최초",
+          requireHomeless: true,
+          incomeLimitPercent: 130,
+          conditions: ["5년 이상 소득세 납부"],
+        } : null,
+        apt.specialSupply.institution > 0 ? {
+          type: "기관추천",
+          requireHomeless: true,
+        } : null,
+        { type: "일반공급" },
+      ].filter(Boolean),
+      // 서류 목록 매핑
+      required_documents: {
+        "공통": apt.requiredDocs.common,
+        ...(apt.requiredDocs.newlywed.length > 0 ? { "신혼부부": apt.requiredDocs.newlywed } : {}),
+        ...(apt.requiredDocs.firstLife.length > 0 ? { "생애최초": apt.requiredDocs.firstLife } : {}),
+        ...(apt.requiredDocs.multiChild.length > 0 ? { "다자녀가구": apt.requiredDocs.multiChild } : {}),
+        ...(apt.requiredDocs.seniorParent.length > 0 ? { "노부모부양": apt.requiredDocs.seniorParent } : {}),
+        ...(apt.requiredDocs.generalPoint.length > 0 ? { "일반공급": apt.requiredDocs.generalPoint } : {}),
+      },
+      // 소득 기준을 income_table 형태로 변환
+      _newlywedIncome: apt.newlywedIncome,
+      _firstLifeIncome: apt.firstLifeIncome,
+      _generalPointSystem: apt.generalPointSystem,
+      _specialSupply: apt.specialSupply,
+      _resaleRestriction: apt.resaleRestriction,
+      _reWinRestriction: apt.reWinRestriction,
+      _residenceObligation: apt.residenceObligation,
+      _priceCapApplied: apt.priceCapApplied,
+      _landType: apt.landType,
+      _moveIn: apt.moveIn,
+      _schedule: apt.schedule,
+      _notes: apt.notes,
+    },
+  };
+}
+
 /* ─── Main Page ──────────────────────────────────────── */
 
 export default function AnnouncementDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const id = Number(params?.id);
+  const rawId = params?.id || "";
+  const isSample = rawId.startsWith("sample-");
+  const numericId = isSample ? 0 : Number(rawId);
 
   const [ann, setAnn] = useState<AnnouncementDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -483,7 +725,21 @@ export default function AnnouncementDetailPage() {
   const [tab, setTab] = useState<Tab>("overview");
 
   useEffect(() => {
-    if (!id || Number.isNaN(id)) {
+    // 샘플 공고
+    if (isSample) {
+      const sampleId = rawId.replace("sample-", "");
+      const found = sampleAnnouncements.find((a) => a.id === sampleId);
+      if (found) {
+        setAnn(sampleToDetail(found));
+      } else {
+        setError("해당 공고를 찾을 수 없습니다.");
+      }
+      setLoading(false);
+      return;
+    }
+
+    // 등록된 공고
+    if (!numericId || Number.isNaN(numericId)) {
       setError("잘못된 공고 ID입니다.");
       setLoading(false);
       return;
@@ -492,10 +748,10 @@ export default function AnnouncementDetailPage() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await api.get(`/announcements/${id}`);
+        const r = await api.get(`/announcements/${numericId}`);
         if (!cancelled) setAnn(r.data);
       } catch (err: any) {
-        const local = localAnnouncements.get(id);
+        const local = localAnnouncements.get(numericId);
         if (!cancelled) {
           if (local) {
             setAnn(local as unknown as AnnouncementDetail);
@@ -513,7 +769,7 @@ export default function AnnouncementDetailPage() {
     })();
 
     return () => { cancelled = true; };
-  }, [id]);
+  }, [rawId]);
 
   if (loading) {
     return (
