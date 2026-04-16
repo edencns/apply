@@ -199,6 +199,18 @@ export default function AnnouncementsPage() {
 
   useEffect(() => { loadAnnouncements(); }, [loadAnnouncements]);
 
+  // 브라우저 뒤로가기(bfcache) 시 최신 상태로 다시 로드
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => { if (e.persisted) loadAnnouncements(); };
+    const onFocus = () => loadAnnouncements();
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [loadAnnouncements]);
+
   const normalizeDateTime = (v: string): string | null => {
     if (!v) return null;
     return /\d{2}:\d{2}:\d{2}/.test(v) ? v : `${v}:00`;
