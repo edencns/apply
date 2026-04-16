@@ -48,6 +48,17 @@ interface ParsedAnnouncement {
   incomeTable?: Record<string, Record<string, number>>;
   assetLimit?: string;
   carValueLimit?: string;
+  resaleRestriction?: string;
+  reWinRestriction?: string;
+  residenceObligation?: string;
+  priceCapApplied?: boolean;
+  landType?: string;
+  moveInDate?: string;
+  pointSystemRatio?: { ratio: string; items?: string[] };
+  announcementDate?: string;  // 공고일
+  specialApplyDate?: string;  // 특별공급 접수일
+  general1stDate?: string;    // 1순위 접수일
+  general2ndDate?: string;    // 2순위 접수일
   rawTextPreview?: string;
 }
 
@@ -126,6 +137,10 @@ interface Schedule {
   docSubmitEnd?: string;
   contractStart?: string;
   contractEnd?: string;
+  announcementDate?: string;
+  specialApplyDate?: string;
+  general1stDate?: string;
+  general2ndDate?: string;
 }
 
 function parseScheduleTable(text: string, allDates: DateMatch[]): Schedule {
@@ -144,6 +159,10 @@ function parseScheduleTable(text: string, allDates: DateMatch[]): Schedule {
 
   sched.applicationStart = d[1] || d[0];
   sched.applicationEnd = d[3] || d[2] || d[1];
+  sched.announcementDate = d[0];
+  sched.specialApplyDate = d[1];
+  sched.general1stDate = d[2];
+  sched.general2ndDate = d[3];
   sched.winnerAnnounceDate = d[4];
 
   // d[5] 이후: 서류접수(start/end) + 계약(start/end)
@@ -260,6 +279,73 @@ function extractTotalUnits(text: string): number | undefined {
   // "일반분양 총 55세대"
   const m2 = text.match(/일반\s*분양\s*총?\s*(\d{1,5})\s*세대/);
   if (m2) return parseInt(m2[1], 10);
+  return undefined;
+}
+
+function extractResaleRestriction(text: string): string | undefined {
+  // "전매행위 제한기간", "전매제한" 근처
+  const m = text.match(/전매(?:행위)?\s*제한\s*(?:기간)?\s*[:：]?\s*([가-힣\d\s~·\-()（）]+?)(?:\n|, |\.)/);
+  if (m) return m[1].trim().slice(0, 60);
+  // "소유권이전등기일까지" 등
+  const m2 = text.match(/전매(?:행위)?\s*제한[^.]*?(소유권이전등기[가-힣]*|당첨[가-힣]*로부터\s*\d+[가-힣]*)/);
+  if (m2) return m2[1].trim();
+  return undefined;
+}
+
+function extractReWinRestriction(text: string): string | undefined {
+  const m = text.match(/재당첨\s*제한\s*[:：]?\s*([가-힣\d\s~·\-()（）]+?)(?:\n|, |\.)/);
+  if (m) {
+    const val = m[1].trim();
+    if (/없|미적용|해당\s*없/.test(val)) return "없음";
+    return val.slice(0, 60);
+  }
+  if (/재당첨\s*제한\s*(?:이|을)\s*(?:받지|적용[가-힣]*않)/.test(text)) return "없음";
+  return undefined;
+}
+
+function extractResidenceObligation(text: string): string | undefined {
+  const m = text.match(/거주\s*의무\s*(?:기간)?\s*[:：]?\s*([가-힣\d\s~·\-()（）]+?)(?:\n|, |\.)/);
+  if (m) {
+    const val = m[1].trim();
+    if (/없|미적용|해당\s*없/.test(val)) return "없음";
+    return val.slice(0, 60);
+  }
+  return undefined;
+}
+
+function extractPriceCap(text: string): boolean | undefined {
+  if (/분양가\s*상한제\s*(?:가\s*)?적용/.test(text)) return true;
+  if (/분양가\s*상한제\s*(?:가\s*)?미적용|분양가\s*상한제\s*(?:를\s*)?적용[가-힣]*않/.test(text)) return false;
+  return undefined;
+}
+
+function extractLandType(text: string): string | undefined {
+  if (/공공택지|공공사업/.test(text)) return "공공택지";
+  if (/민간택지|민간사업/.test(text)) return "민간택지";
+  return undefined;
+}
+
+function extractMoveInDate(text: string): string | undefined {
+  const m = text.match(/입주\s*(?:예정|시기|개시)\s*[:：]?\s*(\d{4}\s*년?\s*\d{1,2}\s*월)/);
+  if (m) return m[1].replace(/\s+/g, ' ').trim();
+  return undefined;
+}
+
+function extractPointSystemRatio(text: string): { ratio: string; items?: string[] } | undefined {
+  // "가점제 40%, 추첨제 60%" or "가점제 100%"
+  const m = text.match(/가점제\s*(\d{1,3})\s*%\s*[,/·]\s*추첨제\s*(\d{1,3})\s*%/);
+  if (m) {
+    const ratio = `가점제 ${m[1]}% / 추첨제 ${m[2]}%`;
+    const items = [
+      "무주택기간 (32점)",
+      "부양가족수 (35점)",
+      "저축가입기간 (17점)",
+    ];
+    return { ratio, items };
+  }
+  // "가점제 100%"
+  const m2 = text.match(/가점제\s*(\d{1,3})\s*%/);
+  if (m2 && parseInt(m2[1]) === 100) return { ratio: "가점제 100%" };
   return undefined;
 }
 
@@ -408,6 +494,7 @@ interface GroqParsedResult {
   incomeTable?: Record<string, Record<string, number>>;
   assetLimit?: string;
   carValueLimit?: string;
+  pointSystemRatio?: string;
 }
 
 async function parseWithGroq(sections: TextSections): Promise<GroqParsedResult | null> {
@@ -471,6 +558,7 @@ ${combinedText}
   "supplyTypes": [
     {
       "type": "다자녀가구|신혼부부|생애최초|노부모부양|기관추천|신생아|일반공급 중 하나",
+      "units": 세대수 (숫자 또는 null),
       "requireHomeless": true/false,
       "minSubscriptionMonths": 숫자 또는 null,
       "incomeLimitPercent": 도시근로자 월평균소득 대비 % (예: 100, 120, 140),
@@ -658,6 +746,18 @@ export async function POST(req: NextRequest) {
       incomeTable: groqResult?.incomeTable || undefined,
       assetLimit: groqResult?.assetLimit || undefined,
       carValueLimit: groqResult?.carValueLimit || undefined,
+
+      resaleRestriction: extractResaleRestriction(fullText),
+      reWinRestriction: extractReWinRestriction(fullText),
+      residenceObligation: extractResidenceObligation(fullText),
+      priceCapApplied: extractPriceCap(fullText),
+      landType: extractLandType(fullText),
+      moveInDate: extractMoveInDate(fullText),
+      pointSystemRatio: extractPointSystemRatio(fullText),
+      announcementDate: schedule.announcementDate || findDateNearKeyword(fullText, allDates, ['모집공고일', '입주자모집공고']) || undefined,
+      specialApplyDate: schedule.specialApplyDate || undefined,
+      general1stDate: schedule.general1stDate || findDateNearKeyword(fullText, allDates, ['1순위 접수', '일순위']) || undefined,
+      general2ndDate: schedule.general2ndDate || findDateNearKeyword(fullText, allDates, ['2순위 접수', '이순위']) || undefined,
 
       rawTextPreview: fullText.slice(0, 500),
     };

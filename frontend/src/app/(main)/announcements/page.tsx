@@ -43,6 +43,18 @@ const DEFAULT_RULES = {
   doc_submit_start: "" as string,
   doc_submit_end: "" as string,
   total_units: 0 as number,
+  // PDF 파싱 규제/제한/일정 필드
+  resale_restriction: "" as string,
+  rewin_restriction: "" as string,
+  residence_obligation: "" as string,
+  price_cap_applied: undefined as boolean | undefined,
+  land_type: "" as string,
+  move_in_date: "" as string,
+  point_system: "" as string,
+  announcement_date: "" as string,
+  special_apply_date: "" as string,
+  general_1st_date: "" as string,
+  general_2nd_date: "" as string,
 };
 
 /** 공고가 완료 상태인지 판별 */
@@ -292,6 +304,18 @@ export default function AnnouncementsPage() {
       if (form.rules.doc_submit_start) eligibilityRules.doc_submit_start = form.rules.doc_submit_start;
       if (form.rules.doc_submit_end) eligibilityRules.doc_submit_end = form.rules.doc_submit_end;
       if (form.rules.total_units) eligibilityRules.total_units = form.rules.total_units;
+      // 규제 + 제한 + 일정
+      if (form.rules.resale_restriction) eligibilityRules.resale_restriction = form.rules.resale_restriction;
+      if (form.rules.rewin_restriction) eligibilityRules.rewin_restriction = form.rules.rewin_restriction;
+      if (form.rules.residence_obligation) eligibilityRules.residence_obligation = form.rules.residence_obligation;
+      if (typeof form.rules.price_cap_applied === "boolean") eligibilityRules.price_cap_applied = form.rules.price_cap_applied;
+      if (form.rules.land_type) eligibilityRules.land_type = form.rules.land_type;
+      if (form.rules.move_in_date) eligibilityRules.move_in_date = form.rules.move_in_date;
+      if (form.rules.point_system) eligibilityRules.point_system = form.rules.point_system;
+      if (form.rules.announcement_date) eligibilityRules.announcement_date = form.rules.announcement_date;
+      if (form.rules.special_apply_date) eligibilityRules.special_apply_date = form.rules.special_apply_date;
+      if (form.rules.general_1st_date) eligibilityRules.general_1st_date = form.rules.general_1st_date;
+      if (form.rules.general_2nd_date) eligibilityRules.general_2nd_date = form.rules.general_2nd_date;
       const annPayload = {
         title: form.title.trim(),
         announcement_no: form.announcement_no || null,
@@ -443,6 +467,18 @@ export default function AnnouncementsPage() {
         }
         if (d.assetLimit) { next.rules.asset_limit = d.assetLimit; filled.push("자산한도"); }
         if (d.carValueLimit) { next.rules.car_value_limit = d.carValueLimit; filled.push("자동차가액 한도"); }
+        // ── 규제 + 제한 + 일정 필드 저장 ──
+        if (d.resaleRestriction) { next.rules.resale_restriction = d.resaleRestriction; filled.push("전매제한"); }
+        if (d.reWinRestriction) { next.rules.rewin_restriction = d.reWinRestriction; filled.push("재당첨제한"); }
+        if (d.residenceObligation) { next.rules.residence_obligation = d.residenceObligation; filled.push("거주의무"); }
+        if (typeof d.priceCapApplied === "boolean") { next.rules.price_cap_applied = d.priceCapApplied; filled.push("분양가상한제"); }
+        if (d.landType) { next.rules.land_type = d.landType; filled.push("택지유형"); }
+        if (d.moveInDate) { next.rules.move_in_date = d.moveInDate; filled.push("입주예정"); }
+        if (d.pointSystemRatio) { next.rules.point_system = d.pointSystemRatio; filled.push("가점제/추첨제"); }
+        if (d.announcementDate) { next.rules.announcement_date = d.announcementDate; }
+        if (d.specialApplyDate) { next.rules.special_apply_date = d.specialApplyDate; }
+        if (d.general1stDate) { next.rules.general_1st_date = d.general1stDate; }
+        if (d.general2ndDate) { next.rules.general_2nd_date = d.general2ndDate; }
         return next;
       });
       if (json.llmUsed) filled.push("✅ AI 분석 완료");

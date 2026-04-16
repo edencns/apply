@@ -11,6 +11,7 @@ import {
   ChevronDown, ChevronUp, AlertTriangle, CheckCircle2,
   Baby, UserCheck,
 } from "lucide-react";
+import { getRequiredDocuments, COMMON_DOCUMENTS, SUPPLY_TYPE_DOCUMENTS } from "@/lib/document-checklist";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -127,10 +128,10 @@ function OverviewTab({ ann, rules }: { ann: AnnouncementDetail; rules: Record<st
             <p className="text-xs text-gray-500 mb-1">위치</p>
             <p className="text-sm">{regionFull}</p>
           </div>
-          {rules._moveIn && (
+          {(rules._moveIn || rules.move_in_date) && (
             <div>
               <p className="text-xs text-gray-500 mb-1">입주 예정</p>
-              <p className="text-sm">{rules._moveIn}</p>
+              <p className="text-sm">{rules._moveIn || rules.move_in_date}</p>
             </div>
           )}
           <div>
@@ -143,23 +144,30 @@ function OverviewTab({ ann, rules }: { ann: AnnouncementDetail; rules: Record<st
           </div>
         </div>
 
-        {/* 규제 현황 — 샘플 데이터에 있을 때 */}
-        {(rules._resaleRestriction || rules._reWinRestriction || rules._residenceObligation || rules._priceCapApplied !== undefined) && (
-          <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
-            {rules._resaleRestriction && <YesNo value={rules._resaleRestriction} label="전매제한" />}
-            {rules._reWinRestriction && <YesNo value={rules._reWinRestriction} label="재당첨 제한" />}
-            {rules._residenceObligation && <YesNo value={rules._residenceObligation} label="거주의무" />}
-            {rules._priceCapApplied !== undefined && (
-              <div className="flex items-center gap-1.5 text-sm">
-                {rules._priceCapApplied ? (
-                  <><AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" /><span className="text-amber-700">분양가상한제 적용</span></>
-                ) : (
-                  <><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /><span className="text-green-700">분양가상한제 미적용</span></>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+        {/* 규제 현황 — 샘플 또는 PDF 파싱 데이터 */}
+        {(() => {
+          const resale = rules._resaleRestriction || rules.resale_restriction;
+          const reWin = rules._reWinRestriction || rules.rewin_restriction;
+          const residence = rules._residenceObligation || rules.residence_obligation;
+          const priceCap = rules._priceCapApplied !== undefined ? rules._priceCapApplied : rules.price_cap_applied;
+          if (!resale && !reWin && !residence && priceCap === undefined) return null;
+          return (
+            <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+              {resale && <YesNo value={resale} label="전매제한" />}
+              {reWin && <YesNo value={reWin} label="재당첨 제한" />}
+              {residence && <YesNo value={residence} label="거주의무" />}
+              {priceCap !== undefined && (
+                <div className="flex items-center gap-1.5 text-sm">
+                  {priceCap ? (
+                    <><AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" /><span className="text-amber-700">분양가상한제 적용</span></>
+                  ) : (
+                    <><CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" /><span className="text-green-700">분양가상한제 미적용</span></>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </Section>
 
       {exclusiveAreas.length > 0 && (
@@ -195,20 +203,39 @@ function OverviewTab({ ann, rules }: { ann: AnnouncementDetail; rules: Record<st
 
       <Section title="공급 일정">
         <div className="space-y-2">
-          {(rules._schedule ? [
-            { label: "공고일", value: rules._schedule.announcement },
-            { label: "특별공급 접수", value: rules._schedule.specialApply },
-            { label: "일반 1순위", value: rules._schedule.general1st },
-            { label: "일반 2순위", value: rules._schedule.general2nd },
-            { label: "당첨자 발표", value: rules._schedule.winnerAnnounce },
-            { label: "서류 제출", value: rules._schedule.docSubmit },
-            { label: "계약 체결", value: rules._schedule.contract },
-          ] : [
-            { label: "청약 접수", value: fmtRange(ann.application_start, ann.application_end) },
-            { label: "당첨자 발표", value: fmtDate(ann.winner_announce_date) },
-            { label: "서류 제출", value: fmtRange(rules.doc_submit_start, rules.doc_submit_end) },
-            { label: "계약 체결", value: fmtRange(ann.contract_start, ann.contract_end) },
-          ]).map((item) => (
+          {(() => {
+            // 1) 샘플 데이터의 _schedule (7줄 상세)
+            if (rules._schedule) {
+              return [
+                { label: "공고일", value: rules._schedule.announcement },
+                { label: "특별공급 접수", value: rules._schedule.specialApply },
+                { label: "일반 1순위", value: rules._schedule.general1st },
+                { label: "일반 2순위", value: rules._schedule.general2nd },
+                { label: "당첨자 발표", value: rules._schedule.winnerAnnounce },
+                { label: "서류 제출", value: rules._schedule.docSubmit },
+                { label: "계약 체결", value: rules._schedule.contract },
+              ];
+            }
+            // 2) PDF 파싱에서 개별 날짜가 있으면 7줄 포맷
+            if (rules.announcement_date || rules.special_apply_date || rules.general_1st_date || rules.general_2nd_date) {
+              return [
+                { label: "공고일", value: fmtDate(rules.announcement_date) },
+                { label: "특별공급 접수", value: fmtDate(rules.special_apply_date) },
+                { label: "일반 1순위", value: fmtDate(rules.general_1st_date) },
+                { label: "일반 2순위", value: fmtDate(rules.general_2nd_date) },
+                { label: "당첨자 발표", value: fmtDate(ann.winner_announce_date) },
+                { label: "서류 제출", value: fmtRange(rules.doc_submit_start, rules.doc_submit_end) },
+                { label: "계약 체결", value: fmtRange(ann.contract_start, ann.contract_end) },
+              ];
+            }
+            // 3) 기본 4줄 폴백
+            return [
+              { label: "청약 접수", value: fmtRange(ann.application_start, ann.application_end) },
+              { label: "당첨자 발표", value: fmtDate(ann.winner_announce_date) },
+              { label: "서류 제출", value: fmtRange(rules.doc_submit_start, rules.doc_submit_end) },
+              { label: "계약 체결", value: fmtRange(ann.contract_start, ann.contract_end) },
+            ];
+          })().map((item) => (
             <div key={item.label} className="flex items-center justify-between text-sm">
               <span className="text-gray-500">{item.label}</span>
               <span className="font-medium">{item.value}</span>
@@ -255,23 +282,33 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
         </div>
       </Section>
 
-      {rules._generalPointSystem && (
+      {/* 가점제/추첨제 — 샘플 또는 PDF */}
+      {(rules._generalPointSystem || rules.point_system) && (
         <Section title="일반공급 가점제/추첨제">
-          <div className="mb-3 bg-indigo-50 rounded-lg p-3">
-            <p className="text-xs font-medium text-indigo-700">적용 비율</p>
-            <p className="text-sm text-indigo-900 mt-0.5 font-semibold">{rules._generalPointSystem.ratio}</p>
-          </div>
-          {rules._generalPointSystem.items?.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-gray-500 mb-2">가점 항목 (최대 {rules._generalPointSystem.maxPoints}점)</p>
-              <div className="space-y-1.5">
-                {rules._generalPointSystem.items.map((item: string, i: number) => (
-                  <div key={i} className="flex items-center gap-2 text-sm">
-                    <div className="w-5 h-5 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">{i + 1}</div>
-                    <span>{item}</span>
-                  </div>
-                ))}
+          {rules._generalPointSystem ? (
+            <>
+              <div className="mb-3 bg-indigo-50 rounded-lg p-3">
+                <p className="text-xs font-medium text-indigo-700">적용 비율</p>
+                <p className="text-sm text-indigo-900 mt-0.5 font-semibold">{rules._generalPointSystem.ratio}</p>
               </div>
+              {rules._generalPointSystem.items?.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-2">가점 항목 (최대 {rules._generalPointSystem.maxPoints}점)</p>
+                  <div className="space-y-1.5">
+                    {rules._generalPointSystem.items.map((item: string, i: number) => (
+                      <div key={i} className="flex items-center gap-2 text-sm">
+                        <div className="w-5 h-5 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">{i + 1}</div>
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="bg-indigo-50 rounded-lg p-3">
+              <p className="text-xs font-medium text-indigo-700">적용 비율</p>
+              <p className="text-sm text-indigo-900 mt-0.5 font-semibold">{rules.point_system}</p>
             </div>
           )}
         </Section>
@@ -287,16 +324,16 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
             <p className="text-xs text-gray-500">무주택 요건</p>
             <p className="text-sm font-medium mt-1">{rules.no_home_required ? "필수" : "해당 없음"}</p>
           </div>
-          {rules._landType && (
+          {(rules._landType || rules.land_type) && (
             <div className="bg-gray-50 rounded-lg p-3">
               <p className="text-xs text-gray-500">택지유형</p>
-              <p className="text-sm font-medium mt-1">{rules._landType}</p>
+              <p className="text-sm font-medium mt-1">{rules._landType || rules.land_type}</p>
             </div>
           )}
-          {rules._resaleRestriction && (
+          {(rules._resaleRestriction || rules.resale_restriction) && (
             <div className="bg-gray-50 rounded-lg p-3">
               <p className="text-xs text-gray-500">전매제한</p>
-              <p className="text-sm font-medium mt-1">{rules._resaleRestriction}</p>
+              <p className="text-sm font-medium mt-1">{rules._resaleRestriction || rules.resale_restriction}</p>
             </div>
           )}
         </div>
@@ -462,7 +499,10 @@ function SpecialTab({ rules }: { rules: Record<string, any> }) {
 
 function IncomeTab({ rules }: { rules: Record<string, any> }) {
   const incomeTable: Record<string, any> = rules.income_table || {};
-  const hasIncome = Object.keys(incomeTable).length > 0;
+  // 실제 숫자 데이터가 하나라도 있는 경우만 표시
+  const hasIncome = Object.keys(incomeTable).length > 0 && Object.values(incomeTable).some(
+    (row: any) => row && typeof row === "object" && Object.values(row).some((v: any) => v !== null && v !== undefined && v !== 0)
+  );
   const nwIncome = rules._newlywedIncome;
   const flIncome = rules._firstLifeIncome;
 
@@ -491,7 +531,7 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
                     <td className="py-2.5 font-medium">{size}</td>
                     {Object.values(vals).map((v: any, i: number) => (
                       <td key={i} className="py-2.5 text-right text-gray-700">
-                        {typeof v === "number" ? `${v.toLocaleString("ko-KR")}원` : String(v)}
+                        {v === null || v === undefined ? "—" : typeof v === "number" ? `${v.toLocaleString("ko-KR")}원` : String(v)}
                       </td>
                     ))}
                   </tr>
@@ -574,8 +614,32 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
 /* ─── Tab: Documents ─────────────────────────────────── */
 
 function DocumentsTab({ rules }: { rules: Record<string, any> }) {
-  const requiredDocuments: Record<string, string[]> = rules.required_documents || {};
-  const hasDocuments = Object.keys(requiredDocuments).length > 0;
+  const parsedDocs: Record<string, string[]> = rules.required_documents || {};
+  const specialTypes: string[] = rules.special_supply_types || [];
+
+  // 문서 체크리스트 폴백: 파싱된 서류가 부족하면 기본 체크리스트로 보충
+  const enrichedDocs: Record<string, string[]> = {};
+
+  // 공통 서류
+  const parsedCommon = parsedDocs["공통"] || [];
+  enrichedDocs["공통"] = parsedCommon.length >= 3 ? parsedCommon : COMMON_DOCUMENTS;
+
+  // 유형별 서류
+  const allTypesSet = new Set<string>();
+  Object.keys(parsedDocs).filter((k) => k !== "공통").forEach((k) => allTypesSet.add(k));
+  specialTypes.forEach((t) => allTypesSet.add(t));
+  allTypesSet.add("일반공급");
+  const allTypes = Array.from(allTypesSet);
+  for (const type of allTypes) {
+    const parsed = parsedDocs[type] || [];
+    if (parsed.length >= 2) {
+      enrichedDocs[type] = parsed;
+    } else if (SUPPLY_TYPE_DOCUMENTS[type]) {
+      enrichedDocs[type] = SUPPLY_TYPE_DOCUMENTS[type];
+    }
+  }
+
+  const hasDocuments = Object.values(enrichedDocs).some((docs) => docs.length > 0);
 
   const DOC_COLORS: Record<string, string> = {
     "공통": "blue",
@@ -598,21 +662,32 @@ function DocumentsTab({ rules }: { rules: Record<string, any> }) {
     );
   }
 
+  // 파싱 데이터 부족 시 기본값이 적용됐는지 표시
+  const isDefault = parsedCommon.length < 3;
+
   return (
     <div className="space-y-4">
-      {Object.entries(requiredDocuments).map(([category, docs]) => (
-        <Section key={category} title={`${category} 서류`} defaultOpen={category === "공통"}>
-          <ul className="space-y-2">
-            {docs.map((doc, i) => (
-              <li key={i} className="flex items-start gap-2.5 text-sm">
-                <div className={`w-5 h-5 rounded-full bg-${DOC_COLORS[category] || "gray"}-100 flex items-center justify-center flex-shrink-0 mt-0.5`}>
-                  <FileText className={`w-3 h-3 text-${DOC_COLORS[category] || "gray"}-600`} />
-                </div>
-                <span>{doc}</span>
-              </li>
-            ))}
-          </ul>
-        </Section>
+      {isDefault && (
+        <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg text-sm text-amber-800">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span>공고에서 서류 목록이 충분히 추출되지 않아 <strong>표준 체크리스트</strong>가 적용되었습니다.</span>
+        </div>
+      )}
+      {Object.entries(enrichedDocs).map(([category, docs]) => (
+        docs.length > 0 && (
+          <Section key={category} title={`${category} 서류`} defaultOpen={category === "공통"}>
+            <ul className="space-y-2">
+              {docs.map((doc, i) => (
+                <li key={i} className="flex items-start gap-2.5 text-sm">
+                  <div className={`w-5 h-5 rounded-full bg-${DOC_COLORS[category] || "gray"}-100 flex items-center justify-center flex-shrink-0 mt-0.5`}>
+                    <FileText className={`w-3 h-3 text-${DOC_COLORS[category] || "gray"}-600`} />
+                  </div>
+                  <span>{doc}</span>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )
       ))}
     </div>
   );
