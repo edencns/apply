@@ -16,6 +16,7 @@ import {
   Loader2, Download, BookOpen, X,
 } from "lucide-react";
 import AnnouncementPicker from "@/components/AnnouncementPicker";
+import { getSampleAsLocalAnnouncements } from "@/lib/sample-adapter";
 
 interface Customer {
   id: number;
@@ -73,6 +74,7 @@ function CustomersPageInner() {
   // ─── 공고 목록 로딩 ────────────────────────────────────
   const loadAnnouncements = useCallback(async () => {
     const local = localAnnouncements.listAll();
+    const samples = getSampleAsLocalAnnouncements();
     try {
       const r = await api.get(`/announcements/`);
       const backend = Array.isArray(r.data) ? r.data : [];
@@ -80,11 +82,15 @@ function CustomersPageInner() {
       for (const l of local) {
         if (!merged.some((a: any) => a.id === l.id)) merged.push(l);
       }
+      for (const s of samples) {
+        if (!merged.some((a: any) => a.id === s.id)) merged.push(s);
+      }
       setAnnouncements(merged);
       return merged;
     } catch {
-      setAnnouncements(local);
-      return local;
+      const combined = [...local, ...samples];
+      setAnnouncements(combined);
+      return combined;
     }
   }, []);
 
