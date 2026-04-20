@@ -825,80 +825,169 @@ export function parseAdditionalStandbys(wb: XLSXWorkBook, fileName: string): Fil
    ───────────────────────────────────────────────────────────── */
 
 export function parseWinnerPdfText(text: string, fileName: string): FileIngestResult {
+  // ─── 섹션 분할 ──────────────────────────────────────
+  // 공개 PDF는 보통 다음 순서로 구성:
+  //   ① 특별공급 당첨자 명단
+  //   ② 일반공급 당첨자 명단
+  //   ③ 일반공급 예비입주자 명단
+  //   ④ 특별공급 예비입주자 명단
+  //   (+ 공급질서 교란자 명단, 추첨제외자 명단 등은 파싱 대상 아님)
+
+  const anchors = [
+    { key: "sp-win",     label: "특별공급 당첨자 명단",   idx: text.indexOf("특별공급 당첨자 명단") },
+    { key: "gen-win",    label: "일반공급 당첨자 명단",   idx: text.indexOf("일반공급 당첨자 명단") },
+    { key: "gen-stand",  label: "일반공급 예비입주자",    idx: text.indexOf("일반공급 예비입주자") },
+    { key: "sp-stand",   label: "특별공급 예비입주자",    idx: text.indexOf("특별공급 예비입주자") },
+    { key: "stopper",    label: "공급질서 교란자",        idx: text.indexOf("공급질서 교란자") },
+  ].filter((a) => a.idx >= 0).sort((a, b) => a.idx - b.idx);
+
+  function sectionText(key: string): string {
+    const i = anchors.findIndex((a) => a.key === key);
+    if (i < 0) return "";
+    const start = anchors[i].idx;
+    const end = i + 1 < anchors.length ? anchors[i + 1].idx : text.length;
+    return text.slice(start, end);
+  }
+
+  const spWinText   = sectionText("sp-win");
+  const genWinText  = sectionText("gen-win");
+  const genStandText = sectionText("gen-stand");
+  const spStandText  = sectionText("sp-stand");
+
+  // ─── 공통 regex 조각 ─────────────────────────────
+  const UNIT = "([\\d.]+[A-Z]?)";
+  const NAME = "([가-힣*]+)";
+  const RRN_F = "(\\d{6})";
+  const RRN_B = "([\\d*]{7})";
+  const PHONE = "(01[016789][\\s.-]?\\d{3,4}[\\s.-]?\\d{4})";
+  const SUPPLY = "(\\S*?특별공급|\\S*?신생아\\S*)";
+  const APPLY_NO = "(\\d{8,10})";
+
+  // ① 특별공급 당첨자: 순번 주택형 공급종류 동 호 성명 주민 전화
+  const spWinRegex = new RegExp(
+    `(\\d+)\\s+${UNIT}\\s+${SUPPLY}\\s+(\\d+)\\s+(\\d+)\\s+${NAME}\\s+${RRN_F}[-–]${RRN_B}\\s+${PHONE}`,
+    "g",
+  );
+  // ② 일반공급 당첨자: 순번 주택형 접수번호 동 호 성명 주민 전화
+  const genWinRegex = new RegExp(
+    `(\\d+)\\s+${UNIT}\\s+${APPLY_NO}\\s+(\\d+)\\s+(\\d+)\\s+${NAME}\\s+${RRN_F}[-–]${RRN_B}\\s+${PHONE}`,
+    "g",
+  );
+  // ③ 일반공급 예비: 순번 주택형 접수번호 예비당첨N 성명 주민 전화
+  const genStandRegex = new RegExp(
+    `(\\d+)\\s+${UNIT}\\s+${APPLY_NO}\\s+예비당첨(\\d+)\\s+${NAME}\\s+${RRN_F}[-–]${RRN_B}\\s+${PHONE}`,
+    "g",
+  );
+  // ④ 특별공급 예비: 순번 주택형 공급종류 예비당첨N 성명 주민 전화 (동·호 없음)
+  const spStandRegex = new RegExp(
+    `(\\d+)\\s+${UNIT}\\s+${SUPPLY}\\s+예비당첨(\\d+)\\s+${NAME}\\s+${RRN_F}[-–]${RRN_B}\\s+${PHONE}`,
+    "g",
+  );
+
   const winners: WinnerRecord[] = [];
-
-  // 특별공급 행: "1 059.9660 생애최초특별공급 103 401 김*형 961101-1****** 010-2698-7887"
-  // 일반공급 행: "1 059.9660 52028187 103 301 최*정 820130-2****** 010-8964-5105 004 국민 04 종합저축 95750701102899 1"
-  //   — 접수번호(8자리 숫자), 순위(끝) 포함
-  const specialRegex = /(\d+)\s+([\d.]+[A-Z]?)\s+(\S*?특별공급|\S*?신생아\S*)\s+(\d+)\s+(\d+)\s+([가-힣*]+)\s+(\d{6})[-–]([\d*]{7})\s+(01[016789][\s.-]?\d{3,4}[\s.-]?\d{4})/g;
-  const generalRegex = /(\d+)\s+([\d.]+[A-Z]?)\s+(\d{8})\s+(\d+)\s+(\d+)\s+([가-힣*]+)\s+(\d{6})[-–]([\d*]{7})\s+(01[016789][\s.-]?\d{3,4}[\s.-]?\d{4})/g;
-
-  // 현재 처리 중인 섹션 판별용
-  const generalStart = text.indexOf("일반공급 당첨자 명단");
-  const specialText = generalStart > 0 ? text.slice(0, generalStart) : text;
-  const generalText = generalStart > 0 ? text.slice(generalStart) : "";
-
+  const seen = new Set<string>();
   let m: RegExpExecArray | null;
 
-  // 특별공급
-  const specialSeen = new Set<string>();
-  while ((m = specialRegex.exec(specialText)) !== null) {
+  /** 주민번호 마스킹 해제 여부 판별 (마스킹이면 rrn 없이 rrnMasked만) */
+  function rrnFrom(front: string, back: string): { rrn?: string; rrnMasked: string } {
+    const masked = `${front}-${back}`;
+    return {
+      rrn: /^\d{7}$/.test(back) ? `${front}${back}` : undefined,
+      rrnMasked: masked,
+    };
+  }
+
+  // ① 특별공급 당첨자
+  while ((m = spWinRegex.exec(spWinText)) !== null) {
     const [, , unit, supply, dong, ho, name, rrnFront, rrnBack, phoneRaw] = m;
-    const key = `${name}:${phoneRaw}`;
-    if (specialSeen.has(key)) continue;
-    specialSeen.add(key);
+    const key = `sp-win:${name}:${phoneRaw}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     winners.push({
-      name,
-      rrnMasked: `${rrnFront}-${rrnBack}`,
-      rrn: /^[\d]+$/.test(rrnBack) ? `${rrnFront}${rrnBack}` : undefined, // 마스킹 없이 완전 숫자일 경우
-      unitType: unit,
-      dong,
-      ho,
+      name, ...rrnFrom(rrnFront, rrnBack),
+      unitType: unit, dong, ho,
       phone: normalizePhone(phoneRaw),
       supplyCategory: "특별공급",
       specialType: normalizeSpecialType(supply),
+      isStandby: false,
       sourceFiles: [fileName],
     });
   }
 
-  // 일반공급
-  const generalSeen = new Set<string>();
-  while ((m = generalRegex.exec(generalText)) !== null) {
-    const [, , unit, applyNo, dong, ho, name, rrnFront, rrnBack, phoneRaw] = m;
-    const key = `${name}:${phoneRaw}`;
-    if (generalSeen.has(key)) continue;
-    generalSeen.add(key);
+  // ② 일반공급 당첨자
+  while ((m = genWinRegex.exec(genWinText)) !== null) {
+    const [, , unit, , dong, ho, name, rrnFront, rrnBack, phoneRaw] = m;
+    const key = `gen-win:${name}:${phoneRaw}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     winners.push({
-      name,
-      rrnMasked: `${rrnFront}-${rrnBack}`,
-      rrn: /^[\d]+$/.test(rrnBack) ? `${rrnFront}${rrnBack}` : undefined,
-      unitType: unit,
-      dong,
-      ho,
+      name, ...rrnFrom(rrnFront, rrnBack),
+      unitType: unit, dong, ho,
       phone: normalizePhone(phoneRaw),
       supplyCategory: "일반공급",
+      isStandby: false,
       sourceFiles: [fileName],
     });
-    void applyNo;
+  }
+
+  // ③ 일반공급 예비
+  while ((m = genStandRegex.exec(genStandText)) !== null) {
+    const [, , unit, , standRank, name, rrnFront, rrnBack, phoneRaw] = m;
+    const key = `gen-stand:${name}:${phoneRaw}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    winners.push({
+      name, ...rrnFrom(rrnFront, rrnBack),
+      unitType: unit,
+      phone: normalizePhone(phoneRaw),
+      supplyCategory: "일반공급",
+      isStandby: true,
+      standbyRank: standRank,
+      sourceFiles: [fileName],
+    });
+  }
+
+  // ④ 특별공급 예비
+  while ((m = spStandRegex.exec(spStandText)) !== null) {
+    const [, , unit, supply, standRank, name, rrnFront, rrnBack, phoneRaw] = m;
+    const key = `sp-stand:${name}:${phoneRaw}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    winners.push({
+      name, ...rrnFrom(rrnFront, rrnBack),
+      unitType: unit,
+      phone: normalizePhone(phoneRaw),
+      supplyCategory: "특별공급",
+      specialType: normalizeSpecialType(supply),
+      isStandby: true,
+      standbyRank: standRank,
+      sourceFiles: [fileName],
+    });
   }
 
   // 공고번호 / 발표일 추출
   const annoMatch = text.match(/관리번호\s*[:：]?\s*(\d{4}[-–]?\d+)/);
   const dateMatch = text.match(/당첨자발표일\s*[:：]?\s*(\d{4}[.\-]\d{2}[.\-]\d{2})/);
+  const withMeta = winners.map((w) => ({
+    ...w,
+    announcementNo: annoMatch ? annoMatch[1].replace(/[-–]/g, "") : undefined,
+    announcementDate: dateMatch ? dateMatch[1].replace(/[.\-]/g, "") : undefined,
+  }));
+
+  const spWin  = withMeta.filter((w) => w.supplyCategory === "특별공급" && !w.isStandby).length;
+  const spStd  = withMeta.filter((w) => w.supplyCategory === "특별공급" &&  w.isStandby).length;
+  const genWin = withMeta.filter((w) => w.supplyCategory === "일반공급" && !w.isStandby).length;
+  const genStd = withMeta.filter((w) => w.supplyCategory === "일반공급" &&  w.isStandby).length;
 
   return {
     fileName,
     kind: "winner-pdf",
-    winners: winners.map((w) => ({
-      ...w,
-      announcementNo: annoMatch ? annoMatch[1].replace(/[-–]/g, "") : undefined,
-      announcementDate: dateMatch ? dateMatch[1].replace(/[.\-]/g, "") : undefined,
-    })),
+    winners: withMeta,
     householdMembers: [],
     properties: [],
     savings: [],
-    label: `당첨자현황 PDF (${winners.length}명)`,
-    notes: winners.length === 0 ? ["PDF에서 당첨자 행을 인식하지 못했습니다"] : [],
+    label: `당첨자현황 PDF (특별 ${spWin}+${spStd} · 일반 ${genWin}+${genStd})`,
+    notes: withMeta.length === 0 ? ["PDF에서 당첨자 행을 인식하지 못했습니다"] : [],
   };
 }
 
@@ -1295,6 +1384,9 @@ export function profileToCustomerPayload(
     supply_type: supplyType,
     unit_type: profile.unitType,
     unit_area: deriveUnitArea(profile.unitType),
+    // 당첨자 / 예비 구분
+    is_standby: profile.isStandby === true,
+    standby_rank: profile.standbyRank,
     // 공적 검증 데이터
     household_members,
     properties,

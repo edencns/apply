@@ -274,11 +274,37 @@ export default function WinnerIngestModal({ open, onClose, onRegister }: Props) 
                 </div>
               )}
 
+              {/* 당첨자/예비 요약 */}
+              {(() => {
+                const total = result.profiles.length;
+                const winners = result.profiles.filter((p) => !p.isStandby).length;
+                const standbys = result.profiles.filter((p) => p.isStandby).length;
+                return (
+                  <div className="p-3 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-700 flex items-center gap-4 flex-wrap">
+                    <div>
+                      <span className="text-gray-500">총</span> <strong className="text-gray-900">{total}명</strong>
+                    </div>
+                    <div className="h-3 w-px bg-gray-300" />
+                    <div>
+                      <span className="text-blue-600">당첨자</span>{" "}
+                      <strong className="text-blue-900">{winners}명</strong>
+                    </div>
+                    <div>
+                      <span className="text-amber-600">예비입주자</span>{" "}
+                      <strong className="text-amber-900">{standbys}명</strong>
+                    </div>
+                    <div className="text-[10px] text-gray-500 ml-auto">
+                      예비는 당첨자가 부적합·포기할 때 자동 승계 후보로 보관됩니다
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* 취합된 프로필 */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-semibold text-gray-800">
-                    취합된 당첨자 프로필 ({result.profiles.length}명)
+                    취합된 프로필 ({result.profiles.length}명)
                   </h3>
                   <div className="text-xs text-gray-500">
                     선택 <strong className="text-blue-700">{selectedIds.size}</strong> / {result.profiles.length}
@@ -322,7 +348,19 @@ export default function WinnerIngestModal({ open, onClose, onRegister }: Props) 
                           </tr>
                         </thead>
                         <tbody>
-                          {result.profiles.map((p, i) => {
+                          {[...result.profiles]
+                            .sort((a, b) => {
+                              // 당첨자 먼저, 그다음 예비
+                              if (!!a.isStandby !== !!b.isStandby) return a.isStandby ? 1 : -1;
+                              // 같은 구분 내에서는 예비순위/이름순
+                              if (a.isStandby && b.isStandby) {
+                                const ar = parseInt(a.standbyRank || "999", 10);
+                                const br = parseInt(b.standbyRank || "999", 10);
+                                if (ar !== br) return ar - br;
+                              }
+                              return (a.name || "").localeCompare(b.name || "");
+                            })
+                            .map((p, i) => {
                             const id = p.rrn || `${p.name}-${p.phone || i}`;
                             const checked = p.rrn ? selectedIds.has(p.rrn) : false;
                             const supply =
@@ -330,7 +368,12 @@ export default function WinnerIngestModal({ open, onClose, onRegister }: Props) 
                                 ? "일반공급"
                                 : p.specialType || "—";
                             return (
-                              <tr key={id} className="border-t border-gray-100 hover:bg-gray-50">
+                              <tr
+                                key={id}
+                                className={`border-t border-gray-100 hover:bg-gray-50 ${
+                                  p.isStandby ? "bg-amber-50/40" : ""
+                                }`}
+                              >
                                 <td className="px-3 py-2">
                                   <input
                                     type="checkbox"
@@ -353,9 +396,13 @@ export default function WinnerIngestModal({ open, onClose, onRegister }: Props) 
                                   {p.rrn ? formatRrn(p.rrn) : (p.rrnMasked || "—")}
                                 </td>
                                 <td className="px-3 py-2">
-                                  {p.isStandby && (
-                                    <span className="text-[9px] bg-gray-200 text-gray-700 px-1 py-0.5 rounded mr-1">
-                                      예비{p.standbyRank ? ` ${p.standbyRank}` : ""}
+                                  {p.isStandby ? (
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded font-medium mr-1">
+                                      예비 {p.standbyRank || "—"}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium mr-1">
+                                      당첨
                                     </span>
                                   )}
                                   {supply}

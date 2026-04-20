@@ -31,6 +31,8 @@ interface Customer {
   unit_type?: string;
   unit_area?: string;
   verification_verdict?: "eligible" | "ineligible" | "pending";
+  is_standby?: boolean;
+  standby_rank?: string;
 }
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
@@ -92,6 +94,9 @@ function CustomersPageInner() {
 
   // 당첨자 파일 일괄 분석 모달
   const [ingestOpen, setIngestOpen] = useState(false);
+
+  // 리스트 탭: 당첨자 / 예비 / 전체
+  const [listTab, setListTab] = useState<"winners" | "standbys" | "all">("winners");
 
   // ─── 공고 목록 로딩 ────────────────────────────────────
   const loadAnnouncements = useCallback(async () => {
@@ -179,6 +184,8 @@ function CustomersPageInner() {
           unit_type: c.unit_type,
           unit_area: c.unit_area,
           verification_verdict: c.verification_verdict,
+          is_standby: c.is_standby,
+          standby_rank: c.standby_rank,
         })));
       } else {
         console.error("[customers] load failed", err);
@@ -615,6 +622,9 @@ function CustomersPageInner() {
           supply_type: c.supply_type,
           unit_type: c.unit_type,
           unit_area: c.unit_area,
+          // 당첨자 / 예비 구분
+          is_standby: anyC.is_standby === true,
+          standby_rank: anyC.standby_rank,
           // 공적 검증 데이터 (파일 일괄 분석 경로에서 전달)
           household_members: anyC.household_members,
           properties: anyC.properties,
@@ -649,9 +659,18 @@ function CustomersPageInner() {
     }
   };
 
-  const filtered = customers.filter((c) =>
-    c.name.includes(search) || c.phone?.includes(search)
-  );
+  const winnersCount = customers.filter((c) => !c.is_standby).length;
+  const standbysCount = customers.filter((c) => c.is_standby).length;
+
+  const filtered = customers.filter((c) => {
+    // 탭 필터
+    if (listTab === "winners" && c.is_standby) return false;
+    if (listTab === "standbys" && !c.is_standby) return false;
+    // 검색 필터
+    const q = search.trim();
+    if (!q) return true;
+    return c.name.includes(q) || (c.phone || "").includes(q);
+  });
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -837,8 +856,44 @@ function CustomersPageInner() {
         </div>
       )}
 
-      {/* 검색 */}
-      <div className="flex gap-3 mb-4">
+      {/* 당첨자 / 예비 / 전체 탭 + 검색 */}
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <div className="inline-flex rounded-lg bg-gray-100 p-0.5">
+          {[
+            { key: "winners" as const, label: "당첨자", count: winnersCount },
+            { key: "standbys" as const, label: "예비", count: standbysCount },
+            { key: "all" as const, label: "전체", count: customers.length },
+          ].map((t) => {
+            const active = listTab === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => {
+                  setListTab(t.key);
+                  setSelectedIds(new Set());
+                }}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                  active
+                    ? t.key === "standbys"
+                      ? "bg-white text-amber-700 shadow-sm"
+                      : "bg-white text-blue-700 shadow-sm"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                {t.label}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                  active
+                    ? t.key === "standbys"
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-blue-100 text-blue-700"
+                    : "bg-gray-200 text-gray-600"
+                }`}>
+                  {t.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -848,6 +903,11 @@ function CustomersPageInner() {
             className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
+        {listTab === "standbys" && (
+          <span className="text-xs text-amber-700 flex items-center gap-1">
+            당첨자가 부적합·포기 시 이 목록에서 승계 후보를 선정합니다
+          </span>
+        )}
       </div>
 
       {/* 가점 계산기 패널 */}
@@ -976,7 +1036,16 @@ function CustomersPageInner() {
                       />
                     </td>
                   )}
-                  <td className="px-4 py-3 font-medium text-gray-900">{c.name}</td>
+                  <td className="px-4 py-3 font-medium text-gray-900">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span>{c.name}</span>
+                      {c.is_standby && (
+                        <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">
+                          예비 {c.standby_rank || ""}
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-gray-600">{c.phone || "-"}</td>
                   <td className="px-4 py-3 text-gray-700">
                     {c.unit_type ? (
