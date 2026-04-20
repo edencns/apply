@@ -9,9 +9,11 @@
 
 import { StageKey } from "./stage-utils";
 import type { FinalVerdict } from "@/lib/verification-rules";
+import type { LocalCustomer } from "@/lib/local-store";
 import {
   UserCheck, Users, Home, Banknote, FileText,
   CheckCircle2, AlertTriangle, XCircle, Circle,
+  UserX, ArrowUpCircle,
 } from "lucide-react";
 
 const STAGES: Array<{
@@ -38,20 +40,62 @@ export default function StageSidebar({
   current,
   finalVerdict,
   onSelect,
+  customer,
 }: {
   current: StageKey;
   finalVerdict: FinalVerdict;
   onSelect: (k: StageKey) => void;
+  customer?: LocalCustomer;
 }) {
+  const isSuperseded = customer?.superseded === true;
+  const isSucceededFrom = customer?.succeeded_from != null;
+  const isStandby = customer?.is_standby === true;
+
   return (
     <nav className="card p-2 sticky top-4">
+      {/* 상단 — 승계 상태 배너 */}
+      {isSuperseded && (
+        <div className="mb-2 px-3 py-2 rounded-lg bg-gray-100 border border-gray-200 flex items-start gap-2">
+          <UserX className="w-3.5 h-3.5 text-gray-500 mt-0.5 flex-shrink-0" />
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-gray-700">포기·승계 완료</div>
+            <div className="text-[10px] text-gray-500 mt-0.5 truncate">
+              {customer?.supersede_reason || "부적합 판정"}
+            </div>
+          </div>
+        </div>
+      )}
+      {isSucceededFrom && !isSuperseded && (
+        <div className="mb-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 flex items-start gap-2">
+          <ArrowUpCircle className="w-3.5 h-3.5 text-emerald-600 mt-0.5 flex-shrink-0" />
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-emerald-800">예비 승계됨</div>
+            <div className="text-[10px] text-emerald-600 mt-0.5">원 당첨자 자리 인수</div>
+          </div>
+        </div>
+      )}
+      {isStandby && !isSucceededFrom && !isSuperseded && (
+        <div className="mb-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
+          <ArrowUpCircle className="w-3.5 h-3.5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-amber-800">
+              예비 {customer?.standby_rank || ""}순위
+            </div>
+            <div className="text-[10px] text-amber-600 mt-0.5">당첨자 결격 시 승계 대기</div>
+          </div>
+        </div>
+      )}
+
       <div className="px-3 py-2 mb-1">
         <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">진행 단계</div>
       </div>
       <ul className="space-y-0.5">
         {STAGES.map((s, i) => {
           const v = finalVerdict.stages[s.field];
-          const { Icon: StateIcon, cls } = stateIcon(v);
+          // 승계 완료(포기) 상태면 모든 단계를 회색으로 표시
+          const { Icon: StateIcon, cls } = isSuperseded
+            ? { Icon: Circle, cls: "text-gray-300" }
+            : stateIcon(v);
           const StepIcon = s.icon;
           const active = current === s.key;
           return (
@@ -62,7 +106,7 @@ export default function StageSidebar({
                   active
                     ? "bg-blue-50 text-blue-900 ring-1 ring-blue-200"
                     : "hover:bg-gray-50 text-gray-700"
-                }`}
+                } ${isSuperseded ? "opacity-60" : ""}`}
               >
                 <span className={`text-[10px] font-mono w-4 ${active ? "text-blue-600" : "text-gray-400"}`}>
                   0{i + 1}
@@ -75,10 +119,28 @@ export default function StageSidebar({
           );
         })}
       </ul>
-      <div className="mt-3 px-3 py-3 rounded-lg bg-gray-50 border border-gray-100">
+
+      {/* 하단 — 최종 판정 카드 */}
+      <div className={`mt-3 px-3 py-3 rounded-lg border ${
+        isSuperseded
+          ? "bg-gray-100 border-gray-200"
+          : "bg-gray-50 border-gray-100"
+      }`}>
         <div className="text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">최종 판정</div>
-        {finalVerdict.verdict === "eligible" ? (
-          <div className="text-sm font-bold text-green-700">적합</div>
+        {isSuperseded ? (
+          <div>
+            <div className="text-sm font-bold text-gray-700 flex items-center gap-1">
+              <UserX className="w-3.5 h-3.5" /> 포기
+            </div>
+            <div className="text-[10px] text-gray-500 mt-0.5">자리 승계됨</div>
+          </div>
+        ) : finalVerdict.verdict === "eligible" ? (
+          <div className="text-sm font-bold text-green-700">
+            적합
+            {isSucceededFrom && (
+              <span className="ml-1 text-[10px] font-normal text-emerald-700">(승계)</span>
+            )}
+          </div>
         ) : finalVerdict.verdict === "ineligible" ? (
           <div>
             <div className="text-sm font-bold text-red-700">부적합</div>

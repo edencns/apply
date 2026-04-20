@@ -185,10 +185,24 @@ function CustomerDetailInner() {
       <div className="flex items-start justify-between mb-5 flex-wrap gap-3">
         <div>
           <div className="flex items-center gap-3 flex-wrap mb-1">
-            <h1 className="text-2xl font-bold text-gray-900">{customer.name}</h1>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${status.cls}`}>
-              {status.label}
-            </span>
+            <h1 className={`text-2xl font-bold ${customer.superseded ? "text-gray-400 line-through" : "text-gray-900"}`}>{customer.name}</h1>
+            {customer.superseded ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-200 text-gray-700">
+                포기·승계 완료
+              </span>
+            ) : customer.succeeded_from ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-100 text-emerald-700 border border-emerald-200">
+                예비 승계
+              </span>
+            ) : customer.is_standby ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-700 border border-amber-200">
+                예비 {customer.standby_rank || ""}순위
+              </span>
+            ) : (
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${status.cls}`}>
+                {status.label}
+              </span>
+            )}
             {customer.supply_type && (
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
                 {customer.supply_type}
@@ -232,7 +246,12 @@ function CustomerDetailInner() {
       {/* 2열 그리드: 좌측 단계 탭 + 우측 콘텐츠 */}
       <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-5">
         <div>
-          <StageSidebar current={stage} finalVerdict={finalVerdict} onSelect={setStage} />
+          <StageSidebar
+            current={stage}
+            finalVerdict={finalVerdict}
+            onSelect={setStage}
+            customer={customer}
+          />
         </div>
 
         <div className="min-w-0 space-y-4">
@@ -308,6 +327,24 @@ function RegistrationStage({
 
   return (
     <>
+      {customer.superseded && (
+        <div className="card border-2 border-gray-300 bg-gray-50">
+          <div className="flex items-start gap-3">
+            <UserX className="w-5 h-5 text-gray-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 text-sm">
+              <p className="font-semibold text-gray-800">이 고객은 포기·승계 완료 상태입니다</p>
+              <p className="text-xs text-gray-600 mt-1">
+                사유: {customer.supersede_reason || "부적합 판정"}
+                {customer.supersede_at && ` · ${fmtDate(customer.supersede_at)}`}
+              </p>
+              <p className="text-[11px] text-gray-500 mt-2">
+                정보는 읽기 전용으로만 열람됩니다. 검증 단계는 더 이상 유효하지 않습니다.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           <User className="w-4 h-4 text-gray-500" />
