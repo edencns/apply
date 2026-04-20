@@ -71,18 +71,17 @@ function CustomersPageInner() {
 
   // ─── 공고 목록 로딩 ────────────────────────────────────
   const loadAnnouncements = useCallback(async () => {
+    const local = localAnnouncements.listAll();
     try {
       const r = await api.get(`/announcements/`);
-      setAnnouncements(r.data);
-      return r.data;
-    } catch (err: any) {
-      if (isNetworkError(err)) {
-        const local = localAnnouncements.listAll();
-        setAnnouncements(local);
-        return local;
+      const backend = Array.isArray(r.data) ? r.data : [];
+      const merged: LocalAnnouncement[] = [...backend];
+      for (const l of local) {
+        if (!merged.some((a: any) => a.id === l.id)) merged.push(l);
       }
-      // 기타 오류: 로컬 저장소라도 보여준다
-      const local = localAnnouncements.listAll();
+      setAnnouncements(merged);
+      return merged;
+    } catch {
       setAnnouncements(local);
       return local;
     }

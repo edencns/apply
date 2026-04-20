@@ -63,12 +63,17 @@ function WinnersPageInner() {
 
   // ─── 공고 목록 로딩 ────────────────────────────────────
   const loadAnnouncements = useCallback(async () => {
+    const local = localAnnouncements.listAll();
     try {
       const r = await api.get(`/announcements/`);
-      setAnnouncements(r.data);
-      return r.data;
+      const backend = Array.isArray(r.data) ? r.data : [];
+      const merged: any[] = [...backend];
+      for (const l of local) {
+        if (!merged.some((a: any) => a.id === l.id)) merged.push(l);
+      }
+      setAnnouncements(merged);
+      return merged;
     } catch {
-      const local = localAnnouncements.listAll();
       setAnnouncements(local);
       return local;
     }
