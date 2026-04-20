@@ -13,11 +13,12 @@ import {
 } from "@/lib/local-store";
 import {
   UserPlus, Search, ChevronRight, Calculator, FileSpreadsheet, FileText,
-  Loader2, Download, BookOpen, X, Trash2,
+  Loader2, Download, BookOpen, X, Trash2, Sparkles,
 } from "lucide-react";
 import AnnouncementPicker from "@/components/AnnouncementPicker";
 import { getSampleAsLocalAnnouncements } from "@/lib/sample-adapter";
 import { classifyIncoming, formatValue, IncomingCustomer, CustomerConflict } from "@/lib/customer-dedup";
+import WinnerIngestModal from "@/components/WinnerIngestModal";
 
 interface Customer {
   id: number;
@@ -88,6 +89,9 @@ function CustomersPageInner() {
   // 업로드 dedup 결과 (충돌 확인 모달)
   const [conflicts, setConflicts] = useState<CustomerConflict[]>([]);
   const [conflictDecisions, setConflictDecisions] = useState<Record<number, "update" | "keep">>({});
+
+  // 당첨자 파일 일괄 분석 모달
+  const [ingestOpen, setIngestOpen] = useState(false);
 
   // ─── 공고 목록 로딩 ────────────────────────────────────
   const loadAnnouncements = useCallback(async () => {
@@ -583,6 +587,63 @@ function CustomersPageInner() {
     }
   };
 
+  /** 당첨자 파일 일괄 분석 결과를 받아 기존 dedup 흐름으로 등록 */
+  const handleIngestCandidates = async (candidates: IncomingCustomer[]) => {
+    if (!selectedAnn || candidates.length === 0) return;
+    const existing = localCustomers.listByAnnouncement(selectedAnn.id);
+    const { toCreate, duplicates, conflicts: foundConflicts } = classifyIncoming(candidates, existing);
+
+    let created = 0, createFailed = 0;
+    const createErrors: string[] = [];
+    for (const c of toCreate) {
+      try {
+        const payload = {
+          site_id: selectedAnn.site_id,
+          announcement_id: selectedAnn.id,
+          name: c.name,
+          phone: c.phone || "",
+          rrn_front: c.rrn_front || "",
+          rrn_back: c.rrn_back || "0000000",
+          address: c.address || "",
+          no_home_years: c.no_home_years ?? 0,
+          dependents_count: c.dependents_count ?? 0,
+          subscription_months: c.subscription_months ?? 0,
+          current_region: c.current_region || "",
+          income_monthly: c.income_monthly ?? null,
+          special_types: c.special_types || [],
+          supply_type: c.supply_type,
+          unit_type: c.unit_type,
+          unit_area: c.unit_area,
+        };
+        try {
+          await customersApi.create(payload as any);
+        } catch (netErr: any) {
+          if (!isNetworkError(netErr)) throw netErr;
+          localCustomers.create(payload);
+        }
+        created++;
+      } catch (err: any) {
+        createFailed++;
+        const msg = err?.response?.data?.detail || err?.message || "등록 실패";
+        createErrors.push(`${c.name}: ${msg}`);
+      }
+    }
+
+    setExcelResult({
+      success: created,
+      failed: createFailed,
+      errors: createErrors.slice(0, 10),
+    });
+    if (created > 0) loadCustomers();
+
+    if (foundConflicts.length > 0) {
+      setConflicts(foundConflicts);
+      setConflictDecisions({});
+    } else if (duplicates.length > 0 && created === 0) {
+      alert(`일괄 분석 결과 ${duplicates.length}명이 모두 이미 등록되어 있습니다.`);
+    }
+  };
+
   const filtered = customers.filter((c) =>
     c.name.includes(search) || c.phone?.includes(search)
   );
@@ -655,6 +716,14 @@ function CustomersPageInner() {
               if (f) handleExcelUpload(f);
             }}
           />
+          <button
+            onClick={() => setIngestOpen(true)}
+            disabled={!selectedAnn}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-violet-500 to-blue-500 text-white hover:from-violet-600 hover:to-blue-600 disabled:opacity-50"
+            title="전산추첨결과·당첨자현황·세대원내역·주택소유 등 여러 파일을 한 번에 분석"
+          >
+            <Sparkles className="w-4 h-4" /> 당첨자 파일 일괄 분석
+          </button>
           <button
             onClick={() => { setFormError(null); setShowForm(true); }}
             disabled={!selectedAnn}
@@ -1239,6 +1308,13 @@ function CustomersPageInner() {
           </div>
         </div>
       )}
+
+      {/* 당첨자 파일 일괄 분석 모달 */}
+      <WinnerIngestModal
+        open={ingestOpen}
+        onClose={() => setIngestOpen(false)}
+        onRegister={(candidates) => handleIngestCandidates(candidates)}
+      />
     </div>
   );
 }

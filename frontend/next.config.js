@@ -8,6 +8,7 @@ const nextConfig = {
     outputFileTracingIncludes: {
       '/api/parse-announcement-pdf': ['./node_modules/pdfjs-dist/cmaps/**/*'],
       '/api/parse-customer-pdf': ['./node_modules/pdfjs-dist/cmaps/**/*'],
+      '/api/extract-pdf-text': ['./node_modules/pdfjs-dist/cmaps/**/*'],
     },
   },
 };
