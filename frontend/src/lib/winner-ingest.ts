@@ -1240,22 +1240,7 @@ function deriveUnitArea(code?: string): string | undefined {
 /** Consolidated 프로필을 고객 등록 payload 형태로 변환 */
 export function profileToCustomerPayload(
   profile: WinnerProfile,
-): {
-  name: string;
-  phone: string;
-  rrn_front: string;
-  rrn_back: string;
-  address: string;
-  no_home_years: number;
-  dependents_count: number;
-  subscription_months: number;
-  current_region: string;
-  income_monthly: number | null;
-  special_types: string[];
-  supply_type: string;
-  unit_type?: string;
-  unit_area?: string;
-} {
+) {
   const specialTypes = profile.specialType ? [profile.specialType] : [];
   const supplyType =
     profile.supplyCategory === "일반공급"
@@ -1271,6 +1256,30 @@ export function profileToCustomerPayload(
   const ownedProperties = (profile.properties || []).filter((p) => !p.transferredDate);
   const noHomeYears = ownedProperties.length === 0 ? 5 : 0; // 정확한 계산은 업무용 입력이 더 정확 — 기본 5년으로 시드
 
+  // 공적 검증 데이터 — LocalCustomer로 그대로 전달
+  const household_members = profile.householdMembers?.map((m) => ({
+    name: m.memberName,
+    rrn: m.memberRrn || undefined,
+    errorCode: m.errorCode,
+  }));
+  const properties = profile.properties?.map((p) => ({
+    ownerRrn: p.ownerRrn,
+    ownerName: p.ownerName,
+    address: p.address,
+    areaM2: p.areaM2,
+    acquiredDate: p.acquiredDate,
+    transferredDate: p.transferredDate,
+    usage: p.usage,
+  }));
+  const savings_priority = profile.savingsPriority
+    ? {
+        verified: profile.savingsPriority.verified,
+        bankCode: profile.savingsPriority.bankCode,
+        errorNote: profile.savingsPriority.errorNote,
+        resultLength: profile.savingsPriority.resultLength,
+      }
+    : undefined;
+
   return {
     name: profile.name,
     phone: profile.phone || "",
@@ -1281,10 +1290,14 @@ export function profileToCustomerPayload(
     dependents_count: dependents,
     subscription_months: 0, // 수작업 검증 후 기입
     current_region: profile.regionLocal?.replace(/^\(\d+\)/, "") || "",
-    income_monthly: null,
+    income_monthly: null as number | null,
     special_types: specialTypes as string[],
     supply_type: supplyType,
     unit_type: profile.unitType,
     unit_area: deriveUnitArea(profile.unitType),
+    // 공적 검증 데이터
+    household_members,
+    properties,
+    savings_priority,
   };
 }

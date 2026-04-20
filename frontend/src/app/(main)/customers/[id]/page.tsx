@@ -15,6 +15,7 @@ import {
   AlertCircle, Trash2, Edit2, Save, X, CheckCircle2, XCircle, Home, Baby,
   CreditCard, Landmark, BookOpen, ChevronRight, FileText,
 } from "lucide-react";
+import VerificationSteps from "@/components/VerificationSteps";
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   inquiry: { label: "문의", cls: "bg-amber-100 text-amber-700" },
@@ -245,6 +246,11 @@ export default function CustomerDetailPage() {
             </>
           )}
         </div>
+      </div>
+
+      {/* 검증 진행 5단계 */}
+      <div className="mb-5">
+        <VerificationSteps customer={customer} />
       </div>
 
       {/* 연결된 공고 */}

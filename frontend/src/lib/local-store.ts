@@ -151,6 +151,28 @@ export interface LocalCustomer {
   verification_verdict?: "eligible" | "ineligible" | "pending";
   verification_score?: number;
   verification_checked_at?: string;
+  verification_reasons?: string[];  // 부적합 사유 (없으면 적합)
+  // ── 공적 검증 데이터 (파일 일괄 분석에서 채움) ──
+  household_members?: Array<{
+    name: string;
+    rrn?: string;
+    errorCode?: string;
+  }>;
+  properties?: Array<{
+    ownerRrn: string;
+    ownerName: string;
+    address: string;
+    areaM2?: number;
+    acquiredDate?: string;
+    transferredDate?: string;
+    usage?: string;
+  }>;
+  savings_priority?: {
+    verified: boolean;
+    bankCode?: string;
+    errorNote?: string;
+    resultLength?: number;
+  };
   created_at: string;
 }
 
@@ -189,6 +211,10 @@ export const localCustomers = {
       verification_verdict: input.verification_verdict,
       verification_score: input.verification_score,
       verification_checked_at: input.verification_checked_at,
+      verification_reasons: input.verification_reasons,
+      household_members: input.household_members,
+      properties: input.properties,
+      savings_priority: input.savings_priority,
       total_score: input.total_score ?? 0,
       status: input.status ?? "inquiry",
       created_at: new Date().toISOString(),

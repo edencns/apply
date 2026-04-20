@@ -597,6 +597,7 @@ function CustomersPageInner() {
     const createErrors: string[] = [];
     for (const c of toCreate) {
       try {
+        const anyC = c as any;
         const payload = {
           site_id: selectedAnn.site_id,
           announcement_id: selectedAnn.id,
@@ -614,6 +615,10 @@ function CustomersPageInner() {
           supply_type: c.supply_type,
           unit_type: c.unit_type,
           unit_area: c.unit_area,
+          // 공적 검증 데이터 (파일 일괄 분석 경로에서 전달)
+          household_members: anyC.household_members,
+          properties: anyC.properties,
+          savings_priority: anyC.savings_priority,
         };
         try {
           await customersApi.create(payload as any);
