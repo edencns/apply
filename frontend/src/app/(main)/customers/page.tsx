@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import AnnouncementPicker from "@/components/AnnouncementPicker";
 import { getSampleAsLocalAnnouncements } from "@/lib/sample-adapter";
+import { classifyIncoming, formatValue, IncomingCustomer, CustomerConflict } from "@/lib/customer-dedup";
 
 interface Customer {
   id: number;
@@ -83,6 +84,10 @@ function CustomersPageInner() {
   // 선택 삭제 모드
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+  // 업로드 dedup 결과 (충돌 확인 모달)
+  const [conflicts, setConflicts] = useState<CustomerConflict[]>([]);
+  const [conflictDecisions, setConflictDecisions] = useState<Record<number, "update" | "keep">>({});
 
   // ─── 공고 목록 로딩 ────────────────────────────────────
   const loadAnnouncements = useCallback(async () => {
@@ -336,76 +341,98 @@ function CustomersPageInner() {
       };
       const toStr = (v: any): string => (v === undefined || v === null ? "" : String(v).trim());
 
-      let success = 0, failed = 0;
-      const errors: string[] = [];
-
+      // 1) 엑셀 행 → IncomingCustomer 후보 목록
+      const candidates: IncomingCustomer[] = [];
+      let parseFailed = 0;
+      const parseErrors: string[] = [];
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
+        const name = toStr(pick(row, "성명", "이름", "name"));
+        if (!name) { parseFailed++; parseErrors.push(`${i + 2}행: 성명 누락`); continue; }
+        const rrnFront = toStr(pick(row, "주민번호앞", "rrn_front")).replace(/\D/g, "").slice(0, 6);
+        const rrnBack = toStr(pick(row, "주민번호뒤", "rrn_back")).replace(/\D/g, "").slice(0, 7);
+        if (!rrnFront || !rrnBack) { parseFailed++; parseErrors.push(`${i + 2}행(${name}): 주민번호 누락`); continue; }
+
+        const specialRaw = toStr(pick(row, "특별공급", "special_types"));
+        const special_types = specialRaw
+          ? specialRaw.split(/[,·/]/).map((s) => s.trim()).filter(Boolean)
+          : [];
+
+        candidates.push({
+          name,
+          phone: toStr(pick(row, "연락처", "전화", "phone")),
+          rrn_front: rrnFront,
+          rrn_back: rrnBack,
+          address: toStr(pick(row, "주소", "address")),
+          no_home_years: toNum(pick(row, "무주택기간_년", "무주택년", "no_home_years")),
+          dependents_count: toNum(pick(row, "부양가족수", "dependents_count")),
+          subscription_months: toNum(pick(row, "통장개월", "subscription_months")),
+          current_region: toStr(pick(row, "지역", "current_region")),
+          income_monthly: (() => {
+            const n = toNum(pick(row, "월소득_원", "월소득", "income_monthly"));
+            return n > 0 ? n : null;
+          })(),
+          special_types,
+          supply_type: special_types[0] || "일반공급",
+        });
+      }
+
+      // 2) 기존 고객과 대조 → 신규/중복/충돌 분류
+      const existing = localCustomers.listByAnnouncement(selectedAnn.id);
+      const { toCreate, duplicates, conflicts: foundConflicts } = classifyIncoming(candidates, existing);
+
+      // 3) 신규 고객만 즉시 등록
+      let created = 0, createFailed = 0;
+      const createErrors: string[] = [];
+      for (const c of toCreate) {
         try {
-          const name = toStr(pick(row, "성명", "이름", "name"));
-          if (!name) { failed++; errors.push(`${i + 2}행: 성명 누락`); continue; }
-          const rrnFront = toStr(pick(row, "주민번호앞", "rrn_front")).replace(/\D/g, "").slice(0, 6);
-          const rrnBack = toStr(pick(row, "주민번호뒤", "rrn_back")).replace(/\D/g, "").slice(0, 7);
-          if (!rrnFront || !rrnBack) { failed++; errors.push(`${i + 2}행(${name}): 주민번호 누락`); continue; }
-
-          // 특별공급 컬럼 — 공고에 등록된 유형명과 매칭
-          const specialRaw = toStr(pick(row, "특별공급", "special_types"));
-          const special_types = specialRaw
-            ? specialRaw.split(/[,·/]/).map((s) => s.trim()).filter(Boolean)
-            : [];
-
           const payload = {
             site_id: selectedAnn.site_id,
             announcement_id: selectedAnn.id,
-            name,
-            phone: toStr(pick(row, "연락처", "전화", "phone")),
-            rrn_front: rrnFront,
-            rrn_back: rrnBack,
-            address: toStr(pick(row, "주소", "address")),
-            no_home_years: toNum(pick(row, "무주택기간_년", "무주택년", "no_home_years")),
-            dependents_count: toNum(pick(row, "부양가족수", "dependents_count")),
-            subscription_months: toNum(pick(row, "통장개월", "subscription_months")),
-            is_first_time_buyer: special_types.includes("생애최초"),
-            is_newlywed: special_types.includes("신혼부부"),
-            current_region: toStr(pick(row, "지역", "current_region")),
-            income_monthly: (() => {
-              const n = toNum(pick(row, "월소득_원", "월소득", "income_monthly"));
-              return n > 0 ? n : null;
-            })(),
-            special_types,
+            name: c.name,
+            phone: c.phone || "",
+            rrn_front: c.rrn_front || "",
+            rrn_back: c.rrn_back || "",
+            address: c.address || "",
+            no_home_years: c.no_home_years ?? 0,
+            dependents_count: c.dependents_count ?? 0,
+            subscription_months: c.subscription_months ?? 0,
+            current_region: c.current_region || "",
+            income_monthly: c.income_monthly ?? null,
+            special_types: c.special_types || [],
+            supply_type: c.supply_type,
+            unit_type: c.unit_type,
+            unit_area: c.unit_area,
           };
-
           try {
             await customersApi.create(payload as any);
           } catch (netErr: any) {
             if (!isNetworkError(netErr)) throw netErr;
-            localCustomers.create({
-              announcement_id: selectedAnn.id,
-              site_id: selectedAnn.site_id,
-              name: payload.name,
-              phone: payload.phone,
-              rrn_front: payload.rrn_front,
-              rrn_back: payload.rrn_back,
-              address: payload.address,
-              no_home_years: payload.no_home_years,
-              dependents_count: payload.dependents_count,
-              subscription_months: payload.subscription_months,
-              current_region: payload.current_region,
-              income_monthly: payload.income_monthly,
-              special_types,
-            });
+            localCustomers.create(payload);
           }
-          success++;
+          created++;
         } catch (err: any) {
-          failed++;
+          createFailed++;
           const msg = err?.response?.data?.detail || err?.message || "등록 실패";
-          const name = String(pick(row, "성명", "이름", "name") || "(이름없음)");
-          errors.push(`${i + 2}행(${name}): ${msg}`);
+          createErrors.push(`${c.name}: ${msg}`);
         }
       }
 
-      setExcelResult({ success, failed, errors: errors.slice(0, 10) });
-      if (success > 0) loadCustomers();
+      // 4) 결과 배너 + 충돌 검토 모달
+      setExcelResult({
+        success: created,
+        failed: parseFailed + createFailed,
+        errors: [...parseErrors, ...createErrors].slice(0, 10),
+      });
+      if (created > 0) loadCustomers();
+
+      if (foundConflicts.length > 0) {
+        setConflicts(foundConflicts);
+        setConflictDecisions({});
+      }
+      if (duplicates.length > 0 && foundConflicts.length === 0 && created === 0) {
+        alert(`모든 고객(${duplicates.length}명)이 이미 등록되어 있습니다.`);
+      }
     } catch (err: any) {
       alert(err?.message || "엑셀 파일 파싱 실패");
     } finally {
@@ -429,16 +456,21 @@ function CustomersPageInner() {
 
       // ── 배치 모드: 당첨자 명단 PDF ──
       if (d.mode === "batch" && Array.isArray(d.customers) && d.customers.length > 0) {
-        const confirmMsg = `당첨자 명단 PDF에서 ${d.count}명을 인식했습니다.\n모두 고객으로 일괄 등록하시겠습니까?`;
+        const confirmMsg = `당첨자 명단 PDF에서 ${d.count}명을 인식했습니다.\n이미 등록된 사람은 제외하고 신규만 추가합니다. 계속하시겠습니까?`;
         if (!confirm(confirmMsg)) return;
 
-        let success = 0, failed = 0;
-        const errors: string[] = [];
+        // 1) 파싱 결과 → IncomingCustomer
+        const candidates: IncomingCustomer[] = [];
+        let parseFailed = 0;
+        const parseErrors: string[] = [];
         for (let i = 0; i < d.customers.length; i++) {
           const c = d.customers[i];
-          if (!c.name || !c.rrnFront) { failed++; errors.push(`${i + 1}번: 필수 정보 부족`); continue; }
+          if (!c.name || !c.rrnFront) {
+            parseFailed++;
+            parseErrors.push(`${i + 1}번: 필수 정보 부족`);
+            continue;
+          }
           const specialTypes = Array.isArray(c.specialTypes) ? c.specialTypes : [];
-          // 주택형 코드("059.9660" / "084.9820B") → 전용면적 "59.97㎡" 파생
           const housingCode: string | undefined = c.housingType || c.unitType;
           let unitArea = c.unitArea as string | undefined;
           if (!unitArea && housingCode) {
@@ -450,23 +482,43 @@ function CustomersPageInner() {
               unitArea = `${area.toFixed(2)}㎡`;
             }
           }
-          const payload = {
-            site_id: selectedAnn.site_id,
-            announcement_id: selectedAnn.id,
+          candidates.push({
             name: c.name,
             phone: c.phone || "",
             rrn_front: c.rrnFront,
-            rrn_back: c.rrnBack || "0000000", // 마스킹된 경우 placeholder
+            rrn_back: c.rrnBack || "0000000",
+            special_types: specialTypes,
+            supply_type: specialTypes[0] || "일반공급",
+            unit_type: housingCode || undefined,
+            unit_area: unitArea,
+          });
+        }
+
+        // 2) dedup 분류
+        const existing = localCustomers.listByAnnouncement(selectedAnn.id);
+        const { toCreate, duplicates, conflicts: foundConflicts } = classifyIncoming(candidates, existing);
+
+        // 3) 신규 등록
+        let created = 0, createFailed = 0;
+        const createErrors: string[] = [];
+        for (const cand of toCreate) {
+          const payload = {
+            site_id: selectedAnn.site_id,
+            announcement_id: selectedAnn.id,
+            name: cand.name,
+            phone: cand.phone || "",
+            rrn_front: cand.rrn_front || "",
+            rrn_back: cand.rrn_back || "0000000",
             address: "",
             no_home_years: 0,
             dependents_count: 0,
             subscription_months: 0,
             current_region: "",
             income_monthly: null,
-            special_types: specialTypes,
-            supply_type: specialTypes[0] || "일반공급",
-            unit_type: housingCode || undefined,
-            unit_area: unitArea,
+            special_types: cand.special_types || [],
+            supply_type: cand.supply_type,
+            unit_type: cand.unit_type,
+            unit_area: cand.unit_area,
           };
           try {
             try {
@@ -475,15 +527,27 @@ function CustomersPageInner() {
               if (!isNetworkError(netErr)) throw netErr;
               localCustomers.create(payload);
             }
-            success++;
+            created++;
           } catch (err: any) {
-            failed++;
+            createFailed++;
             const msg = err?.response?.data?.detail || err?.message || "등록 실패";
-            errors.push(`${c.name}: ${msg}`);
+            createErrors.push(`${cand.name}: ${msg}`);
           }
         }
-        setExcelResult({ success, failed, errors: errors.slice(0, 10) });
-        if (success > 0) loadCustomers();
+
+        setExcelResult({
+          success: created,
+          failed: parseFailed + createFailed,
+          errors: [...parseErrors, ...createErrors].slice(0, 10),
+        });
+        if (created > 0) loadCustomers();
+
+        if (foundConflicts.length > 0) {
+          setConflicts(foundConflicts);
+          setConflictDecisions({});
+        } else if (duplicates.length > 0 && created === 0) {
+          alert(`모든 당첨자(${duplicates.length}명)가 이미 등록되어 있습니다.`);
+        }
         return;
       }
 
@@ -873,6 +937,175 @@ function CustomersPageInner() {
           </div>
         )}
       </div>
+
+      {/* 업로드 충돌 검토 모달 */}
+      {conflicts.length > 0 && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
+              <div>
+                <h2 className="text-lg font-semibold">변경사항 검토</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {conflicts.length}명의 기존 고객과 업로드 내용이 다릅니다. 각각 수정할지 유지할지 선택해 주세요.
+                </p>
+              </div>
+              <button
+                onClick={() => { setConflicts([]); setConflictDecisions({}); }}
+                className="p-1 hover:bg-gray-100 rounded-full"
+              >
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+
+            {/* 일괄 액션 */}
+            <div className="px-6 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-600">일괄 선택:</span>
+              <button
+                onClick={() => {
+                  const next: Record<number, "update" | "keep"> = {};
+                  conflicts.forEach((c) => { next[c.existing.id] = "update"; });
+                  setConflictDecisions(next);
+                }}
+                className="text-xs px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium"
+              >
+                모두 새 값으로 수정
+              </button>
+              <button
+                onClick={() => {
+                  const next: Record<number, "update" | "keep"> = {};
+                  conflicts.forEach((c) => { next[c.existing.id] = "keep"; });
+                  setConflictDecisions(next);
+                }}
+                className="text-xs px-2.5 py-1 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium"
+              >
+                모두 기존 값 유지
+              </button>
+              <span className="text-xs text-gray-400 ml-auto">
+                선택됨 {Object.keys(conflictDecisions).length} / {conflicts.length}
+              </span>
+            </div>
+
+            {/* 충돌 목록 */}
+            <div className="p-6 space-y-4">
+              {conflicts.map((conflict) => {
+                const decision = conflictDecisions[conflict.existing.id];
+                return (
+                  <div
+                    key={conflict.existing.id}
+                    className={`border-2 rounded-xl p-4 transition-colors ${
+                      decision === "update"
+                        ? "border-blue-300 bg-blue-50"
+                        : decision === "keep"
+                          ? "border-gray-300 bg-gray-50"
+                          : "border-amber-200 bg-amber-50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                      <div>
+                        <span className="font-semibold text-gray-900">{conflict.existing.name}</span>
+                        {conflict.existing.rrn_front && (
+                          <span className="text-xs text-gray-500 ml-2 font-mono">
+                            {conflict.existing.rrn_front}-{conflict.existing.rrn_back?.slice(0, 1) || "•"}••••••
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setConflictDecisions((p) => ({ ...p, [conflict.existing.id]: "update" }))}
+                          className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${
+                            decision === "update"
+                              ? "bg-blue-600 text-white"
+                              : "bg-white border border-blue-300 text-blue-700 hover:bg-blue-50"
+                          }`}
+                        >
+                          새 값으로 수정
+                        </button>
+                        <button
+                          onClick={() => setConflictDecisions((p) => ({ ...p, [conflict.existing.id]: "keep" }))}
+                          className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${
+                            decision === "keep"
+                              ? "bg-gray-700 text-white"
+                              : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          기존 값 유지
+                        </button>
+                      </div>
+                    </div>
+                    {/* Diff 테이블 */}
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-gray-200 text-gray-500">
+                          <th className="text-left py-1.5 pr-4 font-normal w-32">항목</th>
+                          <th className="text-left py-1.5 pr-4 font-normal">기존 값</th>
+                          <th className="text-left py-1.5 font-normal">새 값 (파일)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {conflict.diffs.map((d) => (
+                          <tr key={String(d.key)} className="border-b border-gray-100 last:border-0">
+                            <td className="py-1.5 pr-4 font-medium text-gray-700">{d.label}</td>
+                            <td className="py-1.5 pr-4 text-gray-600 line-through decoration-gray-400">
+                              {formatValue(d.oldValue)}
+                            </td>
+                            <td className="py-1.5 text-blue-700 font-medium">
+                              {formatValue(d.newValue)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 하단 액션 */}
+            <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 flex items-center justify-between gap-2">
+              <span className="text-xs text-gray-500">
+                미선택 항목은 기존 값 유지로 처리됩니다.
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setConflicts([]); setConflictDecisions({}); }}
+                  className="btn-secondary text-sm"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={() => {
+                    let updated = 0;
+                    for (const conflict of conflicts) {
+                      const decision = conflictDecisions[conflict.existing.id] ?? "keep";
+                      if (decision !== "update") continue;
+                      // incoming의 non-empty 필드만 적용 (빈 값으로 덮어쓰지 않기)
+                      const patch: any = {};
+                      for (const diff of conflict.diffs) {
+                        const v = diff.newValue;
+                        if (v === undefined || v === null || v === "") continue;
+                        patch[diff.key] = v;
+                      }
+                      if (Object.keys(patch).length > 0) {
+                        localCustomers.update(conflict.existing.id, patch);
+                        updated++;
+                      }
+                    }
+                    setConflicts([]);
+                    setConflictDecisions({});
+                    loadCustomers();
+                    if (updated > 0) {
+                      alert(`${updated}명의 정보가 업데이트되었습니다.`);
+                    }
+                  }}
+                  className="btn-primary text-sm"
+                >
+                  적용
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 고객 등록 모달 */}
       {showForm && (
