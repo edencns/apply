@@ -12,7 +12,7 @@ import {
   LocalCustomer,
 } from "@/lib/local-store";
 import {
-  UserPlus, Search, ChevronRight, Calculator, FileSpreadsheet,
+  UserPlus, Search, ChevronRight, Calculator, FileSpreadsheet, FileText,
   Loader2, Download, BookOpen, X,
 } from "lucide-react";
 import AnnouncementPicker from "@/components/AnnouncementPicker";
@@ -70,6 +70,11 @@ function CustomersPageInner() {
   const excelInputRef = useRef<HTMLInputElement | null>(null);
   const [excelUploading, setExcelUploading] = useState(false);
   const [excelResult, setExcelResult] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
+
+  // PDF 업로드 (주민등록등본 등 → 고객 정보 자동 추출)
+  const pdfInputRef = useRef<HTMLInputElement | null>(null);
+  const [pdfUploading, setPdfUploading] = useState(false);
+  const [pdfFilled, setPdfFilled] = useState<string[]>([]);
 
   // ─── 공고 목록 로딩 ────────────────────────────────────
   const loadAnnouncements = useCallback(async () => {
@@ -397,6 +402,49 @@ function CustomersPageInner() {
     }
   };
 
+  /** PDF(주민등록등본 등) 업로드 → 고객 정보 자동 추출 → 등록 폼 열기 */
+  const handlePdfUpload = async (file: File) => {
+    if (!selectedAnn) { alert("먼저 공고를 선택해주세요"); return; }
+    setPdfUploading(true);
+    setPdfFilled([]);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/parse-customer-pdf", { method: "POST", body: fd });
+      if (!res.ok) throw new Error((await res.json()).error || "PDF 파싱 실패");
+      const d = await res.json();
+
+      const filled: string[] = [];
+      setForm((p) => {
+        const next = { ...p };
+        if (d.name) { next.name = d.name; filled.push("성명"); }
+        if (d.rrnFront) { next.rrn_front = d.rrnFront; filled.push("주민번호 앞자리"); }
+        if (d.rrnBack) { next.rrn_back = d.rrnBack; filled.push("주민번호 뒷자리"); }
+        if (d.phone) { next.phone = d.phone; filled.push("연락처"); }
+        if (d.address) { next.address = d.address; filled.push("주소"); }
+        if (typeof d.dependentsCount === "number") { next.dependents_count = d.dependentsCount; filled.push("부양가족 수"); }
+        if (typeof d.noHomeYears === "number") { next.no_home_years = d.noHomeYears; filled.push("무주택 기간"); }
+        if (typeof d.subscriptionMonths === "number") { next.subscription_months = d.subscriptionMonths; filled.push("통장 가입 개월"); }
+        if (d.currentRegion) { next.current_region = d.currentRegion; filled.push("거주 지역"); }
+        if (Array.isArray(d.specialTypes) && d.specialTypes.length > 0) {
+          next.special_types = d.specialTypes;
+          filled.push(`특별공급(${d.specialTypes.length}종)`);
+        }
+        return next;
+      });
+      setPdfFilled(filled);
+      setShowForm(true);
+      if (filled.length === 0) {
+        alert("PDF에서 인식된 정보가 없습니다. 수동으로 입력해주세요.");
+      }
+    } catch (err: any) {
+      alert(err?.message || "PDF 파싱 실패");
+    } finally {
+      setPdfUploading(false);
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+    }
+  };
+
   const filtered = customers.filter((c) =>
     c.name.includes(search) || c.phone?.includes(search)
   );
@@ -444,6 +492,28 @@ function CustomersPageInner() {
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) handleExcelUpload(f);
+            }}
+          />
+          <button
+            onClick={() => pdfInputRef.current?.click()}
+            disabled={pdfUploading || !selectedAnn}
+            className="btn-secondary flex items-center gap-2 disabled:opacity-50"
+            title="주민등록등본/청약신청서 등 PDF 업로드 → 고객 정보 자동 추출"
+          >
+            {pdfUploading ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
+            ) : (
+              <><FileText className="w-4 h-4" /> PDF 업로드</>
+            )}
+          </button>
+          <input
+            ref={pdfInputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handlePdfUpload(f);
             }}
           />
           <button
@@ -601,6 +671,19 @@ function CustomersPageInner() {
               </button>
             </div>
             <form onSubmit={handleCreate} className="p-6 space-y-4">
+              {pdfFilled.length > 0 && (
+                <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+                  <FileText className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <strong>PDF에서 자동 추출된 항목:</strong>{" "}
+                    {pdfFilled.join(" · ")}
+                    <div className="text-xs text-blue-600 mt-0.5">내용을 확인한 뒤 필요 시 수정해주세요.</div>
+                  </div>
+                  <button type="button" onClick={() => setPdfFilled([])} className="text-blue-400 hover:text-blue-600">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">성명 *</label>
