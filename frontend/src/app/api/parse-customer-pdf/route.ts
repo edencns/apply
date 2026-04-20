@@ -10,8 +10,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { extractText, getDocumentProxy } from 'unpdf';
 import Groq from 'groq-sdk';
+import { extractKoreanPdfText } from '@/lib/pdf-helper';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -144,6 +144,59 @@ ${truncated}`,
   }
 }
 
+/* ─── 당첨자 명단 (배치) 파싱 ────────────────────────── */
+
+/**
+ * 한국부동산원 당첨자 명단 PDF 포맷 감지.
+ * 한 줄에 [순번 주택형 공급종류 동 호 성명 주민번호 전화번호] 형태의 행이 반복된다.
+ */
+function detectWinnerListFormat(text: string): boolean {
+  if (!text) return false;
+  const keywords = ['당첨자 명단', '특별공급 당첨자', '일반공급 당첨자', '순번', '주택형'];
+  const matchCount = keywords.filter((k) => text.includes(k)).length;
+  return matchCount >= 3;
+}
+
+/** 당첨자 명단 행 파싱 — 각 당첨자를 고객 1건으로 변환 */
+function parseWinnerRows(text: string): ParsedCustomer[] {
+  const customers: ParsedCustomer[] = [];
+  // 예시: "1 059.9660 생애최초특별공급 103 401 김*형 961101-1****** 010-2698-7887"
+  //       "23 077.8300A 신혼부부특별공급 101 2105 정*호 880711-1****** 010-6271-9990"
+  // 또는 일반공급: "1 059.9660 20240000001 103 401 김*형 961101-1****** 010-2698-7887 국민은행 주택청약저축 ..."
+  // 순번(숫자) + 주택형(소수점 가능) + 타입/접수번호 + 동 + 호 + 이름(한글+별표) + 주민번호 + 전화
+  const rowRegex = /(\d+)\s+([\d.]+[A-Z]?)\s+(\S+?(?:특별공급|\d{10,}))\s+(\d+)\s+(\d+)\s+([가-힣*]+)\s+(\d{6})[-–]([\d*]{7})\s+(01[016789]\s*[-. ]?\s*\d{3,4}\s*[-. ]?\s*\d{4})/g;
+
+  let m: RegExpExecArray | null;
+  const seen = new Set<string>();
+  while ((m = rowRegex.exec(text)) !== null) {
+    const [, , housingType, supplyRaw, dong, ho, name, rrnFront, , phoneRaw] = m;
+    // 중복 방지 (같은 성명+전화)
+    const key = `${name}:${phoneRaw}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    // 공급 종류 정리
+    let specialType: string | null = null;
+    if (supplyRaw.includes('신혼부부')) specialType = '신혼부부';
+    else if (supplyRaw.includes('생애최초')) specialType = '생애최초';
+    else if (supplyRaw.includes('다자녀')) specialType = '다자녀가구';
+    else if (supplyRaw.includes('노부모')) specialType = '노부모부양';
+    else if (supplyRaw.includes('기관추천')) specialType = '기관추천';
+    else if (supplyRaw.includes('신생아')) specialType = '신생아';
+
+    const phone = phoneRaw.replace(/\s+/g, '').replace(/[.]/g, '-');
+
+    customers.push({
+      name,
+      rrnFront,
+      rrnBack: undefined, // 마스킹되어 있음
+      phone,
+      specialTypes: specialType ? [specialType] : undefined,
+    });
+  }
+  return customers;
+}
+
 /* ─── POST handler ────────────────────────────────── */
 
 export async function POST(req: NextRequest) {
@@ -155,10 +208,29 @@ export async function POST(req: NextRequest) {
     }
 
     const buf = Buffer.from(await file.arrayBuffer());
-    const doc = await getDocumentProxy(new Uint8Array(buf));
-    const { text: pageTexts } = await extractText(doc, { mergePages: false });
-    const text = Array.isArray(pageTexts) ? pageTexts.join('\n') : String(pageTexts);
+    const text = await extractKoreanPdfText(buf);
 
+    if (!text || text.trim().length < 10) {
+      return NextResponse.json(
+        { error: 'PDF에서 텍스트를 추출할 수 없습니다. 스캔본이거나 특수 폰트가 사용된 경우입니다.' },
+        { status: 422 },
+      );
+    }
+
+    // 당첨자 명단 포맷이면 배치 파싱
+    if (detectWinnerListFormat(text)) {
+      const customers = parseWinnerRows(text);
+      if (customers.length > 0) {
+        return NextResponse.json({
+          mode: 'batch',
+          count: customers.length,
+          customers,
+          rawTextPreview: text.slice(0, 500),
+        });
+      }
+    }
+
+    // 단일 고객 문서 (주민등록등본 등) 파싱
     // 1단계: regex
     const rrn = extractRRN(text);
     const address = extractAddress(text);
@@ -190,7 +262,7 @@ export async function POST(req: NextRequest) {
       rawTextPreview: text.slice(0, 500),
     };
 
-    return NextResponse.json(merged);
+    return NextResponse.json({ mode: 'single', ...merged });
   } catch (err: any) {
     console.error('[parse-customer-pdf] error', err);
     return NextResponse.json(

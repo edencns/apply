@@ -402,11 +402,12 @@ function CustomersPageInner() {
     }
   };
 
-  /** PDF(주민등록등본 등) 업로드 → 고객 정보 자동 추출 → 등록 폼 열기 */
+  /** PDF 업로드 → 고객 정보 자동 추출. 단일 문서 / 당첨자 명단(배치) 둘 다 처리. */
   const handlePdfUpload = async (file: File) => {
     if (!selectedAnn) { alert("먼저 공고를 선택해주세요"); return; }
     setPdfUploading(true);
     setPdfFilled([]);
+    setExcelResult(null);
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -414,6 +415,51 @@ function CustomersPageInner() {
       if (!res.ok) throw new Error((await res.json()).error || "PDF 파싱 실패");
       const d = await res.json();
 
+      // ── 배치 모드: 당첨자 명단 PDF ──
+      if (d.mode === "batch" && Array.isArray(d.customers) && d.customers.length > 0) {
+        const confirmMsg = `당첨자 명단 PDF에서 ${d.count}명을 인식했습니다.\n모두 고객으로 일괄 등록하시겠습니까?`;
+        if (!confirm(confirmMsg)) return;
+
+        let success = 0, failed = 0;
+        const errors: string[] = [];
+        for (let i = 0; i < d.customers.length; i++) {
+          const c = d.customers[i];
+          if (!c.name || !c.rrnFront) { failed++; errors.push(`${i + 1}번: 필수 정보 부족`); continue; }
+          const payload = {
+            site_id: selectedAnn.site_id,
+            announcement_id: selectedAnn.id,
+            name: c.name,
+            phone: c.phone || "",
+            rrn_front: c.rrnFront,
+            rrn_back: c.rrnBack || "0000000", // 마스킹된 경우 placeholder
+            address: "",
+            no_home_years: 0,
+            dependents_count: 0,
+            subscription_months: 0,
+            current_region: "",
+            income_monthly: null,
+            special_types: Array.isArray(c.specialTypes) ? c.specialTypes : [],
+          };
+          try {
+            try {
+              await customersApi.create(payload as any);
+            } catch (netErr: any) {
+              if (!isNetworkError(netErr)) throw netErr;
+              localCustomers.create(payload);
+            }
+            success++;
+          } catch (err: any) {
+            failed++;
+            const msg = err?.response?.data?.detail || err?.message || "등록 실패";
+            errors.push(`${c.name}: ${msg}`);
+          }
+        }
+        setExcelResult({ success, failed, errors: errors.slice(0, 10) });
+        if (success > 0) loadCustomers();
+        return;
+      }
+
+      // ── 단일 모드: 주민등록등본 등 ──
       const filled: string[] = [];
       setForm((p) => {
         const next = { ...p };

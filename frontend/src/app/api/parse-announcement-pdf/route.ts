@@ -16,8 +16,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { extractText, getDocumentProxy } from 'unpdf';
 import Groq from 'groq-sdk';
+import { extractKoreanPdfText } from '@/lib/pdf-helper';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -666,10 +666,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'PDF 파일만 업로드 가능합니다.' }, { status: 400 });
     }
 
-    const buf = new Uint8Array(await file.arrayBuffer());
-    const pdf = await getDocumentProxy(buf);
-    const { totalPages, text } = await extractText(pdf, { mergePages: true });
-    const fullText: string = Array.isArray(text) ? text.join('\n') : (text || '');
+    const buf = Buffer.from(await file.arrayBuffer());
+    const fullText: string = await extractKoreanPdfText(buf);
 
     if (!fullText.trim()) {
       return NextResponse.json({ error: '텍스트 추출 실패 — 이미지 기반 PDF일 수 있습니다.' }, { status: 422 });
@@ -765,7 +763,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: parsed,
-      totalPages,
       llmUsed: !!groqResult,
     });
   } catch (err: any) {
