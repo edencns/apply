@@ -434,6 +434,18 @@ function CustomersPageInner() {
           const c = d.customers[i];
           if (!c.name || !c.rrnFront) { failed++; errors.push(`${i + 1}번: 필수 정보 부족`); continue; }
           const specialTypes = Array.isArray(c.specialTypes) ? c.specialTypes : [];
+          // 주택형 코드("059.9660" / "084.9820B") → 전용면적 "59.97㎡" 파생
+          const housingCode: string | undefined = c.housingType || c.unitType;
+          let unitArea = c.unitArea as string | undefined;
+          if (!unitArea && housingCode) {
+            const m = housingCode.match(/^0?(\d{2,3})(?:\.(\d{2,4}))?/);
+            if (m) {
+              const whole = parseInt(m[1], 10);
+              const frac = m[2] ? Number(`0.${m[2]}`) : 0;
+              const area = whole + frac;
+              unitArea = `${area.toFixed(2)}㎡`;
+            }
+          }
           const payload = {
             site_id: selectedAnn.site_id,
             announcement_id: selectedAnn.id,
@@ -449,8 +461,8 @@ function CustomersPageInner() {
             income_monthly: null,
             special_types: specialTypes,
             supply_type: specialTypes[0] || "일반공급",
-            unit_type: c.housingType || c.unitType || undefined,
-            unit_area: c.unitArea || undefined,
+            unit_type: housingCode || undefined,
+            unit_area: unitArea,
           };
           try {
             try {
@@ -733,6 +745,18 @@ function CustomersPageInner() {
                       >
                         상세 <ChevronRight className="w-3 h-3" />
                       </a>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (!confirm(`${c.name} 고객을 삭제하시겠습니까?`)) return;
+                          localCustomers.remove(c.id);
+                          loadCustomers();
+                        }}
+                        className="text-red-600 hover:underline flex items-center gap-0.5 text-xs"
+                        title="고객 삭제"
+                      >
+                        삭제 <ChevronRight className="w-3 h-3" />
+                      </button>
                     </div>
                   </td>
                 </tr>
