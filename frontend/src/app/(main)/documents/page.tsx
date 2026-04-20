@@ -12,6 +12,7 @@ import {
   RefreshCw, Plus, X, BookOpen, ChevronDown, ChevronUp,
   Users, CheckSquare, Square, Play, ChevronRight,
 } from "lucide-react";
+import AnnouncementPicker from "@/components/AnnouncementPicker";
 
 // ─── 서류 정의 ─────────────────────────────────────────────
 interface DocDef {
@@ -323,42 +324,12 @@ function DocumentsPageInner() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       {/* ─── 공고 선택 배너 ───────────────────────────────── */}
-      <div className="mb-5 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center flex-shrink-0">
-            <BookOpen className="w-4 h-4" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[11px] uppercase tracking-wider text-blue-600 font-medium">현재 검수 공고</div>
-            {announcements.length > 0 ? (
-              <select
-                value={selectedAnn?.id ?? ""}
-                onChange={(e) => {
-                  const ann = announcements.find((a) => a.id === Number(e.target.value));
-                  if (ann) setSelectedAnn(ann);
-                }}
-                className="w-full text-sm font-semibold text-gray-900 bg-transparent border-0 focus:outline-none focus:ring-0 p-0"
-              >
-                {announcements.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.title}{a.announcement_no ? ` (#${a.announcement_no})` : ""}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <div className="text-sm text-gray-600">등록된 공고가 없습니다 — 먼저 모집공고를 등록해 주세요.</div>
-            )}
-          </div>
-          {selectedAnn && (
-            <button
-              onClick={() => router.push(`/announcements/${selectedAnn.id}`)}
-              className="inline-flex items-center gap-1 text-xs text-blue-700 hover:text-blue-900 font-medium"
-            >
-              공고 상세 <ChevronRight className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-      </div>
+      <AnnouncementPicker
+        announcements={announcements as any}
+        selected={selectedAnn as any}
+        onSelect={(a) => setSelectedAnn(a as any)}
+        onOpenDetail={(a) => router.push(`/announcements/${a.id}`)}
+      />
 
       <div className="flex items-center justify-between mb-6">
         <div>

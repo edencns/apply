@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { sitesApi, api } from "@/lib/api";
-import { localSites, localAnnouncements, isNetworkError } from "@/lib/local-store";
+import { localSites, localAnnouncements, isNetworkError, isAnnouncementDone } from "@/lib/local-store";
 import { Plus, BookOpen, CalendarDays, ChevronRight, FileUp, Loader2, CheckCircle2, Trash2, FileText, PenTool } from "lucide-react";
 import { announcements as sampleAnnouncements } from "./compare/data";
 
@@ -58,31 +58,7 @@ const DEFAULT_RULES = {
 };
 
 /** 공고가 완료 상태인지 판별 — 가장 늦은 일정이 오늘 이전이면 완료 */
-function isDone(ann: Announcement): boolean {
-  if (ann.status === "closed") return true;
-  const a: any = ann;
-  const rules: any = a.eligibility_rules || {};
-  const candidates = [
-    a.contract_end,
-    a.application_end,
-    a.winner_announce_date,
-    rules.doc_submit_end,
-    rules.general_2nd_date,
-    rules.general_1st_date,
-    rules.special_apply_date,
-  ].filter(Boolean) as string[];
-  if (candidates.length === 0) return false;
-  try {
-    const latestMs = Math.max(...candidates.map((d) => new Date(d).getTime()).filter((t) => !Number.isNaN(t)));
-    if (!Number.isFinite(latestMs)) return false;
-    // 오늘 00:00 기준으로 비교 — 오늘이 마지막 날인 공고는 진행중으로 유지
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return latestMs < today.getTime();
-  } catch {
-    return false;
-  }
-}
+const isDone = (ann: Announcement): boolean => isAnnouncementDone(ann);
 
 export default function AnnouncementsPage() {
   const [sites, setSites] = useState<any[]>([]);

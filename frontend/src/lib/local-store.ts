@@ -339,6 +339,38 @@ export const activeAnnouncement = {
 };
 
 /**
+ * 공고가 완료 상태인지 판별.
+ * - status === "closed" 이거나
+ * - 모든 주요 일정 중 가장 늦은 날짜가 오늘보다 이전이면 완료
+ */
+export function isAnnouncementDone(ann: any): boolean {
+  if (!ann) return false;
+  if (ann.status === "closed") return true;
+  const rules: any = ann.eligibility_rules || {};
+  const candidates: string[] = [
+    ann.contract_end,
+    ann.application_end,
+    ann.winner_announce_date,
+    rules.doc_submit_end,
+    rules.general_2nd_date,
+    rules.general_1st_date,
+    rules.special_apply_date,
+  ].filter(Boolean);
+  if (candidates.length === 0) return false;
+  try {
+    const latestMs = Math.max(
+      ...candidates.map((d) => new Date(d).getTime()).filter((t) => !Number.isNaN(t)),
+    );
+    if (!Number.isFinite(latestMs)) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return latestMs < today.getTime();
+  } catch {
+    return false;
+  }
+}
+
+/**
  * 백엔드 호출에서 "Network Error"가 났는지 판별.
  * axios는 서버와 연결 자체가 실패했을 때 `err.message === "Network Error"`로 떨어진다.
  */
