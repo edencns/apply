@@ -12,7 +12,6 @@ const navItems = [
   { href: "/announcements",      icon: BookOpen,         label: "모집공고" },
   { href: "/announcements/compare", icon: GitCompareArrows, label: "공고 비교" },
   { href: "/customers",          icon: Users,            label: "고객 관리" },
-  { href: "/documents",          icon: FileText,         label: "서류 검수" },
   { href: "/winners",            icon: ClipboardCheck,   label: "당첨자 관리" },
   { href: "/contracts/walk-in",  icon: PenLine,          label: "방문 계약" },
 ];

@@ -658,30 +658,44 @@ function CustomersPageInner() {
         onOpenDetail={(a) => router.push(`/announcements/${a.id}`)}
       />
 
-      <div className="flex items-center justify-between mb-6">
-        <div>
+      {/* 헤더 + 액션 바 */}
+      <div className="mb-6">
+        <div className="flex items-baseline gap-3 flex-wrap mb-4">
           <h1 className="text-2xl font-bold text-gray-900">고객 관리</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-500">
             {selectedAnn ? `「${selectedAnn.title}」 청약 신청자 등록 및 관리` : "공고를 먼저 선택해주세요"}
           </p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowCalc(!showCalc)} className="btn-secondary flex items-center gap-2">
-            <Calculator className="w-4 h-4" /> 가점 계산기
+
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* ── 도구 그룹 ── */}
+          <button
+            onClick={() => setShowCalc(!showCalc)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 whitespace-nowrap transition-colors"
+          >
+            <Calculator className="w-4 h-4 text-gray-500" /> 가점 계산기
           </button>
-          <button onClick={downloadTemplate} className="btn-secondary flex items-center gap-2" title="엑셀 템플릿 다운로드">
-            <Download className="w-4 h-4" /> 템플릿
+          <button
+            onClick={downloadTemplate}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 whitespace-nowrap transition-colors"
+            title="엑셀 템플릿 다운로드"
+          >
+            <Download className="w-4 h-4 text-gray-500" /> 템플릿
           </button>
+
+          <div className="w-px h-6 bg-gray-200 mx-1" />
+
+          {/* ── 파일 업로드 그룹 ── */}
           <button
             onClick={() => pdfInputRef.current?.click()}
             disabled={pdfUploading || !selectedAnn}
-            className="btn-secondary flex items-center gap-2 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             title="주민등록등본/청약신청서 등 PDF 업로드 → 고객 정보 자동 추출"
           >
             {pdfUploading ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
+              <><Loader2 className="w-4 h-4 animate-spin text-blue-500" /> 분석 중…</>
             ) : (
-              <><FileText className="w-4 h-4" /> PDF 업로드</>
+              <><FileText className="w-4 h-4 text-gray-500" /> PDF 업로드</>
             )}
           </button>
           <input
@@ -697,13 +711,13 @@ function CustomersPageInner() {
           <button
             onClick={() => excelInputRef.current?.click()}
             disabled={excelUploading || !selectedAnn}
-            className="btn-secondary flex items-center gap-2 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             title="엑셀 파일 업로드 → 고객 일괄 등록"
           >
             {excelUploading ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> 등록 중…</>
+              <><Loader2 className="w-4 h-4 animate-spin text-blue-500" /> 등록 중…</>
             ) : (
-              <><FileSpreadsheet className="w-4 h-4" /> 엑셀 업로드</>
+              <><FileSpreadsheet className="w-4 h-4 text-gray-500" /> 엑셀 업로드</>
             )}
           </button>
           <input
@@ -719,31 +733,34 @@ function CustomersPageInner() {
           <button
             onClick={() => setIngestOpen(true)}
             disabled={!selectedAnn}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-violet-500 to-blue-500 text-white hover:from-violet-600 hover:to-blue-600 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-600 hover:to-indigo-600 shadow-sm whitespace-nowrap transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             title="전산추첨결과·당첨자현황·세대원내역·주택소유 등 여러 파일을 한 번에 분석"
           >
-            <Sparkles className="w-4 h-4" /> 당첨자 파일 일괄 분석
+            <Sparkles className="w-4 h-4" /> 파일 일괄 분석
           </button>
+
+          <div className="flex-1" />
+
+          {/* ── 주요 액션 ── */}
           <button
             onClick={() => { setFormError(null); setShowForm(true); }}
             disabled={!selectedAnn}
-            className="btn-primary flex items-center gap-2 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <UserPlus className="w-4 h-4" /> 고객 등록
           </button>
           <button
             onClick={() => {
               setSelectMode((prev) => {
-                // 선택 모드 해제 시 선택 목록도 비움
                 if (prev) setSelectedIds(new Set());
                 return !prev;
               });
             }}
             disabled={!selectedAnn || customers.length === 0}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               selectMode
-                ? "bg-gray-200 text-gray-800 hover:bg-gray-300"
-                : "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
+                ? "bg-gray-700 text-white hover:bg-gray-800"
+                : "text-red-600 hover:bg-red-50"
             }`}
           >
             <Trash2 className="w-4 h-4" />
