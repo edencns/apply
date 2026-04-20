@@ -739,7 +739,7 @@ function CustomersPageInner() {
             <Sparkles className="w-4 h-4" /> 파일 일괄 분석
           </button>
 
-          <div className="flex-1" />
+          <div className="w-px h-6 bg-gray-200 mx-1" />
 
           {/* ── 주요 액션 ── */}
           <button
