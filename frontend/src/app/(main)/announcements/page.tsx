@@ -112,6 +112,28 @@ export default function AnnouncementsPage() {
 
   useEffect(() => { reloadSites(); }, [reloadSites]);
 
+  /** "YYYY.MM.DD~MM.DD" 또는 "YYYY.MM.DD ~ YYYY.MM.DD" 형식에서 끝 날짜를 ISO로 추출 */
+  function extractEndDateISO(range?: string): string | null {
+    if (!range) return null;
+    const parts = range.split("~").map((s) => s.trim());
+    if (parts.length < 2) return null;
+    const [startStr, endStr] = parts;
+    const startMatch = startStr.match(/(\d{4})[.\-](\d{1,2})[.\-](\d{1,2})/);
+    if (!startMatch) return null;
+    const startYear = startMatch[1];
+    // 끝이 "MM.DD"만 있는 경우 → 시작 연도 사용
+    const endShort = endStr.match(/^(\d{1,2})[.\-](\d{1,2})$/);
+    if (endShort) {
+      return `${startYear}-${endShort[1].padStart(2, "0")}-${endShort[2].padStart(2, "0")}`;
+    }
+    // 끝이 "YYYY.MM.DD"인 경우
+    const endFull = endStr.match(/(\d{4})[.\-](\d{1,2})[.\-](\d{1,2})/);
+    if (endFull) {
+      return `${endFull[1]}-${endFull[2].padStart(2, "0")}-${endFull[3].padStart(2, "0")}`;
+    }
+    return null;
+  }
+
   /** 샘플 공고를 Announcement 형태로 변환 */
   const sampleAsAnnouncements: Announcement[] = sampleAnnouncements.map((s) => ({
     id: `sample-${s.id}`,
@@ -119,7 +141,7 @@ export default function AnnouncementsPage() {
     announcement_no: "",
     status: "published",
     application_start: s.schedule.specialApply || "",
-    contract_end: null,
+    contract_end: extractEndDateISO(s.schedule.contract),
     _isSample: true,
     _docSubmit: s.schedule.docSubmit,
     _contract: s.schedule.contract,
