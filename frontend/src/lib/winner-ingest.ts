@@ -20,6 +20,8 @@
  * 단 PDF 텍스트 추출만 CMap이 필요해 전용 API(/api/extract-pdf-text)를 거친다.
  */
 
+import { toIdentity, identityScore } from "./identity";
+
 // xlsx는 300KB+ 라이브러리 — 번들 부풀림 방지를 위해 동적 import
 type XLSXModule = typeof import("xlsx");
 type XLSXWorkBook = import("xlsx").WorkBook;
@@ -1055,41 +1057,57 @@ function fillIfEmpty<T extends Record<string, any>>(target: T, patch: Partial<T>
 
 export function consolidate(files: FileIngestResult[]): ConsolidatedResult {
   const profilesByRrn = new Map<string, WinnerProfile>();
-  const profilesByNameKey = new Map<string, WinnerProfile>();
+  const profilesList: WinnerProfile[] = [];       // fuzzy 매칭을 위한 전체 목록
   const unmatchedWinners: WinnerRecord[] = [];
   const unmatchedHousehold: HouseholdMemberRecord[] = [];
   const unmatchedProperties: PropertyOwnershipRecord[] = [];
   const announcementNos = new Set<string>();
   const announcementDates = new Set<string>();
 
-  // 1단계: 당첨자 레코드 병합
+  /** identity 기반 퍼지 매칭 (이름 와일드카드·rrn 앞자리·성별·전화 조합) */
+  function findProfileByIdentity(w: WinnerRecord): WinnerProfile | undefined {
+    const ident = toIdentity(w as any);
+    let best: { profile: WinnerProfile; score: number } | null = null;
+    for (const p of profilesList) {
+      const s = identityScore(ident, toIdentity(p as any));
+      if (s.conflict) continue;
+      if (s.exact) return p;
+      if (s.score >= 3 && (!best || s.score > best.score)) {
+        best = { profile: p, score: s.score };
+      }
+    }
+    return best?.profile;
+  }
+
+  function registerProfile(profile: WinnerProfile) {
+    profilesList.push(profile);
+    if (profile.rrn) profilesByRrn.set(profile.rrn, profile);
+  }
+
+  // 1단계: 당첨자 레코드 병합 (identity 기반)
   for (const file of files) {
     for (const w of file.winners) {
       if (w.announcementNo) announcementNos.add(w.announcementNo);
       if (w.announcementDate) announcementDates.add(w.announcementDate);
 
+      // 완전 일치 (13자리 RRN) 먼저, 없으면 퍼지 매칭
       let profile: WinnerProfile | undefined;
-      if (w.rrn) {
-        profile = profilesByRrn.get(w.rrn);
-        if (!profile) {
-          profile = { ...w, sourceKinds: [file.kind], sourceFiles: [file.fileName] };
-          profilesByRrn.set(w.rrn, profile);
-          // 이름+전화로도 매칭될 수 있으니 index
-          const nk = nameKey(w.name, w.phone);
-          if (nk !== "|") profilesByNameKey.set(nk, profile);
-          continue;
-        }
-      } else {
-        const nk = nameKey(w.name, w.phone);
-        profile = profilesByNameKey.get(nk);
-        if (!profile) {
-          profile = { ...w, sourceKinds: [file.kind], sourceFiles: [file.fileName] };
-          if (nk !== "|") profilesByNameKey.set(nk, profile);
-          continue;
-        }
+      if (w.rrn) profile = profilesByRrn.get(w.rrn);
+      if (!profile) profile = findProfileByIdentity(w);
+
+      if (!profile) {
+        profile = { ...w, sourceKinds: [file.kind], sourceFiles: [file.fileName] };
+        registerProfile(profile);
+        continue;
       }
-      // 기존 프로필 병합
+
+      // 병합 — 기존값 우선, 빈 필드만 신규값으로 채움
       fillIfEmpty(profile, w);
+      // 주민번호가 나중에 완전본(Excel)으로 보강되면 인덱스 갱신
+      if (w.rrn && !profilesByRrn.has(w.rrn)) {
+        profile.rrn = profile.rrn || w.rrn;
+        profilesByRrn.set(w.rrn, profile);
+      }
       if (profile.sourceKinds && !profile.sourceKinds.includes(file.kind)) {
         profile.sourceKinds.push(file.kind);
       }
@@ -1174,24 +1192,13 @@ export function consolidate(files: FileIngestResult[]): ConsolidatedResult {
           sourceKinds: [file.kind],
           sourceFiles: [file.fileName],
         };
-        profilesByRrn.set(s.rrn, provisional);
+        registerProfile(provisional);
       }
     }
   }
 
-  // 이름+전화 기준 중복 제거 (주민번호 확인 후 이름키로만 저장된 프로필이 주민번호 프로필과 중복된 경우)
-  const dedupProfiles: WinnerProfile[] = [];
-  const seen = new Set<WinnerProfile>();
-  profilesByRrn.forEach((p) => {
-    dedupProfiles.push(p);
-    seen.add(p);
-  });
-  profilesByNameKey.forEach((p) => {
-    if (!seen.has(p)) {
-      dedupProfiles.push(p);
-      seen.add(p);
-    }
-  });
+  // 전체 프로필 반환 (중복은 이미 1단계에서 identity-merge로 제거됨)
+  const dedupProfiles: WinnerProfile[] = profilesList.slice();
 
   return {
     profiles: dedupProfiles,

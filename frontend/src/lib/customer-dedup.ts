@@ -11,6 +11,7 @@
  */
 
 import type { LocalCustomer } from "./local-store";
+import { toIdentity, sameIdentity, identityScore } from "./identity";
 
 export type IncomingCustomer = Partial<LocalCustomer> & {
   name: string;
@@ -51,36 +52,42 @@ export interface DedupResult {
   conflicts: CustomerConflict[];
 }
 
-/** name + rrn_front(있으면) / name + phone 로 매칭 */
+/**
+ * 동일인 매칭 — 다중 신호 기반 (주민번호 앞자리 + 성별 + 전화 + 이름 와일드카드)
+ * lib/identity.ts의 `sameIdentity`를 사용.
+ *
+ * 매칭 기준 (총점 ≥ 3):
+ *   - 주민번호 13자리 일치 → 결정적
+ *   - 앞자리 + 성별 일치 → +3
+ *   - 앞자리 + 전화 일치 → +4
+ *   - 앞자리 + 이름(마스킹 호환) 일치 → +3
+ *   - 전화 + 이름 일치만으로도 → +3
+ *   - 앞자리/성별/풀네임 모순 → 무조건 상이
+ */
 function findMatch(
   candidate: IncomingCustomer,
   existingList: LocalCustomer[],
 ): LocalCustomer | null {
-  const name = (candidate.name || "").trim();
-  if (!name) return null;
+  if (!(candidate.name || "").trim()) return null;
+  const candIdentity = toIdentity(candidate as any);
 
-  const rrnFront = (candidate.rrn_front || "").trim();
-  const phone = (candidate.phone || "").replace(/\D/g, "");
-
+  // 동점일 때는 점수 높은 쪽을 채택
+  let best: { record: LocalCustomer; score: number } | null = null;
   for (const e of existingList) {
-    if ((e.name || "").trim() !== name) continue;
-    // 1순위: rrn_front 일치 (둘 다 placeholder가 아닐 때)
-    if (rrnFront && rrnFront !== "0000000" && e.rrn_front && e.rrn_front !== "0000000") {
-      if (e.rrn_front === rrnFront) return e;
-      // 둘 다 있지만 다르면 다른 사람 — continue
-      continue;
-    }
-    // 2순위: 이름 + 전화번호
-    if (phone) {
-      const ePhone = (e.phone || "").replace(/\D/g, "");
-      if (ePhone && ePhone === phone) return e;
-    }
-    // 3순위: 이름만 일치 (rrn/phone 둘 다 없는 경우)
-    if (!rrnFront && !phone && !e.rrn_front && !(e.phone || "").trim()) {
-      return e;
+    const eIdentity = toIdentity(e as any);
+    const s = identityScore(candIdentity, eIdentity);
+    if (s.conflict) continue;
+    if (s.exact) return e;
+    if (s.score >= 3) {
+      if (!best || s.score > best.score) best = { record: e, score: s.score };
     }
   }
-  return null;
+  return best?.record || null;
+}
+
+// 외부 모듈(UI 등)에서도 동일 기준으로 매칭 여부만 알고 싶을 때 사용
+export function isSameCustomer(a: Partial<LocalCustomer>, b: Partial<LocalCustomer>): boolean {
+  return sameIdentity(toIdentity(a as any), toIdentity(b as any));
 }
 
 /** 기존값과 새값 중 "의미있게 다른" 필드만 diff로 기록 */
