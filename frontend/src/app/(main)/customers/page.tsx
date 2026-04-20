@@ -1003,7 +1003,7 @@ function CustomersPageInner() {
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center gap-3 justify-end">
                       <a
-                        href={`/customers/${c.id}/documents`}
+                        href={`/customers/${c.id}?stage=5`}
                         className="text-emerald-700 hover:underline flex items-center gap-0.5 text-xs font-medium"
                         title="필요 서류 체크리스트 + 적합 판정"
                       >
