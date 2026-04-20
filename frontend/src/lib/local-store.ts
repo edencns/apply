@@ -142,6 +142,15 @@ export interface LocalCustomer {
   special_types?: string[];
   total_score?: number;
   status?: string;
+  // ── 공급 유형 및 평형 ──
+  supply_type?: string;      // "일반공급" 또는 특별공급 유형명
+  unit_type?: string;        // 주택형 코드 (예: "84A", "059.9660")
+  unit_area?: string;        // 전용면적 (예: "59.99㎡")
+  // ── 서류 검수 상태 ──
+  documents_submitted?: Record<string, boolean>;
+  verification_verdict?: "eligible" | "ineligible" | "pending";
+  verification_score?: number;
+  verification_checked_at?: string;
   created_at: string;
 }
 

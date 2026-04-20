@@ -12,8 +12,8 @@ import {
 } from "@/lib/local-store";
 import {
   ArrowLeft, User, Phone, MapPin, Calculator, Calendar, Loader2,
-  AlertCircle, Trash2, Edit2, Save, X, CheckCircle2, Home, Baby,
-  CreditCard, Landmark, BookOpen, ChevronRight,
+  AlertCircle, Trash2, Edit2, Save, X, CheckCircle2, XCircle, Home, Baby,
+  CreditCard, Landmark, BookOpen, ChevronRight, FileText,
 } from "lucide-react";
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
@@ -183,10 +183,33 @@ export default function CustomerDetailPage() {
                 <Phone className="w-3.5 h-3.5" /> {customer.phone}
               </span>
             )}
+            {customer.unit_type && (
+              <span className="flex items-center gap-1">
+                <Home className="w-3.5 h-3.5" /> {customer.unit_type}
+                {customer.unit_area ? ` · ${customer.unit_area}` : ""}
+              </span>
+            )}
+            {customer.supply_type && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                {customer.supply_type}
+              </span>
+            )}
+            {customer.verification_verdict && customer.verification_verdict !== "pending" && (
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                customer.verification_verdict === "eligible"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-700"
+              }`}>
+                {customer.verification_verdict === "eligible"
+                  ? <><CheckCircle2 className="w-3 h-3" /> 적합</>
+                  : <><XCircle className="w-3 h-3" /> 부적합</>
+                }
+              </span>
+            )}
             <span className="text-xs">등록일 {fmtDate(customer.created_at)}</span>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {editMode ? (
             <>
               <button
@@ -207,6 +230,12 @@ export default function CustomerDetailPage() {
             </>
           ) : (
             <>
+              <a
+                href={`/customers/${customer.id}/documents`}
+                className="btn-primary flex items-center gap-1.5 text-sm"
+              >
+                <FileText className="w-4 h-4" /> 서류 검수
+              </a>
               <button onClick={() => setEditMode(true)} className="btn-secondary flex items-center gap-1.5 text-sm">
                 <Edit2 className="w-4 h-4" /> 수정
               </button>

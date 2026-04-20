@@ -27,6 +27,9 @@ interface ParsedCustomer {
   subscriptionMonths?: number;
   currentRegion?: string;
   specialTypes?: string[];
+  housingType?: string;   // 당첨자 명단에서의 주택형 (예: "059.9660", "084.9820")
+  unitDong?: string;      // 동
+  unitHo?: string;        // 호
   rawTextPreview?: string;
 }
 
@@ -192,6 +195,9 @@ function parseWinnerRows(text: string): ParsedCustomer[] {
       rrnBack: undefined, // 마스킹되어 있음
       phone,
       specialTypes: specialType ? [specialType] : undefined,
+      housingType,
+      unitDong: dong,
+      unitHo: ho,
     });
   }
   return customers;

@@ -25,6 +25,10 @@ interface Customer {
   total_score: number;
   status: string;
   special_types?: string[];
+  supply_type?: string;
+  unit_type?: string;
+  unit_area?: string;
+  verification_verdict?: "eligible" | "ineligible" | "pending";
 }
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
@@ -158,6 +162,10 @@ function CustomersPageInner() {
           total_score: c.total_score ?? 0,
           status: c.status ?? "inquiry",
           special_types: c.special_types,
+          supply_type: c.supply_type,
+          unit_type: c.unit_type,
+          unit_area: c.unit_area,
+          verification_verdict: c.verification_verdict,
         })));
       } else {
         console.error("[customers] load failed", err);
@@ -425,6 +433,7 @@ function CustomersPageInner() {
         for (let i = 0; i < d.customers.length; i++) {
           const c = d.customers[i];
           if (!c.name || !c.rrnFront) { failed++; errors.push(`${i + 1}번: 필수 정보 부족`); continue; }
+          const specialTypes = Array.isArray(c.specialTypes) ? c.specialTypes : [];
           const payload = {
             site_id: selectedAnn.site_id,
             announcement_id: selectedAnn.id,
@@ -438,7 +447,10 @@ function CustomersPageInner() {
             subscription_months: 0,
             current_region: "",
             income_monthly: null,
-            special_types: Array.isArray(c.specialTypes) ? c.specialTypes : [],
+            special_types: specialTypes,
+            supply_type: specialTypes[0] || "일반공급",
+            unit_type: c.housingType || c.unitType || undefined,
+            unit_area: c.unitArea || undefined,
           };
           try {
             try {
@@ -651,43 +663,77 @@ function CustomersPageInner() {
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">성명</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">연락처</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">특별공급</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">주택형</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">공급 유형</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">청약 가점</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">상태</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">서류 검수</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {!selectedAnn ? (
-              <tr><td colSpan={6} className="text-center py-8 text-gray-400">먼저 공고를 선택해주세요</td></tr>
+              <tr><td colSpan={7} className="text-center py-8 text-gray-400">먼저 공고를 선택해주세요</td></tr>
             ) : loading ? (
-              <tr><td colSpan={6} className="text-center py-8 text-gray-400">불러오는 중...</td></tr>
+              <tr><td colSpan={7} className="text-center py-8 text-gray-400">불러오는 중...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-8 text-gray-400">이 공고에 등록된 고객이 없습니다</td></tr>
+              <tr><td colSpan={7} className="text-center py-8 text-gray-400">이 공고에 등록된 고객이 없습니다</td></tr>
             ) : filtered.map((c) => {
-              const s = STATUS_LABEL[c.status] || { label: c.status, cls: "badge-pending" };
+              const displaySupply = c.supply_type || (c.special_types && c.special_types.length > 0 ? c.special_types[0] : "일반공급");
+              const supplyCls = displaySupply === "일반공급"
+                ? "bg-indigo-50 text-indigo-700"
+                : "bg-purple-50 text-purple-700";
+              const vCls = c.verification_verdict === "eligible"
+                ? "bg-green-100 text-green-700"
+                : c.verification_verdict === "ineligible"
+                  ? "bg-red-100 text-red-700"
+                  : "bg-gray-100 text-gray-500";
+              const vLabel = c.verification_verdict === "eligible"
+                ? "적합"
+                : c.verification_verdict === "ineligible"
+                  ? "부적합"
+                  : "미검수";
               return (
                 <tr key={c.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 font-medium text-gray-900">{c.name}</td>
                   <td className="px-4 py-3 text-gray-600">{c.phone || "-"}</td>
+                  <td className="px-4 py-3 text-gray-700">
+                    {c.unit_type ? (
+                      <>
+                        <span className="font-medium">{c.unit_type}</span>
+                        {c.unit_area && <span className="text-gray-400 text-xs ml-1">{c.unit_area}</span>}
+                      </>
+                    ) : (
+                      <span className="text-xs text-gray-400">-</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
-                    {(c.special_types && c.special_types.length > 0) ? (
-                      <div className="flex flex-wrap gap-1">
-                        {c.special_types.map((t) => (
-                          <span key={t} className="text-[10px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded">{t}</span>
-                        ))}
-                      </div>
-                    ) : <span className="text-xs text-gray-400">-</span>}
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${supplyCls}`}>{displaySupply}</span>
                   </td>
                   <td className="px-4 py-3">
                     <span className="font-semibold text-blue-700">{c.total_score}점</span>
                     <span className="text-gray-400 text-xs ml-1">/ 84점</span>
                   </td>
-                  <td className="px-4 py-3"><span className={s.cls}>{s.label}</span></td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${vCls}`}>
+                      {vLabel}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-right">
-                    <a href={`/customers/${c.id}`} className="text-blue-600 hover:underline flex items-center gap-1 justify-end">
-                      상세 <ChevronRight className="w-3 h-3" />
-                    </a>
+                    <div className="flex items-center gap-3 justify-end">
+                      <a
+                        href={`/customers/${c.id}/documents`}
+                        className="text-emerald-700 hover:underline flex items-center gap-0.5 text-xs font-medium"
+                        title="필요 서류 체크리스트 + 적합 판정"
+                      >
+                        서류등록 <ChevronRight className="w-3 h-3" />
+                      </a>
+                      <a
+                        href={`/customers/${c.id}`}
+                        className="text-blue-600 hover:underline flex items-center gap-0.5 text-xs"
+                      >
+                        상세 <ChevronRight className="w-3 h-3" />
+                      </a>
+                    </div>
                   </td>
                 </tr>
               );
