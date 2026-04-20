@@ -822,21 +822,33 @@ export default function AnnouncementDetailPage() {
 
     let cancelled = false;
     (async () => {
+      // 로컬 저장소에 있는 공고 (PDF 파싱으로 풍부한 eligibility_rules 보관)
+      const local = localAnnouncements.get(numericId);
+
       try {
         const r = await api.get(`/announcements/${numericId}`);
-        if (!cancelled) setAnn(r.data);
+        if (cancelled) return;
+        // 로컬 규칙이 더 풍부하면 로컬을 선호, 아니면 백엔드 + 로컬 규칙 병합
+        const backend = r.data || {};
+        const merged: AnnouncementDetail = {
+          ...backend,
+          ...(local || {}),
+          eligibility_rules: {
+            ...(backend.eligibility_rules || {}),
+            ...(local?.eligibility_rules || {}),
+          },
+        };
+        setAnn(merged);
       } catch (err: any) {
-        const local = localAnnouncements.get(numericId);
-        if (!cancelled) {
-          if (local) {
-            setAnn(local as unknown as AnnouncementDetail);
-          } else {
-            setError(
-              isNetworkError(err)
-                ? "해당 공고를 찾을 수 없습니다."
-                : err?.response?.data?.detail || "공고를 불러오지 못했습니다."
-            );
-          }
+        if (cancelled) return;
+        if (local) {
+          setAnn(local as unknown as AnnouncementDetail);
+        } else {
+          setError(
+            isNetworkError(err)
+              ? "해당 공고를 찾을 수 없습니다."
+              : err?.response?.data?.detail || "공고를 불러오지 못했습니다."
+          );
         }
       } finally {
         if (!cancelled) setLoading(false);

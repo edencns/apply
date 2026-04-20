@@ -540,6 +540,10 @@ function adaptToAptAnnouncement(ann: any): AptAnnouncement {
   const rules = ann?.eligibility_rules || {};
   const regionPriority: string[] = rules.region_priority || [];
   const specialTypes: string[] = rules.special_supply_types || [];
+  const exclusiveAreas: any[] = rules.exclusive_areas || [];
+  const supplyTypesDetail: any[] = rules.supply_types_detail || [];
+  const requiredDocuments: Record<string, string[]> = rules.required_documents || {};
+  const incomeTable: Record<string, any> = rules.income_table || {};
 
   const fmtDate = (s?: string | null) => {
     if (!s) return "—";
@@ -550,33 +554,77 @@ function adaptToAptAnnouncement(ann: any): AptAnnouncement {
     } catch { return String(s); }
   };
 
+  const fmtRange = (start?: string | null, end?: string | null) => {
+    const s = fmtDate(start); const e = fmtDate(end);
+    if (s === "—" && e === "—") return "—";
+    if (s === "—") return e;
+    if (e === "—" || e === s) return s;
+    const [sy] = s.split("."); const [ey, ...rest] = e.split(".");
+    if (sy === ey) return `${s}~${rest.join(".")}`;
+    return `${s} ~ ${e}`;
+  };
+
+  // 소득기준표에서 3인 가구 기준 첫 행을 가져와 신혼부부 소득 표시에 대략 매핑 (정확한 변환은 어려우므로 "—")
+  const getIncomeAt = (percent: string): string => {
+    const first = Object.values(incomeTable)[0];
+    if (first && typeof first === "object") {
+      const v = (first as any)[percent];
+      if (typeof v === "number") return `${Math.round(v / 10000).toLocaleString("ko-KR")}만원`;
+    }
+    return "—";
+  };
+
+  // 총 세대수: rules.total_units 우선, 없으면 exclusive_areas 합계
+  const totalUnits: number = rules.total_units
+    || exclusiveAreas.reduce((s: number, a: any) => s + (a.totalUnits || 0), 0);
+  const generalUnits: number = exclusiveAreas.reduce((s: number, a: any) => s + (a.generalUnits || 0), 0);
+  const specialUnits: number = exclusiveAreas.reduce((s: number, a: any) => s + (a.specialUnits || 0), 0);
+
+  // 위치: region_full > region_priority 합
+  const location = rules.region_full || regionPriority.join(" ") || "—";
+
+  // 특별공급 타입별 세대수 (전용면적 합산에서 유추)
+  const countByType = (typeName: string): number => {
+    const st = supplyTypesDetail.find((t: any) => t.type === typeName);
+    return st?.totalUnits || (specialTypes.includes(typeName) ? 1 : 0);
+  };
+
+  const newlywedDetail = supplyTypesDetail.find((t: any) => t.type === "신혼부부");
+  const firstLifeDetail = supplyTypesDetail.find((t: any) => t.type === "생애최초");
+  const multiChildDetail = supplyTypesDetail.find((t: any) => t.type === "다자녀가구");
+
   return {
     id: `registered-${ann.id}`,
     name: ann.title,
     shortName: ann.title,
-    location: regionPriority[0] || "—",
-    totalUnits: 0,
-    generalUnits: 0,
-    specialUnits: 0,
-    moveIn: "—",
-    regulation: "비규제",
-    landType: "민간택지",
-    priceCapApplied: false,
-    resaleRestriction: "없음",
-    reWinRestriction: "없음",
-    residenceObligation: "없음",
+    location,
+    totalUnits,
+    generalUnits,
+    specialUnits,
+    moveIn: rules.move_in_date || "—",
+    regulation: rules.regulation || (rules.no_home_required ? "비규제" : "—"),
+    landType: rules.land_type || "민간택지",
+    priceCapApplied: rules.price_cap_applied ?? false,
+    resaleRestriction: rules.resale_restriction || "없음",
+    reWinRestriction: rules.rewin_restriction || "없음",
+    residenceObligation: rules.residence_obligation || "없음",
     schedule: {
-      announcement: "—",
-      specialApply: fmtDate(ann.application_start),
-      general1st: fmtDate(ann.application_start),
-      general2nd: fmtDate(ann.application_end),
+      announcement: fmtDate(rules.announcement_date),
+      specialApply: fmtDate(rules.special_apply_date || ann.application_start),
+      general1st: fmtDate(rules.general_1st_date || ann.application_start),
+      general2nd: fmtDate(rules.general_2nd_date || ann.application_end),
       winnerAnnounce: fmtDate(ann.winner_announce_date),
-      docSubmit: "—",
-      contract: `${fmtDate(ann.contract_start)}${ann.contract_end ? ` ~ ${fmtDate(ann.contract_end)}` : ""}`,
+      docSubmit: fmtRange(rules.doc_submit_start, rules.doc_submit_end),
+      contract: fmtRange(ann.contract_start, ann.contract_end),
     },
-    types: [],
+    types: exclusiveAreas.map((a: any) => ({
+      name: a.area || "—",
+      area: Number(a.squareMeters) || 0,
+      units: Number(a.totalUnits) || 0,
+      priceRange: a.price || "—",
+    })),
     region: {
-      priority: regionPriority[0] || "—",
+      priority: regionPriority[0] || location || "—",
       other: regionPriority.slice(1).join(", ") || "—",
     },
     subscription: {
@@ -584,29 +632,43 @@ function adaptToAptAnnouncement(ann: any): AptAnnouncement {
       deposit: [],
     },
     specialSupply: {
-      institution: specialTypes.includes("기관추천") ? 1 : 0,
-      multiChild: specialTypes.includes("다자녀가구") ? 1 : 0,
-      newlywed: specialTypes.includes("신혼부부") ? 1 : 0,
-      seniorParent: specialTypes.includes("노부모부양") ? 1 : 0,
-      firstLife: specialTypes.includes("생애최초") ? 1 : 0,
+      institution: countByType("기관추천"),
+      multiChild: countByType("다자녀가구"),
+      newlywed: countByType("신혼부부"),
+      seniorParent: countByType("노부모부양"),
+      firstLife: countByType("생애최초"),
     },
-    multiChildCriteria: [],
-    newlywedIncome: { single100: "—", dual120: "—", single140: "—", dual160: "—" },
-    firstLifeIncome: { pct130: "—", pct160: "—" },
-    assetLimit: "—",
-    generalPointSystem: { ratio: "—", maxPoints: 0, items: [] },
+    multiChildCriteria: multiChildDetail?.conditions || [],
+    newlywedIncome: {
+      single100: newlywedDetail?.incomeLimitPercent ? `${newlywedDetail.incomeLimitPercent}%` : getIncomeAt("100%"),
+      dual120: newlywedDetail?.incomeLimitDualPercent ? `${newlywedDetail.incomeLimitDualPercent}%` : getIncomeAt("120%"),
+      single140: getIncomeAt("140%"),
+      dual160: getIncomeAt("160%"),
+    },
+    firstLifeIncome: {
+      pct130: firstLifeDetail?.incomeLimitPercent ? `${firstLifeDetail.incomeLimitPercent}%` : getIncomeAt("130%"),
+      pct160: getIncomeAt("160%"),
+    },
+    assetLimit: rules.asset_limit || "—",
+    generalPointSystem: {
+      ratio: rules.point_system || "—",
+      maxPoints: 84,
+      items: [],
+    },
     requiredDocs: {
-      common: rules.no_home_required ? ["주민등록등본", "주민등록초본 (무주택 확인)", "혼인관계증명서"] : ["주민등록등본", "주민등록초본"],
-      multiChild: [],
-      newlywed: specialTypes.includes("신혼부부") ? ["혼인관계증명서 (상세)", "건강보험 자격득실 확인서", "소득금액증명원"] : [],
-      seniorParent: [],
-      firstLife: specialTypes.includes("생애최초") ? ["소득금액증명원", "재직·사업 증빙", "근로/사업소득세 납부증명원"] : [],
-      generalPoint: [],
+      common: requiredDocuments["공통"] || (rules.no_home_required ? ["주민등록등본", "주민등록초본 (무주택 확인)", "혼인관계증명서"] : ["주민등록등본", "주민등록초본"]),
+      multiChild: requiredDocuments["다자녀가구"] || [],
+      newlywed: requiredDocuments["신혼부부"] || [],
+      seniorParent: requiredDocuments["노부모부양"] || [],
+      firstLife: requiredDocuments["생애최초"] || [],
+      generalPoint: requiredDocuments["일반공급"] || [],
     },
-    notes: [
-      "PDF 자동 추출은 일정·자격 기준·특별공급 유형만 지원합니다.",
-      "단지 세부 정보(공급세대수, 소득기준, 가점제 등)는 공고문에서 수동으로 확인해 주세요.",
-    ],
+    notes: totalUnits > 0 && exclusiveAreas.length > 0
+      ? []  // 충분한 정보가 추출된 경우 경고 노트 생략
+      : [
+          "PDF 자동 추출은 일정·자격 기준·특별공급 유형만 지원합니다.",
+          "단지 세부 정보(공급세대수, 소득기준, 가점제 등)는 공고문에서 수동으로 확인해 주세요.",
+        ],
   };
 }
 
