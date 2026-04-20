@@ -13,7 +13,7 @@ import {
 } from "@/lib/local-store";
 import {
   UserPlus, Search, ChevronRight, Calculator, FileSpreadsheet, FileText,
-  Loader2, Download, BookOpen, X,
+  Loader2, Download, BookOpen, X, Trash2,
 } from "lucide-react";
 import AnnouncementPicker from "@/components/AnnouncementPicker";
 import { getSampleAsLocalAnnouncements } from "@/lib/sample-adapter";
@@ -79,6 +79,10 @@ function CustomersPageInner() {
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
   const [pdfUploading, setPdfUploading] = useState(false);
   const [pdfFilled, setPdfFilled] = useState<string[]>([]);
+
+  // 선택 삭제 모드
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   // ─── 공고 목록 로딩 ────────────────────────────────────
   const loadAnnouncements = useCallback(async () => {
@@ -544,27 +548,6 @@ function CustomersPageInner() {
             <Download className="w-4 h-4" /> 템플릿
           </button>
           <button
-            onClick={() => excelInputRef.current?.click()}
-            disabled={excelUploading || !selectedAnn}
-            className="btn-secondary flex items-center gap-2 disabled:opacity-50"
-          >
-            {excelUploading ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> 등록 중…</>
-            ) : (
-              <><FileSpreadsheet className="w-4 h-4" /> 엑셀 업로드</>
-            )}
-          </button>
-          <input
-            ref={excelInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleExcelUpload(f);
-            }}
-          />
-          <button
             onClick={() => pdfInputRef.current?.click()}
             disabled={pdfUploading || !selectedAnn}
             className="btn-secondary flex items-center gap-2 disabled:opacity-50"
@@ -593,8 +576,65 @@ function CustomersPageInner() {
           >
             <UserPlus className="w-4 h-4" /> 고객 등록
           </button>
+          <button
+            onClick={() => {
+              setSelectMode((prev) => {
+                // 선택 모드 해제 시 선택 목록도 비움
+                if (prev) setSelectedIds(new Set());
+                return !prev;
+              });
+            }}
+            disabled={!selectedAnn || customers.length === 0}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+              selectMode
+                ? "bg-gray-200 text-gray-800 hover:bg-gray-300"
+                : "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
+            }`}
+          >
+            <Trash2 className="w-4 h-4" />
+            {selectMode ? "선택 취소" : "삭제"}
+          </button>
         </div>
       </div>
+
+      {/* 선택 삭제 바 */}
+      {selectMode && (
+        <div className="mb-4 flex items-center justify-between p-3 rounded-lg bg-red-50 border border-red-200">
+          <div className="text-sm text-red-800">
+            <strong>{selectedIds.size}명</strong> 선택됨
+            {selectedIds.size === 0 && <span className="text-red-500 ml-2">— 삭제할 고객을 체크하세요</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                if (selectedIds.size === filtered.length) {
+                  setSelectedIds(new Set());
+                } else {
+                  setSelectedIds(new Set(filtered.map((c) => c.id)));
+                }
+              }}
+              className="text-xs text-red-700 hover:underline"
+            >
+              {selectedIds.size === filtered.length ? "전체 선택 해제" : "전체 선택"}
+            </button>
+            <button
+              onClick={() => {
+                if (selectedIds.size === 0) return;
+                if (!confirm(`선택한 ${selectedIds.size}명의 고객을 삭제하시겠습니까?`)) return;
+                Array.from(selectedIds).forEach((id) => localCustomers.remove(id));
+                setSelectedIds(new Set());
+                setSelectMode(false);
+                loadCustomers();
+              }}
+              disabled={selectedIds.size === 0}
+              className="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              선택 삭제 ({selectedIds.size})
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 엑셀 업로드 결과 */}
       {excelResult && (
@@ -673,6 +713,22 @@ function CustomersPageInner() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
+              {selectMode && (
+                <th className="px-4 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                    onChange={() => {
+                      if (selectedIds.size === filtered.length) {
+                        setSelectedIds(new Set());
+                      } else {
+                        setSelectedIds(new Set(filtered.map((c) => c.id)));
+                      }
+                    }}
+                    className="w-4 h-4 accent-red-600"
+                  />
+                </th>
+              )}
               <th className="text-left px-4 py-3 font-medium text-gray-600">성명</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">연락처</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">주택형</th>
@@ -684,11 +740,11 @@ function CustomersPageInner() {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {!selectedAnn ? (
-              <tr><td colSpan={7} className="text-center py-8 text-gray-400">먼저 공고를 선택해주세요</td></tr>
+              <tr><td colSpan={selectMode ? 8 : 7} className="text-center py-8 text-gray-400">먼저 공고를 선택해주세요</td></tr>
             ) : loading ? (
-              <tr><td colSpan={7} className="text-center py-8 text-gray-400">불러오는 중...</td></tr>
+              <tr><td colSpan={selectMode ? 8 : 7} className="text-center py-8 text-gray-400">불러오는 중...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={7} className="text-center py-8 text-gray-400">이 공고에 등록된 고객이 없습니다</td></tr>
+              <tr><td colSpan={selectMode ? 8 : 7} className="text-center py-8 text-gray-400">이 공고에 등록된 고객이 없습니다</td></tr>
             ) : filtered.map((c) => {
               const displaySupply = c.supply_type || (c.special_types && c.special_types.length > 0 ? c.special_types[0] : "일반공급");
               const supplyCls = displaySupply === "일반공급"
@@ -704,8 +760,45 @@ function CustomersPageInner() {
                 : c.verification_verdict === "ineligible"
                   ? "부적합"
                   : "미검수";
+              const isChecked = selectedIds.has(c.id);
               return (
-                <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                <tr
+                  key={c.id}
+                  className={`transition-colors ${
+                    selectMode
+                      ? isChecked
+                        ? "bg-red-50 hover:bg-red-100"
+                        : "hover:bg-gray-50 cursor-pointer"
+                      : "hover:bg-gray-50"
+                  }`}
+                  onClick={selectMode ? () => {
+                    setSelectedIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(c.id)) next.delete(c.id);
+                      else next.add(c.id);
+                      return next;
+                    });
+                  } : undefined}
+                >
+                  {selectMode && (
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(c.id)) next.delete(c.id);
+                            else next.add(c.id);
+                            return next;
+                          });
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-4 h-4 accent-red-600"
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-3 font-medium text-gray-900">{c.name}</td>
                   <td className="px-4 py-3 text-gray-600">{c.phone || "-"}</td>
                   <td className="px-4 py-3 text-gray-700">
@@ -745,18 +838,6 @@ function CustomersPageInner() {
                       >
                         상세 <ChevronRight className="w-3 h-3" />
                       </a>
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          if (!confirm(`${c.name} 고객을 삭제하시겠습니까?`)) return;
-                          localCustomers.remove(c.id);
-                          loadCustomers();
-                        }}
-                        className="text-red-600 hover:underline flex items-center gap-0.5 text-xs"
-                        title="고객 삭제"
-                      >
-                        삭제 <ChevronRight className="w-3 h-3" />
-                      </button>
                     </div>
                   </td>
                 </tr>
