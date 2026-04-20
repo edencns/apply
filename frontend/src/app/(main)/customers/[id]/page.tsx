@@ -26,13 +26,14 @@ import {
 } from "@/lib/document-checklist";
 import { calculateSubscriptionScore } from "@/lib/score-calculator";
 import { evaluateFinal } from "@/lib/verification-rules";
+import { findStandbyCandidates, buildPromotionUpdates, PromotionCandidate } from "@/lib/standby-promotion";
 import StageSidebar from "@/components/verification/StageSidebar";
 import { parseStageParam, STAGE_NUMBER, StageKey } from "@/components/verification/stage-utils";
 import { HouseholdPanel, PropertyPanel, SavingsPanel } from "@/components/verification/panels";
 import {
   ArrowLeft, User, Phone, Calculator, Loader2, AlertCircle, Trash2, Edit2, Save, X,
   Home, Baby, CreditCard, Landmark, BookOpen, ChevronRight, FileText, CheckCircle2,
-  XCircle, Users, ClipboardCheck,
+  XCircle, Users, ClipboardCheck, ArrowUpCircle, UserX,
 } from "lucide-react";
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
@@ -534,6 +535,13 @@ function DocumentsStage({
         </div>
       </div>
 
+      {/* 예비 승계 섹션 — 당첨자가 부적합이거나 이미 포기/승계 완료된 경우 */}
+      <StandbyPromotionBlock
+        customer={customer}
+        verdict={finalVerdict.verdict}
+        onUpdate={onUpdate}
+      />
+
       {/* 진행률 */}
       <div className="card">
         <div className="flex items-center justify-between mb-2">
@@ -660,6 +668,259 @@ function NumField({
       )}
     </div>
   );
+}
+
+/* ─── 예비 승계 블록 ─────────────────────────────────── */
+
+function StandbyPromotionBlock({
+  customer,
+  verdict,
+  onUpdate,
+}: {
+  customer: LocalCustomer;
+  verdict: "eligible" | "ineligible" | "pending";
+  onUpdate: (c: LocalCustomer) => void;
+}) {
+  const router = useRouter();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [candidates, setCandidates] = useState<PromotionCandidate[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [reason, setReason] = useState("부적합 판정");
+  const [promoting, setPromoting] = useState(false);
+  const [predecessor, setPredecessor] = useState<LocalCustomer | null>(null);
+  const [successor, setSuccessor] = useState<LocalCustomer | null>(null);
+
+  // 예비에서 올라온 고객이라면 원래 당첨자 정보를 보여주기
+  useEffect(() => {
+    if (customer.succeeded_from) {
+      const pre = localCustomers.get(customer.succeeded_from);
+      if (pre) setPredecessor(pre);
+    }
+    if (customer.superseded_by) {
+      const suc = localCustomers.get(customer.superseded_by);
+      if (suc) setSuccessor(suc);
+    }
+  }, [customer.succeeded_from, customer.superseded_by, customer.id]);
+
+  // 이미 승계된 당첨자
+  if (customer.superseded) {
+    return (
+      <div className="card border-2 border-gray-300 bg-gray-50">
+        <div className="flex items-start gap-3">
+          <UserX className="w-5 h-5 text-gray-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 text-sm">
+            <p className="font-semibold text-gray-800">
+              이 당첨자는 포기·승계 완료되었습니다
+            </p>
+            <p className="text-xs text-gray-600 mt-1">
+              사유: {customer.supersede_reason || "부적합 판정"}
+              {customer.supersede_at && ` · ${fmtDate(customer.supersede_at)}`}
+            </p>
+            {successor && (
+              <button
+                onClick={() => router.push(`/customers/${successor.id}`)}
+                className="mt-2 inline-flex items-center gap-1 text-xs text-blue-700 hover:underline"
+              >
+                승계자: {successor.name} (예비에서 이동) <ChevronRight className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 예비에서 올라온 고객
+  if (customer.succeeded_from && predecessor) {
+    return (
+      <div className="card border-2 border-emerald-200 bg-emerald-50">
+        <div className="flex items-start gap-3">
+          <ArrowUpCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 text-sm">
+            <p className="font-semibold text-emerald-900">
+              예비 승계로 당첨 자리에 이동됨
+            </p>
+            <p className="text-xs text-emerald-800 mt-1">
+              원 당첨자: {predecessor.name}
+              {predecessor.supersede_reason && ` (${predecessor.supersede_reason})`}
+              {customer.supersede_at && ` · ${fmtDate(customer.supersede_at)}`}
+            </p>
+            <button
+              onClick={() => router.push(`/customers/${predecessor.id}`)}
+              className="mt-2 inline-flex items-center gap-1 text-xs text-emerald-700 hover:underline"
+            >
+              원 당첨자 상세 <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 당첨자이고 부적합 판정 → 승계 후보 제시
+  if (!customer.is_standby && verdict === "ineligible") {
+    const openPicker = () => {
+      const all = localCustomers.listByAnnouncement(customer.announcement_id);
+      const cands = findStandbyCandidates(customer, all);
+      setCandidates(cands);
+      setSelectedId(cands[0]?.customer.id ?? null);
+      setPickerOpen(true);
+    };
+
+    const executePromotion = () => {
+      if (!selectedId) return;
+      const standby = candidates.find((c) => c.customer.id === selectedId)?.customer;
+      if (!standby) return;
+      if (!confirm(`${standby.name}(예비 ${standby.standby_rank}순위)을(를) 승계하시겠습니까?\n${customer.name}은(는) 포기 상태로 전환됩니다.`)) return;
+
+      setPromoting(true);
+      try {
+        const { winnerPatch, standbyPatch } = buildPromotionUpdates(customer, standby, reason);
+        const updatedWinner = localCustomers.update(customer.id, winnerPatch);
+        localCustomers.update(standby.id, standbyPatch);
+        if (updatedWinner) onUpdate(updatedWinner);
+        setPickerOpen(false);
+        alert(`${standby.name}이(가) 승계됐습니다. 해당 고객 페이지로 이동합니다.`);
+        router.push(`/customers/${standby.id}`);
+      } finally {
+        setPromoting(false);
+      }
+    };
+
+    return (
+      <>
+        <div className="card border-2 border-amber-300 bg-amber-50">
+          <div className="flex items-start gap-3">
+            <UserX className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold text-amber-900">예비 승계 가능</p>
+              <p className="text-xs text-amber-800 mt-1">
+                이 당첨자가 부적합 판정을 받아, 같은 주택형({customer.unit_type || "미지정"})의
+                예비 중에서 자리를 이어받을 후보를 선정할 수 있습니다.
+              </p>
+              <button
+                onClick={openPicker}
+                className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-700"
+              >
+                <ArrowUpCircle className="w-4 h-4" /> 예비에서 승계 후보 보기
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {pickerOpen && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="p-5 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+                <div>
+                  <h2 className="text-lg font-semibold">예비 승계 후보</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    주택형 {customer.unit_type || "미지정"} · 총 {candidates.length}명 · 순위 오름차순
+                  </p>
+                </div>
+                <button
+                  onClick={() => setPickerOpen(false)}
+                  className="p-1 hover:bg-gray-100 rounded-full"
+                >
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-5">
+                {candidates.length === 0 ? (
+                  <div className="p-8 text-center text-sm text-gray-400 border border-dashed border-gray-300 rounded-lg">
+                    같은 주택형의 가능한 예비 후보가 없습니다.
+                    <br />
+                    <span className="text-xs">
+                      "당첨자 파일 일괄 분석"에서 예비입주자 명단이 포함된 파일을 업로드했는지 확인하세요.
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-4">
+                      <label className="text-xs text-gray-500 block mb-1">승계 사유</label>
+                      <input
+                        type="text"
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder="예: 부적합 판정, 계약 포기 등"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                      />
+                    </div>
+
+                    <ul className="space-y-2">
+                      {candidates.map((c) => {
+                        const picked = selectedId === c.customer.id;
+                        return (
+                          <li key={c.customer.id}>
+                            <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                              picked
+                                ? "border-amber-400 bg-amber-50"
+                                : "border-gray-200 hover:border-gray-300"
+                            }`}>
+                              <input
+                                type="radio"
+                                checked={picked}
+                                onChange={() => setSelectedId(c.customer.id)}
+                                className="accent-amber-600 w-4 h-4"
+                              />
+                              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex-shrink-0">
+                                {c.rankLabel}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium text-gray-900">{c.customer.name}</span>
+                                  {c.customer.supply_type && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">
+                                      {c.customer.supply_type}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-gray-500 mt-0.5 font-mono">
+                                  {c.customer.rrn_front && (
+                                    <span>
+                                      {c.customer.rrn_front}-{c.customer.rrn_back?.slice(0, 1) || "•"}••••••
+                                    </span>
+                                  )}
+                                  {c.customer.phone && <span className="ml-2">{c.customer.phone}</span>}
+                                </p>
+                              </div>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                )}
+              </div>
+
+              <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-2 flex-shrink-0">
+                <button
+                  onClick={() => setPickerOpen(false)}
+                  className="btn-secondary text-sm"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={executePromotion}
+                  disabled={!selectedId || promoting}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {promoting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> 승계 중...</>
+                  ) : (
+                    <><ArrowUpCircle className="w-4 h-4" /> 승계 실행</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  return null;
 }
 
 export default function CustomerDetailPage() {

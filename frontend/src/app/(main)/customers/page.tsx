@@ -33,6 +33,8 @@ interface Customer {
   verification_verdict?: "eligible" | "ineligible" | "pending";
   is_standby?: boolean;
   standby_rank?: string;
+  superseded?: boolean;
+  succeeded_from?: number;
 }
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
@@ -186,6 +188,8 @@ function CustomersPageInner() {
           verification_verdict: c.verification_verdict,
           is_standby: c.is_standby,
           standby_rank: c.standby_rank,
+          superseded: c.superseded,
+          succeeded_from: c.succeeded_from,
         })));
       } else {
         console.error("[customers] load failed", err);
@@ -1036,12 +1040,22 @@ function CustomersPageInner() {
                       />
                     </td>
                   )}
-                  <td className="px-4 py-3 font-medium text-gray-900">
+                  <td className={`px-4 py-3 font-medium ${c.superseded ? "text-gray-400 line-through" : "text-gray-900"}`}>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span>{c.name}</span>
                       {c.is_standby && (
                         <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">
                           예비 {c.standby_rank || ""}
+                        </span>
+                      )}
+                      {c.superseded && (
+                        <span className="text-[9px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">
+                          포기
+                        </span>
+                      )}
+                      {c.succeeded_from && (
+                        <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">
+                          승계 완료
                         </span>
                       )}
                     </div>

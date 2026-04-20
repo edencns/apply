@@ -149,6 +149,12 @@ export interface LocalCustomer {
   // ── 당첨자 / 예비 구분 ──
   is_standby?: boolean;      // true면 예비입주자 (빈자리 대기)
   standby_rank?: string;     // 예비 순위 (1,2,3...)
+  // ── 예비 승계 체인 ──
+  superseded?: boolean;          // true면 부적합/포기 후 다른 사람이 자리 승계 → 비활성
+  superseded_by?: number;        // 이 자리를 승계한 고객 ID
+  succeeded_from?: number;       // (예비→당첨 승계된 경우) 원래 당첨자 ID
+  supersede_reason?: string;     // 포기·부적합 사유 요약
+  supersede_at?: string;         // 승계 시각 ISO
   // ── 서류 검수 상태 ──
   documents_submitted?: Record<string, boolean>;
   verification_verdict?: "eligible" | "ineligible" | "pending";
@@ -212,6 +218,11 @@ export const localCustomers = {
       unit_area: input.unit_area,
       is_standby: input.is_standby,
       standby_rank: input.standby_rank,
+      superseded: input.superseded,
+      superseded_by: input.superseded_by,
+      succeeded_from: input.succeeded_from,
+      supersede_reason: input.supersede_reason,
+      supersede_at: input.supersede_at,
       documents_submitted: input.documents_submitted,
       verification_verdict: input.verification_verdict,
       verification_score: input.verification_score,
