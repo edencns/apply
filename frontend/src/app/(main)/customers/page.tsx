@@ -570,6 +570,28 @@ function CustomersPageInner() {
             }}
           />
           <button
+            onClick={() => excelInputRef.current?.click()}
+            disabled={excelUploading || !selectedAnn}
+            className="btn-secondary flex items-center gap-2 disabled:opacity-50"
+            title="엑셀 파일 업로드 → 고객 일괄 등록"
+          >
+            {excelUploading ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> 등록 중…</>
+            ) : (
+              <><FileSpreadsheet className="w-4 h-4" /> 엑셀 업로드</>
+            )}
+          </button>
+          <input
+            ref={excelInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleExcelUpload(f);
+            }}
+          />
+          <button
             onClick={() => { setFormError(null); setShowForm(true); }}
             disabled={!selectedAnn}
             className="btn-primary flex items-center gap-2 disabled:opacity-50"
