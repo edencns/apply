@@ -102,24 +102,24 @@ export default function DashboardPage() {
 
       {/* 빠른 메뉴 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Link href="/customers" className="card hover:shadow-md transition-shadow cursor-pointer group">
+        <Link href="/workflow/registration" className="card hover:shadow-md transition-shadow cursor-pointer group">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
               <Users className="w-5 h-5 text-blue-600" />
             </div>
-            <span className="font-semibold text-gray-800 group-hover:text-blue-600">고객 관리</span>
+            <span className="font-semibold text-gray-800 group-hover:text-blue-600">당첨자 등록</span>
           </div>
-          <p className="text-sm text-gray-500">고객 등록 및 청약 정보 관리</p>
+          <p className="text-sm text-gray-500">전산추첨결과·당첨자현황 PDF 업로드로 등록</p>
         </Link>
 
-        <Link href="/documents" className="card hover:shadow-md transition-shadow cursor-pointer group">
+        <Link href="/workflow/documents" className="card hover:shadow-md transition-shadow cursor-pointer group">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
               <FileText className="w-5 h-5 text-green-600" />
             </div>
-            <span className="font-semibold text-gray-800 group-hover:text-green-600">서류 검수</span>
+            <span className="font-semibold text-gray-800 group-hover:text-green-600">서류·판정</span>
           </div>
-          <p className="text-sm text-gray-500">OCR 서류 자동 분석 및 적격 판정</p>
+          <p className="text-sm text-gray-500">공급유형별 서류 체크 + 적합 판정</p>
         </Link>
 
         <Link href="/contracts/walk-in" className="card hover:shadow-md transition-shadow cursor-pointer group">

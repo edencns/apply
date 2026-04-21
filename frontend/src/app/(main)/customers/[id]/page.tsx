@@ -160,7 +160,7 @@ function CustomerDetailInner() {
   if (error || !customer || !finalVerdict) {
     return (
       <div className="p-6 max-w-6xl mx-auto">
-        <button onClick={() => router.push("/customers")} className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1 mb-4">
+        <button onClick={() => router.push("/workflow/registration")} className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1 mb-4">
           <ArrowLeft className="w-4 h-4" /> 목록으로 돌아가기
         </button>
         <div className="card text-center py-16">
@@ -178,8 +178,8 @@ function CustomerDetailInner() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       {/* Top header */}
-      <a href="/customers" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-3">
-        <ArrowLeft className="w-3.5 h-3.5" /> 고객 목록
+      <a href="/workflow/registration" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-3">
+        <ArrowLeft className="w-3.5 h-3.5" /> 당첨자 목록
       </a>
 
       <div className="flex items-start justify-between mb-5 flex-wrap gap-3">
@@ -322,7 +322,7 @@ function RegistrationStage({
   const handleDelete = () => {
     if (!confirm(`${customer.name} 고객을 삭제하시겠습니까?`)) return;
     localCustomers.remove(customer.id);
-    router.push("/customers");
+    router.push("/workflow/registration");
   };
 
   return (

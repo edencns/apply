@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Building2, LayoutDashboard, Users, FileText,
-  ClipboardCheck, BookOpen, LogOut, PenLine, GitCompareArrows,
+  BookOpen, LogOut, PenLine, GitCompareArrows,
   UserCheck, Home, Banknote,
 } from "lucide-react";
 
@@ -15,26 +15,25 @@ interface NavItem {
 }
 
 const topItems: NavItem[] = [
-  { href: "/dashboard",           icon: LayoutDashboard,   label: "대시보드" },
-  { href: "/announcements",       icon: BookOpen,          label: "모집공고" },
-  { href: "/announcements/compare", icon: GitCompareArrows, label: "공고 비교" },
+  { href: "/dashboard",             icon: LayoutDashboard,   label: "대시보드" },
+  { href: "/announcements",         icon: BookOpen,          label: "모집공고" },
+  { href: "/announcements/compare", icon: GitCompareArrows,  label: "공고 비교" },
 ];
 
 // 청약 당첨자 서류 검수 5단계 워크플로우
 const workflowItems: NavItem[] = [
-  { href: "/customers",           icon: UserCheck,     label: "① 당첨자 등록" },
-  { href: "/workflow/household",  icon: Users,         label: "② 세대원 확인" },
-  { href: "/workflow/property",   icon: Home,          label: "③ 주택소유" },
-  { href: "/workflow/savings",    icon: Banknote,      label: "④ 청약통장" },
-  { href: "/workflow/documents",  icon: FileText,      label: "⑤ 서류·판정" },
+  { href: "/workflow/registration", icon: UserCheck, label: "당첨자 등록" },
+  { href: "/workflow/household",    icon: Users,     label: "세대원 확인" },
+  { href: "/workflow/property",     icon: Home,      label: "주택소유" },
+  { href: "/workflow/savings",      icon: Banknote,  label: "청약통장" },
+  { href: "/workflow/documents",    icon: FileText,  label: "서류·판정" },
 ];
 
 const bottomItems: NavItem[] = [
-  { href: "/winners",            icon: ClipboardCheck, label: "당첨자 관리" },
-  { href: "/contracts/walk-in",  icon: PenLine,        label: "방문 계약" },
+  { href: "/contracts/walk-in", icon: PenLine, label: "방문 계약" },
 ];
 
-function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
+function NavLink({ item, isActive, stepNumber }: { item: NavItem; isActive: boolean; stepNumber?: number }) {
   return (
     <Link
       href={item.href}
@@ -44,7 +43,15 @@ function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
           : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
         }`}
     >
-      <item.icon className="w-4 h-4 flex-shrink-0" />
+      {stepNumber !== undefined ? (
+        <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold flex-shrink-0 ${
+          isActive ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-600"
+        }`}>
+          {stepNumber}
+        </span>
+      ) : (
+        <item.icon className="w-4 h-4 flex-shrink-0" />
+      )}
       {item.label}
     </Link>
   );
@@ -61,11 +68,6 @@ export default function Sidebar() {
 
   const userName = typeof window !== "undefined" ? localStorage.getItem("user_name") : "";
 
-  const isWorkflowActive = (href: string) => {
-    // /customers/[id] 같은 서브 경로는 ①에서는 활성 표시하지 않음 (상세 진입시 혼동 방지)
-    if (href === "/customers") return pathname === "/customers";
-    return pathname === href || pathname.startsWith(href + "/");
-  };
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   return (
@@ -86,18 +88,23 @@ export default function Sidebar() {
           <NavLink key={item.href} item={item} isActive={isActive(item.href)} />
         ))}
 
-        {/* 워크플로우 구분선 + 섹션 타이틀 */}
-        <div className="pt-3 pb-1 px-3">
+        {/* 워크플로우 섹션 */}
+        <div className="pt-4 pb-1 px-3">
           <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
             서류 검수 단계
           </div>
         </div>
-        {workflowItems.map((item) => (
-          <NavLink key={item.href} item={item} isActive={isWorkflowActive(item.href)} />
+        {workflowItems.map((item, i) => (
+          <NavLink
+            key={item.href}
+            item={item}
+            isActive={isActive(item.href)}
+            stepNumber={i + 1}
+          />
         ))}
 
         {/* 기타 */}
-        <div className="pt-3 pb-1 px-3">
+        <div className="pt-4 pb-1 px-3">
           <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
             기타
           </div>

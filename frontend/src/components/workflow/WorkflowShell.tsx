@@ -41,7 +41,7 @@ export const WORKFLOW_STEPS: WorkflowStep[] = [
     title: "당첨자 등록",
     description: "전산추첨결과·당첨자현황 PDF·예비입주자 명단 등 당첨자 원본 파일을 올려 고객으로 등록합니다.",
     fileHint: "전산추첨결과.xlsx, 당첨자현황.pdf, 인포용 명단 등",
-    href: "/customers",
+    href: "/workflow/registration",
   },
   {
     step: 2,
