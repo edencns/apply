@@ -868,33 +868,21 @@ function CustomersPageInner() {
               <th className="text-left px-4 py-3 font-medium text-ink-2">연락처</th>
               <th className="text-left px-4 py-3 font-medium text-ink-2">주택형</th>
               <th className="text-left px-4 py-3 font-medium text-ink-2">공급 유형</th>
-              <th className="text-left px-4 py-3 font-medium text-ink-2">청약 가점</th>
-              <th className="text-left px-4 py-3 font-medium text-ink-2">서류 검수</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border-soft">
             {!selectedAnn ? (
-              <tr><td colSpan={selectMode ? 8 : 7} className="text-center py-8 text-ink-4">먼저 공고를 선택해주세요</td></tr>
+              <tr><td colSpan={selectMode ? 6 : 5} className="text-center py-8 text-ink-4">먼저 공고를 선택해주세요</td></tr>
             ) : loading ? (
-              <tr><td colSpan={selectMode ? 8 : 7} className="text-center py-8 text-ink-4">불러오는 중...</td></tr>
+              <tr><td colSpan={selectMode ? 6 : 5} className="text-center py-8 text-ink-4">불러오는 중...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={selectMode ? 8 : 7} className="text-center py-8 text-ink-4">이 공고에 등록된 고객이 없습니다</td></tr>
+              <tr><td colSpan={selectMode ? 6 : 5} className="text-center py-8 text-ink-4">이 공고에 등록된 고객이 없습니다</td></tr>
             ) : filtered.map((c) => {
               const displaySupply = c.supply_type || (c.special_types && c.special_types.length > 0 ? c.special_types[0] : "일반공급");
               const supplyCls = displaySupply === "일반공급"
                 ? "bg-indigo-50 text-indigo-700"
                 : "bg-purple-50 text-purple-700";
-              const vCls = c.verification_verdict === "eligible"
-                ? "bg-green-100 text-green-700"
-                : c.verification_verdict === "ineligible"
-                  ? "bg-red-100 text-red-700"
-                  : "bg-surface2 text-ink-3";
-              const vLabel = c.verification_verdict === "eligible"
-                ? "적합"
-                : c.verification_verdict === "ineligible"
-                  ? "부적합"
-                  : "미검수";
               const isChecked = selectedIds.has(c.id);
               return (
                 <tr
@@ -968,24 +956,8 @@ function CustomersPageInner() {
                   <td className="px-4 py-3">
                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${supplyCls}`}>{displaySupply}</span>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className="font-semibold text-accent">{c.total_score}점</span>
-                    <span className="text-ink-4 text-xs ml-1">/ 84점</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${vCls}`}>
-                      {vLabel}
-                    </span>
-                  </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center gap-3 justify-end">
-                      <a
-                        href={`/customers/${c.id}?stage=5`}
-                        className="text-emerald-700 hover:underline flex items-center gap-0.5 text-xs font-medium"
-                        title="필요 서류 체크리스트 + 적합 판정"
-                      >
-                        서류등록 <ChevronRight className="w-3 h-3" />
-                      </a>
                       <a
                         href={`/customers/${c.id}`}
                         className="text-accent hover:underline flex items-center gap-0.5 text-xs"
