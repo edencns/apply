@@ -176,6 +176,8 @@ export interface LocalCustomer {
     transferredDate?: string;
     usage?: string;
   }>;
+  /** 주택소유 전산검색 파일 업로드 시각 — 파일에 레코드 없으면 무주택으로 간주 */
+  property_checked_at?: string;
   savings_priority?: {
     verified: boolean;
     bankCode?: string;

@@ -80,7 +80,19 @@ export function evaluateProperty(
   announcement?: LocalAnnouncement | null,
 ): StageVerdict {
   const properties = customer.properties || [];
-  if (properties.length === 0) return missing();
+  // 주택소유 전산검색 파일이 업로드된 적 있으면, 레코드 없는 사람은 "무주택"으로 확정
+  if (properties.length === 0) {
+    if (customer.property_checked_at) {
+      return {
+        ok: true,
+        reasons: [],
+        warnings: [],
+        missing: false,
+        context: { count: 0, regulation: "무주택 확정", verified: true },
+      };
+    }
+    return missing();
+  }
 
   // 현재 보유 + 주거용만 카운트
   const current = properties.filter(

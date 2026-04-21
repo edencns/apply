@@ -27,7 +27,10 @@ const columns: StageColumn[] = [
     header: "현재 보유",
     render: (c) => {
       const props = c.properties || [];
-      if (props.length === 0) return <span className="text-xs text-gray-400">미조회</span>;
+      if (props.length === 0) {
+        if (c.property_checked_at) return <span className="text-xs text-green-700">보유 없음</span>;
+        return <span className="text-xs text-gray-400">미조회</span>;
+      }
       const current = props.filter((p) => !p.transferredDate && isResidentialUse(p.usage));
       if (current.length === 0) return <span className="text-xs text-green-700">무주택</span>;
       return (
@@ -155,6 +158,15 @@ export default function PropertyStepPage() {
         }
       });
 
+      // 이 공고의 모든 (미승계) 고객에게 "조회 완료" 마킹 — 파일에 없는 사람 = 무주택 확정
+      const checkedAt = new Date().toISOString();
+      for (const c of customers) {
+        if (c.superseded) continue;
+        try {
+          localCustomers.update(c.id, { property_checked_at: checkedAt });
+        } catch {}
+      }
+
       let attached = 0;
       byCustomer.forEach((props, cid) => {
         try {
@@ -182,23 +194,6 @@ export default function PropertyStepPage() {
           errors.push(`고객 #${cid}: 저장 실패 (${e?.message || ""})`);
         }
       });
-
-      // 보유 레코드 0건인 당첨자는 "무주택 확인됨" 상태로 빈 배열 저장
-      // → evaluateProperty가 missing 대신 무주택 적격으로 판정하도록
-      let zeroMarked = 0;
-      for (const c of customers) {
-        if (byCustomer.has(c.id)) continue;
-        // 본인 + 세대원 주민번호 리스트 전원이 소유 조회에 없었음
-        // 업로드된 파일에 그들의 RRN이 아예 없었다면 진짜로 레코드 0건 (무주택)
-        if (!c.properties || c.properties.length === 0) {
-          try {
-            // 무주택을 명시적으로 저장: 빈 배열을 [] 유지 → missing 계속됨
-            // 대신 placeholder 1건(ownerRrn=self, address="무주택 확인")을 넣지 않고,
-            // 사용자에게는 업로드 결과 배너로만 알림.
-            zeroMarked++;
-          } catch {}
-        }
-      }
 
       setUploadResult({
         attached,
