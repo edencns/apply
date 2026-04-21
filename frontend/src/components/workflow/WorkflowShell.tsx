@@ -140,46 +140,46 @@ export default function WorkflowShell({ step, selected, onSelect, children }: Pr
   const totalSteps = WORKFLOW_STEPS.length;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="px-7 py-6 max-w-6xl mx-auto">
       {/* 단계 헤더 */}
-      <div className="mb-5">
-        <div className="flex items-center gap-2 text-xs text-gray-400 mb-1">
-          <span>서류 검수 단계</span>
-          <ChevronRight className="w-3 h-3" />
-          <span>{step.step} / {totalSteps}</span>
-        </div>
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white text-sm font-bold">
-                {step.step}
-              </span>
+      <div className="mb-4 flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div className="flex items-center gap-1.5 text-[11px] text-ink-3 mb-1">
+            <span>서류 검수 단계</span>
+            <ChevronRight className="w-3 h-3 text-ink-4" />
+            <span className="text-ink-2 font-medium tnum">{step.step} / {totalSteps}</span>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex items-center justify-center w-[26px] h-[26px] rounded-full bg-accent text-white text-xs font-bold tnum">
+              {step.step}
+            </span>
+            <h1 className="text-xl font-bold text-ink tracking-[-0.3px]">
               {step.title}
             </h1>
-            <p className="text-sm text-gray-500 mt-1 max-w-2xl">{step.description}</p>
           </div>
+          <p className="text-xs text-ink-3 mt-1 max-w-xl">{step.description}</p>
+        </div>
 
-          {/* 이전/다음 단계 */}
-          <div className="flex items-center gap-2">
-            {step.prev && (
-              <Link
-                href={step.prev}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-                이전 단계
-              </Link>
-            )}
-            {step.next && (
-              <Link
-                href={step.next}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors"
-              >
-                다음 단계
-                <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
-            )}
-          </div>
+        {/* 이전/다음 단계 */}
+        <div className="flex items-center gap-1.5">
+          {step.prev && (
+            <Link
+              href={step.prev}
+              className="btn-secondary inline-flex items-center gap-1"
+            >
+              <ChevronLeft className="w-3 h-3" />
+              이전
+            </Link>
+          )}
+          {step.next && (
+            <Link
+              href={step.next}
+              className="btn-accent inline-flex items-center gap-1"
+            >
+              다음 단계
+              <ChevronRight className="w-3 h-3" />
+            </Link>
+          )}
         </div>
       </div>
 
@@ -193,8 +193,8 @@ export default function WorkflowShell({ step, selected, onSelect, children }: Pr
 
       {/* 본문 */}
       {!selected ? (
-        <div className="card text-center py-16 text-gray-400">
-          <p className="text-sm">공고를 먼저 선택해 주세요</p>
+        <div className="card text-center py-16 text-ink-4">
+          <p className="text-xs">공고를 먼저 선택해 주세요</p>
         </div>
       ) : (
         children
@@ -205,10 +205,10 @@ export default function WorkflowShell({ step, selected, onSelect, children }: Pr
         <div className="mt-8 flex justify-end">
           <Link
             href={step.next}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm"
+            className="btn-accent inline-flex items-center gap-1.5 !px-4 !py-2 !text-[13px]"
           >
             다음 단계로 진행
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-3.5 h-3.5" />
           </Link>
         </div>
       )}

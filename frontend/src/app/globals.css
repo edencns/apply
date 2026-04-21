@@ -4,33 +4,56 @@
 
 @layer base {
   body {
-    @apply text-gray-900;
+    @apply text-ink bg-bg font-sans;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
   }
 }
 
 @layer components {
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;
+    @apply bg-surface rounded-lg border border-border p-4;
   }
   .btn-primary {
-    @apply bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50;
+    @apply bg-ink text-white font-medium px-3 py-1.5 rounded-md text-xs hover:bg-ink-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
   }
   .btn-secondary {
-    @apply bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-4 py-2 rounded-lg transition-colors;
+    @apply bg-surface border border-border text-ink-2 font-medium px-3 py-1.5 rounded-md text-xs hover:bg-surface2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-accent {
+    @apply bg-accent text-white font-medium px-3 py-1.5 rounded-md text-xs hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed;
   }
   .btn-danger {
-    @apply bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg transition-colors;
+    @apply bg-fail text-white font-medium px-3 py-1.5 rounded-md text-xs hover:opacity-90 transition-opacity disabled:opacity-40;
   }
-  .badge-eligible {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800;
+
+  .badge-ok {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-ok-soft text-ok;
   }
-  .badge-ineligible {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800;
+  .badge-warn {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-warn-soft text-warn;
   }
-  .badge-review {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800;
+  .badge-fail {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-fail-soft text-fail;
   }
   .badge-pending {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600;
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-surface2 text-ink-3;
+  }
+
+  /* 레거시 호환 — 기존 코드가 badge-eligible 등을 쓰면 그대로 매핑 */
+  .badge-eligible {
+    @apply badge-ok;
+  }
+  .badge-ineligible {
+    @apply badge-fail;
+  }
+  .badge-review {
+    @apply badge-warn;
+  }
+
+  /* 상태 pill 좌측 도트 */
+  .status-dot {
+    @apply w-1 h-1 rounded-sm;
   }
 }
