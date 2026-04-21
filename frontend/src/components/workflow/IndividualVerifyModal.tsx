@@ -39,13 +39,13 @@ export default function IndividualVerifyModal({
   const filtered = useMemo(() => {
     const q = search.trim();
     const base = customers.filter((c) => !c.superseded);
-    if (!q) return base.slice(0, 50);
+    if (!q) return base;
     return base.filter(
       (c) =>
         c.name.includes(q) ||
         (c.phone || "").includes(q) ||
         (c.rrn_front || "").includes(q),
-    ).slice(0, 50);
+    );
   }, [customers, search]);
 
   const selected = customers.find((c) => c.id === selectedId) || null;
@@ -86,8 +86,11 @@ export default function IndividualVerifyModal({
 
           {/* 고객 선택 */}
           <div className="mb-4">
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-              1. 고객 선택
+            <label className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1.5">
+              <span>1. 고객 선택</span>
+              <span className="text-[11px] font-normal text-gray-500">
+                {filtered.length} / {customers.filter((c) => !c.superseded).length}명
+              </span>
             </label>
             <div className="relative mb-2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -98,7 +101,7 @@ export default function IndividualVerifyModal({
                 className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <div className="border border-gray-200 rounded-lg max-h-60 overflow-auto divide-y divide-gray-50">
+            <div className="border border-gray-200 rounded-lg max-h-80 overflow-auto divide-y divide-gray-50">
               {filtered.length === 0 ? (
                 <div className="text-center py-8 text-xs text-gray-400">검색 결과 없음</div>
               ) : (
