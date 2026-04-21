@@ -11,7 +11,8 @@ import {
 } from "@/lib/local-store";
 import { parseHouseholdMembers, ensureXlsx, type HouseholdMemberRecord } from "@/lib/winner-ingest";
 import { toIdentity, sameIdentity } from "@/lib/identity";
-import { Users, AlertTriangle, Upload, Loader2, CheckCircle2 } from "lucide-react";
+import IndividualVerifyModal from "@/components/workflow/IndividualVerifyModal";
+import { Users, AlertTriangle, Upload, Loader2, CheckCircle2, UserCheck } from "lucide-react";
 
 const step = WORKFLOW_STEPS[1]; // household
 
@@ -81,6 +82,7 @@ export default function HouseholdStepPage() {
   const [verifyResult, setVerifyResult] = useState<
     { ok: number; fail: number; missing: number } | null
   >(null);
+  const [indivOpen, setIndivOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const evaluate = (c: LocalCustomer) => evaluateHousehold(c);
@@ -175,6 +177,56 @@ export default function HouseholdStepPage() {
     }
   };
 
+  /** 개별 고객 파일 업로드 → 그 사람의 세대원만 저장 */
+  const handleIndividualUpload = async (c: LocalCustomer, file: File) => {
+    try {
+      const XLSX = await ensureXlsx();
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const result = parseHouseholdMembers(wb as any, file.name);
+      const records = result.householdMembers;
+      if (records.length === 0) {
+        alert("세대원내역을 찾지 못했습니다.");
+        return;
+      }
+
+      // 고객과 매칭되는 요청자 행만 선택 (RRN 13자리 우선, 없으면 identity)
+      const cIdent = toIdentity(c as any);
+      const mine = records.filter((r) => {
+        if (c.rrn_front && c.rrn_back && /^\d{13}$/.test(c.rrn_front + c.rrn_back)) {
+          if (r.requesterRrn === c.rrn_front + c.rrn_back) return true;
+        }
+        return sameIdentity(
+          toIdentity({ name: r.requesterName, rrn: r.requesterRrn }),
+          cIdent,
+        );
+      });
+
+      if (mine.length === 0) {
+        // 파일에 이 사람 기록이 없으면, 파일 내용 전체를 이 사람의 세대원으로 저장
+        // (단일 사용자용 세대원내역 파일이라 요청자 컬럼이 없거나 본인 명의 파일인 경우)
+        const members = records.map((m) => ({
+          name: m.memberName || m.requesterName,
+          rrn: m.memberRrn || undefined,
+          errorCode: m.errorCode,
+        }));
+        localCustomers.update(c.id, { household_members: members });
+        alert(`${c.name}: 파일 내 세대원 ${members.length}명 저장 (요청자 매칭 없음)`);
+      } else {
+        const members = mine.map((m) => ({
+          name: m.memberName || m.requesterName,
+          rrn: m.memberRrn || undefined,
+          errorCode: m.errorCode,
+        }));
+        localCustomers.update(c.id, { household_members: members });
+        alert(`${c.name}: 세대원 ${members.length}명 저장됨`);
+      }
+      setReloadKey((k) => k + 1);
+    } catch (err: any) {
+      alert(err?.message || "파일 파싱 실패");
+    }
+  };
+
   /** 현재 공고 고객 전원 재검증 → 요약 표시 */
   const handleVerify = () => {
     if (!selected) return;
@@ -227,7 +279,24 @@ export default function HouseholdStepPage() {
             >
               <CheckCircle2 className="w-4 h-4" /> 검증
             </button>
+            <button
+              onClick={() => setIndivOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 shadow-sm whitespace-nowrap transition-colors"
+              title="고객 한 명을 지정해 개별 파일 업로드"
+            >
+              <UserCheck className="w-4 h-4" /> 추가 검증
+            </button>
           </div>
+
+          <IndividualVerifyModal
+            open={indivOpen}
+            onClose={() => setIndivOpen(false)}
+            customers={localCustomers.listByAnnouncement(selected.id)}
+            title="세대원 개별 검증"
+            fileHint="한 명의 당첨자 세대원내역 파일만 올려 해당 고객에게 붙입니다."
+            accept=".xlsx,.xls,.xlsm,.csv"
+            onApply={handleIndividualUpload}
+          />
 
           {/* 업로드 결과 배너 */}
           {uploadResult && (

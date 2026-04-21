@@ -10,7 +10,8 @@ import {
   type LocalCustomer,
 } from "@/lib/local-store";
 import { parsePropertyOwnership, ensureXlsx, type PropertyOwnershipRecord } from "@/lib/winner-ingest";
-import { Home, AlertTriangle, Upload, Loader2, CheckCircle2 } from "lucide-react";
+import IndividualVerifyModal from "@/components/workflow/IndividualVerifyModal";
+import { Home, AlertTriangle, Upload, Loader2, CheckCircle2, UserCheck } from "lucide-react";
 
 const step = WORKFLOW_STEPS[2]; // property
 
@@ -88,6 +89,7 @@ export default function PropertyStepPage() {
   const [verifyResult, setVerifyResult] = useState<
     { ok: number; fail: number; warn: number; missing: number } | null
   >(null);
+  const [indivOpen, setIndivOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const evaluate = (c: LocalCustomer, a: LocalAnnouncement) => evaluateProperty(c, a);
@@ -210,6 +212,56 @@ export default function PropertyStepPage() {
     }
   };
 
+  /** 개별 고객 파일 업로드 → 그 사람(+세대원)의 소유 기록만 저장 */
+  const handleIndividualUpload = async (c: LocalCustomer, file: File) => {
+    try {
+      const XLSX = await ensureXlsx();
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const result = parsePropertyOwnership(wb as any, file.name);
+      const records = result.properties;
+
+      // 이 고객(+세대원)의 RRN과 일치하는 레코드만 선별
+      const ownRrn = c.rrn_front && c.rrn_back ? c.rrn_front + c.rrn_back : "";
+      const memberRrns = (c.household_members || [])
+        .map((m) => m.rrn || "")
+        .filter((r) => /^\d{13}$/.test(r));
+      const targetRrns = new Set<string>([ownRrn, ...memberRrns].filter(Boolean));
+
+      // 파일에 이 사람 RRN이 전혀 없으면 "파일 전체 = 이 사람 것"으로 간주 (본인용 파일)
+      let mine = records.filter((r) => targetRrns.has(r.ownerRrn));
+      if (mine.length === 0 && records.length > 0) {
+        mine = records;
+      }
+
+      // 중복 제거
+      const seen = new Set<string>();
+      const uniq = mine.filter((p) => {
+        const k = `${p.ownerRrn}|${p.address}|${p.acquiredDate || ""}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+
+      localCustomers.update(c.id, {
+        properties: uniq.map((p) => ({
+          ownerRrn: p.ownerRrn,
+          ownerName: p.ownerName,
+          address: p.address,
+          areaM2: p.areaM2,
+          acquiredDate: p.acquiredDate,
+          transferredDate: p.transferredDate,
+          usage: p.usage,
+        })),
+        property_checked_at: new Date().toISOString(),
+      });
+      alert(`${c.name}: 소유 레코드 ${uniq.length}건 저장됨`);
+      setReloadKey((k) => k + 1);
+    } catch (err: any) {
+      alert(err?.message || "파일 파싱 실패");
+    }
+  };
+
   /** 현재 공고 고객 전원 재검증 → 요약 */
   const handleVerify = () => {
     if (!selected) return;
@@ -272,7 +324,24 @@ export default function PropertyStepPage() {
             >
               <CheckCircle2 className="w-4 h-4" /> 검증
             </button>
+            <button
+              onClick={() => setIndivOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 shadow-sm whitespace-nowrap transition-colors"
+              title="고객 한 명을 지정해 개별 파일 업로드"
+            >
+              <UserCheck className="w-4 h-4" /> 추가 검증
+            </button>
           </div>
+
+          <IndividualVerifyModal
+            open={indivOpen}
+            onClose={() => setIndivOpen(false)}
+            customers={localCustomers.listByAnnouncement(selected.id)}
+            title="주택소유 개별 검증"
+            fileHint="한 명의 주택소유 전산검색 결과 파일만 올려 해당 고객에게 붙입니다."
+            accept=".xlsx,.xls,.xlsm,.csv"
+            onApply={handleIndividualUpload}
+          />
 
           {/* 업로드 결과 */}
           {uploadResult && (
