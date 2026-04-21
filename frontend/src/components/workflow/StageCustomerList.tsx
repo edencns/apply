@@ -19,7 +19,7 @@ import {
 import { customersApi } from "@/lib/api";
 import type { StageVerdict } from "@/lib/verification-rules";
 import {
-  ChevronRight, Loader2, Search, CheckCircle2, AlertTriangle, XCircle, Circle,
+  ChevronRight, Loader2, Search,
 } from "lucide-react";
 
 export interface StageColumn {
@@ -38,20 +38,6 @@ interface Props {
   stageNumber: number;
 }
 
-function verdictIcon(v: StageVerdict) {
-  if (v.missing) return <Circle className="w-4 h-4 text-gray-300" />;
-  if (v.ok && v.warnings.length > 0) return <AlertTriangle className="w-4 h-4 text-amber-500" />;
-  if (v.ok) return <CheckCircle2 className="w-4 h-4 text-green-600" />;
-  return <XCircle className="w-4 h-4 text-red-600" />;
-}
-
-function verdictLabel(v: StageVerdict): string {
-  if (v.missing) return "미검증";
-  if (v.ok && v.warnings.length > 0) return "경고";
-  if (v.ok) return "통과";
-  return "부적합";
-}
-
 export default function StageCustomerList({ announcement, evaluate, columns, stageNumber }: Props) {
   const router = useRouter();
   const [customers, setCustomers] = useState<LocalCustomer[]>([]);
@@ -59,6 +45,8 @@ export default function StageCustomerList({ announcement, evaluate, columns, sta
   const [search, setSearch] = useState("");
   const [listTab, setListTab] = useState<"winners" | "standbys" | "all">("winners");
   const [statusFilter, setStatusFilter] = useState<"all" | "ok" | "fail" | "missing">("all");
+  const [unitFilter, setUnitFilter] = useState<string>("all");
+  const [supplyFilter, setSupplyFilter] = useState<string>("all");
 
   const loadCustomers = useCallback(async () => {
     setLoading(true);
@@ -94,12 +82,24 @@ export default function StageCustomerList({ announcement, evaluate, columns, sta
       .map((c) => ({ customer: c, verdict: evaluate(c, announcement) }));
   }, [customers, announcement, evaluate]);
 
+  // 주택형·공급유형 옵션 (현재 공고의 고객 데이터에서 추출)
+  const unitOptions = useMemo(
+    () => Array.from(new Set(customers.map((c) => c.unit_type).filter(Boolean) as string[])).sort(),
+    [customers],
+  );
+  const supplyOptions = useMemo(
+    () => Array.from(new Set(customers.map((c) => c.supply_type).filter(Boolean) as string[])).sort(),
+    [customers],
+  );
+
   const filtered = rows.filter(({ customer: c, verdict: v }) => {
     if (listTab === "winners" && c.is_standby) return false;
     if (listTab === "standbys" && !c.is_standby) return false;
     if (statusFilter === "ok" && !(v.ok && !v.missing)) return false;
     if (statusFilter === "fail" && (v.ok || v.missing)) return false;
     if (statusFilter === "missing" && !v.missing) return false;
+    if (unitFilter !== "all" && (c.unit_type || "") !== unitFilter) return false;
+    if (supplyFilter !== "all" && (c.supply_type || "") !== supplyFilter) return false;
     const q = search.trim();
     if (!q) return true;
     return c.name.includes(q) || (c.phone || "").includes(q);
@@ -175,6 +175,30 @@ export default function StageCustomerList({ announcement, evaluate, columns, sta
           })}
         </div>
 
+        {/* 주택형 필터 */}
+        <select
+          value={unitFilter}
+          onChange={(e) => setUnitFilter(e.target.value)}
+          className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">주택형 전체</option>
+          {unitOptions.map((u) => (
+            <option key={u} value={u}>{u}</option>
+          ))}
+        </select>
+
+        {/* 공급유형 필터 */}
+        <select
+          value={supplyFilter}
+          onChange={(e) => setSupplyFilter(e.target.value)}
+          className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">공급유형 전체</option>
+          {supplyOptions.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+
         {/* 검색 */}
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -192,7 +216,6 @@ export default function StageCustomerList({ announcement, evaluate, columns, sta
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              <th className="text-center px-3 py-3 w-10 font-medium text-gray-600">상태</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">성명</th>
               {columns.map((col) => (
                 <th key={col.key} className={`text-left px-4 py-3 font-medium text-gray-600 ${col.cls || ""}`}>
@@ -204,12 +227,12 @@ export default function StageCustomerList({ announcement, evaluate, columns, sta
           </thead>
           <tbody className="divide-y divide-gray-50">
             {loading ? (
-              <tr><td colSpan={columns.length + 3} className="text-center py-10 text-gray-400">
+              <tr><td colSpan={columns.length + 2} className="text-center py-10 text-gray-400">
                 <Loader2 className="w-5 h-5 mx-auto mb-2 animate-spin opacity-60" />
                 불러오는 중...
               </td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={columns.length + 3} className="text-center py-10 text-gray-400">
+              <tr><td colSpan={columns.length + 2} className="text-center py-10 text-gray-400">
                 조건에 맞는 고객이 없습니다
               </td></tr>
             ) : filtered.map(({ customer: c, verdict: v }) => {
@@ -221,11 +244,6 @@ export default function StageCustomerList({ announcement, evaluate, columns, sta
                     c.is_standby ? "bg-amber-50/30" : ""
                   }`}
                 >
-                  <td className="px-3 py-3 text-center">
-                    <div className="inline-flex items-center gap-1" title={verdictLabel(v)}>
-                      {verdictIcon(v)}
-                    </div>
-                  </td>
                   <td className="px-4 py-3 font-medium text-gray-900">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span>{c.name}</span>

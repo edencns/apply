@@ -89,6 +89,8 @@ function CustomersPageInner() {
 
   // 리스트 탭: 당첨자 / 예비 / 전체
   const [listTab, setListTab] = useState<"winners" | "standbys" | "all">("winners");
+  const [unitFilter, setUnitFilter] = useState<string>("all");
+  const [supplyFilter, setSupplyFilter] = useState<string>("all");
 
   // ─── 공고 목록 로딩 ────────────────────────────────────
   const loadAnnouncements = useCallback(async () => {
@@ -554,10 +556,19 @@ function CustomersPageInner() {
   const winnersCount = customers.filter((c) => !c.is_standby).length;
   const standbysCount = customers.filter((c) => c.is_standby).length;
 
+  const unitOptions = Array.from(
+    new Set(customers.map((c) => c.unit_type).filter(Boolean) as string[]),
+  ).sort();
+  const supplyOptions = Array.from(
+    new Set(customers.map((c) => c.supply_type).filter(Boolean) as string[]),
+  ).sort();
+
   const filtered = customers.filter((c) => {
     // 탭 필터
     if (listTab === "winners" && c.is_standby) return false;
     if (listTab === "standbys" && !c.is_standby) return false;
+    if (unitFilter !== "all" && (c.unit_type || "") !== unitFilter) return false;
+    if (supplyFilter !== "all" && (c.supply_type || "") !== supplyFilter) return false;
     // 검색 필터
     const q = search.trim();
     if (!q) return true;
@@ -778,6 +789,26 @@ function CustomersPageInner() {
             );
           })}
         </div>
+        <select
+          value={unitFilter}
+          onChange={(e) => setUnitFilter(e.target.value)}
+          className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">주택형 전체</option>
+          {unitOptions.map((u) => (
+            <option key={u} value={u}>{u}</option>
+          ))}
+        </select>
+        <select
+          value={supplyFilter}
+          onChange={(e) => setSupplyFilter(e.target.value)}
+          className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">공급유형 전체</option>
+          {supplyOptions.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
