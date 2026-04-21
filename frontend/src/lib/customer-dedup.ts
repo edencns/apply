@@ -72,13 +72,15 @@ function findMatch(
   const candIdentity = toIdentity(candidate as any);
 
   // 동점일 때는 점수 높은 쪽을 채택
+  // 엄격 매칭: 생년월일 + 성별/이름/전화 중 양쪽 모두 확보된 신호 최소 1개 일치,
+  //           한쪽이라도 모순(conflict) 있으면 즉시 제외.
   let best: { record: LocalCustomer; score: number } | null = null;
   for (const e of existingList) {
     const eIdentity = toIdentity(e as any);
     const s = identityScore(candIdentity, eIdentity);
     if (s.conflict) continue;
     if (s.exact) return e;
-    if (s.score >= 3) {
+    if (sameIdentity(candIdentity, eIdentity)) {
       if (!best || s.score > best.score) best = { record: e, score: s.score };
     }
   }

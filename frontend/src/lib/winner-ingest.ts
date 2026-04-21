@@ -20,7 +20,7 @@
  * 단 PDF 텍스트 추출만 CMap이 필요해 전용 API(/api/extract-pdf-text)를 거친다.
  */
 
-import { toIdentity, identityScore } from "./identity";
+import { toIdentity, identityScore, sameIdentity } from "./identity";
 
 // xlsx는 300KB+ 라이브러리 — 번들 부풀림 방지를 위해 동적 import
 type XLSXModule = typeof import("xlsx");
@@ -1069,10 +1069,12 @@ export function consolidate(files: FileIngestResult[]): ConsolidatedResult {
     const ident = toIdentity(w as any);
     let best: { profile: WinnerProfile; score: number } | null = null;
     for (const p of profilesList) {
-      const s = identityScore(ident, toIdentity(p as any));
+      const pIdent = toIdentity(p as any);
+      const s = identityScore(ident, pIdent);
       if (s.conflict) continue;
       if (s.exact) return p;
-      if (s.score >= 3 && (!best || s.score > best.score)) {
+      // 엄격 매칭: 생년월일 + 2차 신호 요구
+      if (sameIdentity(ident, pIdent) && (!best || s.score > best.score)) {
         best = { profile: p, score: s.score };
       }
     }
@@ -1376,11 +1378,31 @@ export function profileToCustomerPayload(
       }
     : undefined;
 
+  // 주민번호 앞자리 추출 — 13자리 풀 RRN 우선, 없으면 마스킹본에서
+  let rrnFront = "";
+  if (profile.rrn) {
+    rrnFront = profile.rrn.slice(0, 6);
+  } else if (profile.rrnMasked) {
+    rrnFront = profile.rrnMasked.split("-")[0] || "";
+  }
+
+  // 주민번호 뒷자리 — 성별 digit 보존이 중요
+  //   · 13자리 있으면: 실제 7자리
+  //   · 마스킹 있으면: "1******" 형태 그대로 (첫 자리 성별만 드러남)
+  //   · 둘 다 없으면: placeholder "0000000"
+  let rrnBack = "0000000";
+  if (profile.rrn) {
+    rrnBack = profile.rrn.slice(6);
+  } else if (profile.rrnMasked) {
+    const masked = profile.rrnMasked.split("-")[1];
+    if (masked) rrnBack = masked;
+  }
+
   return {
     name: profile.name,
     phone: profile.phone || "",
-    rrn_front: profile.rrn ? profile.rrn.slice(0, 6) : "",
-    rrn_back: profile.rrn ? profile.rrn.slice(6) : "0000000",
+    rrn_front: rrnFront,
+    rrn_back: rrnBack,
     address: profile.address || "",
     no_home_years: noHomeYears,
     dependents_count: dependents,

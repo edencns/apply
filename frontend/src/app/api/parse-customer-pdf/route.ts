@@ -233,11 +233,14 @@ export async function POST(req: NextRequest) {
     if (detectWinnerListFormat(text)) {
       const result = parseWinnerPdfText(text, file.name);
       const customers: ParsedCustomer[] = result.winners.map((w) => {
-        const rrnFrontFromMasked = w.rrnMasked?.split('-')[0];
+        const maskedFront = w.rrnMasked?.split('-')[0];
+        const maskedBack = w.rrnMasked?.split('-')[1];
         return {
           name: w.name,
-          rrnFront: w.rrn ? w.rrn.slice(0, 6) : rrnFrontFromMasked,
-          rrnBack: w.rrn ? w.rrn.slice(6) : undefined,
+          rrnFront: w.rrn ? w.rrn.slice(0, 6) : maskedFront,
+          // 풀 주민번호 있으면 7자리, 없으면 마스킹된 뒷자리("1******") 그대로 —
+          // 성별 digit (첫 자리) 보존이 목적
+          rrnBack: w.rrn ? w.rrn.slice(6) : maskedBack,
           phone: w.phone,
           specialTypes: w.specialType ? [w.specialType] : undefined,
           housingType: w.unitType,
