@@ -158,7 +158,7 @@ export default function StageCustomerList({ announcement, evaluate, columns, sta
             { key: "all" as const,     label: "전체 상태",  count: counts.all,     cls: "text-gray-700" },
             { key: "ok" as const,      label: "통과",       count: counts.ok,      cls: "text-green-700" },
             { key: "fail" as const,    label: "부적합",     count: counts.fail,    cls: "text-red-700" },
-            { key: "missing" as const, label: "미검증",     count: counts.missing, cls: "text-gray-500" },
+            { key: "missing" as const, label: "검증 필요",     count: counts.missing, cls: "text-gray-500" },
           ].map((t) => {
             const active = statusFilter === t.key;
             return (

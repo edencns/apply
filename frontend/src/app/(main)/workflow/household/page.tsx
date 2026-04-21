@@ -255,7 +255,7 @@ export default function HouseholdStepPage() {
               <span className="font-semibold text-emerald-900 mr-3">세대원 검증 결과</span>
               <span className="text-green-700 mr-3">통과 {verifyResult.ok}명</span>
               <span className="text-red-700 mr-3">부적합 {verifyResult.fail}명</span>
-              <span className="text-gray-600">미검증 {verifyResult.missing}명</span>
+              <span className="text-gray-600">검증 필요 {verifyResult.missing}명</span>
             </div>
           )}
 

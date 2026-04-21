@@ -29,7 +29,7 @@ const columns: StageColumn[] = [
       const props = c.properties || [];
       if (props.length === 0) {
         if (c.property_checked_at) return <span className="text-xs text-green-700">보유 없음</span>;
-        return <span className="text-xs text-gray-400">미조회</span>;
+        return <span className="text-xs text-gray-400">조회 불가</span>;
       }
       const current = props.filter((p) => !p.transferredDate && isResidentialUse(p.usage));
       if (current.length === 0) return <span className="text-xs text-green-700">무주택</span>;
@@ -56,7 +56,7 @@ const columns: StageColumn[] = [
     key: "verdict",
     header: "판정",
     render: (c, v) => {
-      if (v.missing) return <span className="text-xs text-gray-400">미검증</span>;
+      if (v.missing) return <span className="text-xs text-gray-400">검증 필요</span>;
       if (!v.ok) {
         return (
           <span className="inline-flex items-center gap-1 text-xs text-red-700">
@@ -301,7 +301,7 @@ export default function PropertyStepPage() {
               <span className="text-green-700 mr-3">무주택 적격 {verifyResult.ok}명</span>
               <span className="text-amber-700 mr-3">경고 {verifyResult.warn}명</span>
               <span className="text-red-700 mr-3">부적합 {verifyResult.fail}명</span>
-              <span className="text-gray-600">미검증 {verifyResult.missing}명</span>
+              <span className="text-gray-600">검증 필요 {verifyResult.missing}명</span>
             </div>
           )}
 

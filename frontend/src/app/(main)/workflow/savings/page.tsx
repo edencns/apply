@@ -30,7 +30,7 @@ const columns: StageColumn[] = [
     header: "순위확인 결과",
     render: (c) => {
       const s = c.savings_priority;
-      if (!s) return <span className="text-xs text-gray-400">미조회</span>;
+      if (!s) return <span className="text-xs text-gray-400">조회 불가</span>;
       if (s.verified) {
         return (
           <span className="inline-flex items-center gap-1 text-sm text-green-700">
@@ -61,7 +61,7 @@ const columns: StageColumn[] = [
     key: "verdict",
     header: "판정",
     render: (c, v) => {
-      if (v.missing) return <span className="text-xs text-gray-400">미검증</span>;
+      if (v.missing) return <span className="text-xs text-gray-400">검증 필요</span>;
       if (!v.ok) {
         return (
           <span className="inline-flex items-center gap-1 text-xs text-red-700">
