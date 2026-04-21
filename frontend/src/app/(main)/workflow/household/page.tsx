@@ -265,11 +265,17 @@ export default function HouseholdStepPage() {
             <input
               ref={fileRef}
               type="file"
-              accept=".xlsx,.xls,.xlsm,.csv"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) handleUpload(f);
+                if (!f) return;
+                const ext = f.name.toLowerCase().split(".").pop() || "";
+                if (["xlsx", "xls", "xlsm", "csv"].includes(ext)) {
+                  handleUpload(f);
+                } else {
+                  alert("세대원 확인은 엑셀 파일(당첨자세대원내역.xlsx)만 지원합니다.");
+                  if (fileRef.current) fileRef.current.value = "";
+                }
               }}
             />
             <button

@@ -249,11 +249,17 @@ export default function SavingsStepPage() {
             <input
               ref={fileRef}
               type="file"
-              accept=".pdf,application/pdf"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) handleUpload(f);
+                if (!f) return;
+                const ext = f.name.toLowerCase().split(".").pop() || "";
+                if (ext === "pdf") {
+                  handleUpload(f);
+                } else {
+                  alert("청약통장 순위확인은 PDF 파일(입주자저축 순위확인 통보.pdf)만 지원합니다.");
+                  if (fileRef.current) fileRef.current.value = "";
+                }
               }}
             />
             <button

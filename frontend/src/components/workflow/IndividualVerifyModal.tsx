@@ -17,7 +17,7 @@ interface Props {
   customers: LocalCustomer[];
   title: string;        // "세대원 개별 검증" 등
   fileHint: string;     // 업로드 안내
-  accept?: string;      // 파일 필터 (기본 엑셀)
+  accept?: string;      // 파일 필터 (기본: 모든 파일)
   /** 실제 업로드 처리 — 호출측에서 페이지별 파싱·저장 로직 구현 */
   onApply: (customer: LocalCustomer, file: File) => Promise<void>;
 }
@@ -28,7 +28,7 @@ export default function IndividualVerifyModal({
   customers,
   title,
   fileHint,
-  accept = ".xlsx,.xls,.xlsm,.csv,.pdf",
+  accept = "",
   onApply,
 }: Props) {
   const [search, setSearch] = useState("");

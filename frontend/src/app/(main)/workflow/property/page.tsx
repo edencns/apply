@@ -310,11 +310,17 @@ export default function PropertyStepPage() {
             <input
               ref={fileRef}
               type="file"
-              accept=".xlsx,.xls,.xlsm,.csv"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) handleUpload(f);
+                if (!f) return;
+                const ext = f.name.toLowerCase().split(".").pop() || "";
+                if (["xlsx", "xls", "xlsm", "csv"].includes(ext)) {
+                  handleUpload(f);
+                } else {
+                  alert("주택소유 조회는 엑셀 파일(주택소유정보전산검색결과.xlsx)만 지원합니다.");
+                  if (fileRef.current) fileRef.current.value = "";
+                }
               }}
             />
             <button
