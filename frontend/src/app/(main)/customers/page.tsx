@@ -471,7 +471,13 @@ function CustomersPageInner() {
 
       // ── 배치 모드: 당첨자 명단 PDF ──
       if (d.mode === "batch" && Array.isArray(d.customers) && d.customers.length > 0) {
-        const confirmMsg = `당첨자 명단 PDF에서 ${d.count}명을 인식했습니다.\n이미 등록된 사람은 제외하고 신규만 추가합니다. 계속하시겠습니까?`;
+        const counts = d.counts || {};
+        const breakdown =
+          counts.spWin !== undefined
+            ? `\n특별공급 당첨 ${counts.spWin}명 + 예비 ${counts.spStd}명`
+              + `\n일반공급 당첨 ${counts.genWin}명 + 예비 ${counts.genStd}명`
+            : "";
+        const confirmMsg = `당첨자 명단 PDF에서 ${d.count}명을 인식했습니다.${breakdown}\n\n이미 등록된 사람은 제외하고 신규만 추가합니다. 계속하시겠습니까?`;
         if (!confirm(confirmMsg)) return;
 
         // 1) 파싱 결과 → IncomingCustomer
@@ -497,15 +503,22 @@ function CustomersPageInner() {
               unitArea = `${area.toFixed(2)}㎡`;
             }
           }
+          // supply_type 결정: 예비는 상위 공급 구분 유지
+          const supplyType =
+            c.supplyCategory === "일반공급"
+              ? "일반공급"
+              : (specialTypes[0] || "일반공급");
           candidates.push({
             name: c.name,
             phone: c.phone || "",
             rrn_front: c.rrnFront,
             rrn_back: c.rrnBack || "0000000",
             special_types: specialTypes,
-            supply_type: specialTypes[0] || "일반공급",
+            supply_type: supplyType,
             unit_type: housingCode || undefined,
             unit_area: unitArea,
+            is_standby: c.isStandby === true,
+            standby_rank: c.standbyRank,
           });
         }
 
@@ -517,6 +530,7 @@ function CustomersPageInner() {
         let created = 0, createFailed = 0;
         const createErrors: string[] = [];
         for (const cand of toCreate) {
+          const anyCand = cand as any;
           const payload = {
             site_id: selectedAnn.site_id,
             announcement_id: selectedAnn.id,
@@ -534,6 +548,8 @@ function CustomersPageInner() {
             supply_type: cand.supply_type,
             unit_type: cand.unit_type,
             unit_area: cand.unit_area,
+            is_standby: anyCand.is_standby === true,
+            standby_rank: anyCand.standby_rank,
           };
           try {
             try {

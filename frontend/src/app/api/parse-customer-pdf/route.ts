@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 import { extractKoreanPdfText } from '@/lib/pdf-helper';
+import { parseWinnerPdfText } from '@/lib/winner-ingest';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -30,6 +31,9 @@ interface ParsedCustomer {
   housingType?: string;   // 당첨자 명단에서의 주택형 (예: "059.9660", "084.9820")
   unitDong?: string;      // 동
   unitHo?: string;        // 호
+  supplyCategory?: "특별공급" | "일반공급";
+  isStandby?: boolean;
+  standbyRank?: string;
   rawTextPreview?: string;
 }
 
@@ -223,13 +227,39 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 당첨자 명단 포맷이면 배치 파싱
+    // 당첨자 명단 포맷이면 lib/winner-ingest.ts 의 4섹션 분할 파서로 처리
+    // (특별공급 당첨·예비 + 일반공급 당첨·예비 모두 인식)
     if (detectWinnerListFormat(text)) {
-      const customers = parseWinnerRows(text);
-      if (customers.length > 0) {
+      const result = parseWinnerPdfText(text, file.name);
+      if (result.winners.length > 0) {
+        const customers: ParsedCustomer[] = result.winners.map((w) => {
+          const rrnFrontFromMasked = w.rrnMasked?.split('-')[0];
+          return {
+            name: w.name,
+            rrnFront: w.rrn ? w.rrn.slice(0, 6) : rrnFrontFromMasked,
+            rrnBack: w.rrn ? w.rrn.slice(6) : undefined,
+            phone: w.phone,
+            specialTypes: w.specialType ? [w.specialType] : undefined,
+            housingType: w.unitType,
+            unitDong: w.dong,
+            unitHo: w.ho,
+            supplyCategory: w.supplyCategory,
+            isStandby: w.isStandby === true,
+            standbyRank: w.standbyRank,
+          };
+        });
+
+        const counts = {
+          spWin:  customers.filter((c) => c.supplyCategory === '특별공급' && !c.isStandby).length,
+          spStd:  customers.filter((c) => c.supplyCategory === '특별공급' &&  c.isStandby).length,
+          genWin: customers.filter((c) => c.supplyCategory === '일반공급' && !c.isStandby).length,
+          genStd: customers.filter((c) => c.supplyCategory === '일반공급' &&  c.isStandby).length,
+        };
+
         return NextResponse.json({
           mode: 'batch',
           count: customers.length,
+          counts,               // 구분별 카운트
           customers,
           rawTextPreview: text.slice(0, 500),
         });
