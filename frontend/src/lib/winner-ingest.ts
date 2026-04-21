@@ -26,7 +26,7 @@ import { toIdentity, identityScore, sameIdentity } from "./identity";
 type XLSXModule = typeof import("xlsx");
 type XLSXWorkBook = import("xlsx").WorkBook;
 let _xlsx: XLSXModule | null = null;
-async function ensureXlsx(): Promise<XLSXModule> {
+export async function ensureXlsx(): Promise<XLSXModule> {
   if (!_xlsx) _xlsx = await import("xlsx");
   return _xlsx;
 }

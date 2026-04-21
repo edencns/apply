@@ -9,7 +9,7 @@ import {
   type LocalAnnouncement,
   type LocalCustomer,
 } from "@/lib/local-store";
-import { parseHouseholdMembers, type HouseholdMemberRecord } from "@/lib/winner-ingest";
+import { parseHouseholdMembers, ensureXlsx, type HouseholdMemberRecord } from "@/lib/winner-ingest";
 import { toIdentity, sameIdentity } from "@/lib/identity";
 import { Users, AlertTriangle, Upload, Loader2, CheckCircle2 } from "lucide-react";
 
@@ -92,7 +92,7 @@ export default function HouseholdStepPage() {
     setUploadResult(null);
     setVerifyResult(null);
     try {
-      const XLSX = await import("xlsx");
+      const XLSX = await ensureXlsx();
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
       const result = parseHouseholdMembers(wb as any, file.name);
