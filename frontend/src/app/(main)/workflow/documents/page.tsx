@@ -5,10 +5,10 @@ import WorkflowShell, { WORKFLOW_STEPS } from "@/components/workflow/WorkflowShe
 import StageCustomerList, { StageColumn } from "@/components/workflow/StageCustomerList";
 import { evaluateFinal } from "@/lib/verification-rules";
 import { COMMON_DOCUMENTS, SUPPLY_TYPE_DOCUMENTS } from "@/lib/document-checklist";
-import type { LocalAnnouncement, LocalCustomer } from "@/lib/local-store";
+import { localCustomers, type LocalAnnouncement, type LocalCustomer } from "@/lib/local-store";
 import { ingestAutoStage, stageLabel, type WorkflowIngestResult } from "@/lib/workflow-ingest";
 import {
-  CheckCircle2, XCircle, Clock, FileText, FileSpreadsheet, Loader2,
+  CheckCircle2, XCircle, Clock, FileText, FileSpreadsheet, Loader2, Gavel,
 } from "lucide-react";
 
 const step = WORKFLOW_STEPS[4]; // documents
@@ -112,6 +112,9 @@ export default function DocumentsStepPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<WorkflowIngestResult | null>(null);
+  const [verifyResult, setVerifyResult] = useState<
+    { eligible: number; ineligible: number; pending: number } | null
+  >(null);
   const pdfRef = useRef<HTMLInputElement>(null);
   const xlsxRef = useRef<HTMLInputElement>(null);
 
@@ -120,6 +123,33 @@ export default function DocumentsStepPage() {
     const submitted = c.documents_submitted || {};
     const final = evaluateFinal(c, a, submitted, docList);
     return final.stages.documents;
+  };
+
+  /** 최종 검증: 공고 고객 전원에 대해 evaluateFinal 실행 → 적합/부적합 판정 저장 */
+  const handleFinalVerify = () => {
+    if (!selected) return;
+    const customers = localCustomers
+      .listByAnnouncement(selected.id)
+      .filter((c) => !c.superseded);
+    let eligible = 0, ineligible = 0, pending = 0;
+    for (const c of customers) {
+      const docList = computeDocList(c, selected);
+      const submitted = c.documents_submitted || {};
+      const final = evaluateFinal(c, selected, submitted, docList);
+      const verdict = final.verdict;
+      if (verdict === "eligible") eligible++;
+      else if (verdict === "ineligible") ineligible++;
+      else pending++;
+      try {
+        localCustomers.update(c.id, {
+          verification_verdict: verdict,
+          verification_reasons: final.reasons || [],
+          verification_checked_at: new Date().toISOString(),
+        });
+      } catch {}
+    }
+    setVerifyResult({ eligible, ineligible, pending });
+    setReloadKey((k) => k + 1);
   };
 
   const handleFile = async (file: File) => {
@@ -195,10 +225,26 @@ export default function DocumentsStepPage() {
                 if (f) handleFile(f);
               }}
             />
+            <button
+              onClick={handleFinalVerify}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-700 hover:bg-indigo-800 shadow-sm whitespace-nowrap transition-colors"
+              title="1~4단계 검증 결과 + 서류 체크리스트를 종합해 최종 적합·부적합 판정"
+            >
+              <Gavel className="w-4 h-4" /> 최종 검증
+            </button>
             <span className="text-[11px] text-gray-500 ml-2">
               * 세대원/주택/통장 어느 쪽이든 자동 인식하여 반영
             </span>
           </div>
+
+          {verifyResult && (
+            <div className="card mb-4 p-3 text-sm bg-emerald-50/60 border-emerald-100">
+              <span className="font-semibold text-emerald-900 mr-3">최종 판정 결과</span>
+              <span className="text-green-700 mr-3">적합 {verifyResult.eligible}명</span>
+              <span className="text-red-700 mr-3">부적합 {verifyResult.ineligible}명</span>
+              <span className="text-gray-600">보류 {verifyResult.pending}명</span>
+            </div>
+          )}
 
           {uploadResult && (
             <div className="card mb-4 p-3 text-sm bg-indigo-50/60 border-indigo-100">

@@ -21,7 +21,7 @@ import {
 } from "@/lib/local-store";
 import AnnouncementPicker from "@/components/AnnouncementPicker";
 import { getSampleAsLocalAnnouncements } from "@/lib/sample-adapter";
-import { ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export interface WorkflowStep {
   step: number;
@@ -157,12 +157,6 @@ export default function WorkflowShell({ step, selected, onSelect, children }: Pr
               {step.title}
             </h1>
             <p className="text-sm text-gray-500 mt-1 max-w-2xl">{step.description}</p>
-            {step.fileHint && (
-              <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-full px-2.5 py-0.5">
-                <Info className="w-3 h-3" />
-                <span>필요 파일: {step.fileHint}</span>
-              </div>
-            )}
           </div>
 
           {/* 이전/다음 단계 */}
