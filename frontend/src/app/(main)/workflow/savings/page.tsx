@@ -31,7 +31,7 @@ const columns: StageColumn[] = [
     header: "은행",
     render: (c) => {
       const code = c.savings_priority?.bankCode;
-      if (!code) return <span className="text-xs text-gray-400">—</span>;
+      if (!code) return <span className="text-xs text-ink-4">—</span>;
       return <span className="text-sm">{BANK_MAP[code] || code}</span>;
     },
   },
@@ -40,7 +40,7 @@ const columns: StageColumn[] = [
     header: "순위확인 결과",
     render: (c) => {
       const s = c.savings_priority;
-      if (!s) return <span className="text-xs text-gray-400">조회 불가</span>;
+      if (!s) return <span className="text-xs text-ink-4">조회 불가</span>;
       if (s.verified) {
         return (
           <span className="inline-flex items-center gap-1 text-sm text-green-700">
@@ -64,14 +64,14 @@ const columns: StageColumn[] = [
       const m = c.subscription_months ?? 0;
       return m > 0 ? (
         <span className="text-sm">{m}개월</span>
-      ) : <span className="text-xs text-gray-400">0개월</span>;
+      ) : <span className="text-xs text-ink-4">0개월</span>;
     },
   },
   {
     key: "verdict",
     header: "판정",
     render: (c, v) => {
-      if (v.missing) return <span className="text-xs text-gray-400">검증 필요</span>;
+      if (v.missing) return <span className="text-xs text-ink-4">검증 필요</span>;
       if (!v.ok) {
         return (
           <span className="inline-flex items-center gap-1 text-xs text-red-700">
@@ -292,7 +292,7 @@ export default function SavingsStepPage() {
               <span className="font-semibold text-emerald-900 mr-3">청약통장 검증 결과</span>
               <span className="text-green-700 mr-3">통과 {verifyResult.ok}명</span>
               <span className="text-red-700 mr-3">부적합 {verifyResult.fail}명</span>
-              <span className="text-gray-600">검증 필요 {verifyResult.missing}명</span>
+              <span className="text-ink-2">검증 필요 {verifyResult.missing}명</span>
             </div>
           )}
 

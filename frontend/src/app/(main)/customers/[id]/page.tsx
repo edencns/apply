@@ -38,7 +38,7 @@ import {
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   inquiry: { label: "문의", cls: "bg-amber-100 text-amber-700" },
-  applied: { label: "청약 접수", cls: "bg-blue-100 text-blue-700" },
+  applied: { label: "청약 접수", cls: "bg-accent-soft text-accent" },
   winner: { label: "당첨", cls: "bg-purple-100 text-purple-700" },
   contracted: { label: "계약 완료", cls: "bg-green-100 text-green-700" },
 };
@@ -149,7 +149,7 @@ function CustomerDetailInner() {
   if (loading) {
     return (
       <div className="p-6 max-w-6xl mx-auto">
-        <div className="card text-center py-16 text-gray-400">
+        <div className="card text-center py-16 text-ink-4">
           <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin opacity-60" />
           <p>고객 정보를 불러오는 중...</p>
         </div>
@@ -160,12 +160,12 @@ function CustomerDetailInner() {
   if (error || !customer || !finalVerdict) {
     return (
       <div className="p-6 max-w-6xl mx-auto">
-        <button onClick={() => router.push("/workflow/registration")} className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1 mb-4">
+        <button onClick={() => router.push("/workflow/registration")} className="text-sm text-ink-2 hover:text-ink flex items-center gap-1 mb-4">
           <ArrowLeft className="w-4 h-4" /> 목록으로 돌아가기
         </button>
         <div className="card text-center py-16">
           <AlertCircle className="w-12 h-12 mx-auto mb-3 text-red-400" />
-          <p className="text-gray-700 font-medium">{error || "고객을 찾을 수 없습니다"}</p>
+          <p className="text-ink-2 font-medium">{error || "고객을 찾을 수 없습니다"}</p>
         </div>
       </div>
     );
@@ -178,16 +178,16 @@ function CustomerDetailInner() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       {/* Top header */}
-      <a href="/workflow/registration" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-3">
+      <a href="/workflow/registration" className="inline-flex items-center gap-1 text-sm text-ink-3 hover:text-ink-2 mb-3">
         <ArrowLeft className="w-3.5 h-3.5" /> 당첨자 목록
       </a>
 
       <div className="flex items-start justify-between mb-5 flex-wrap gap-3">
         <div>
           <div className="flex items-center gap-3 flex-wrap mb-1">
-            <h1 className={`text-2xl font-bold ${customer.superseded ? "text-gray-400 line-through" : "text-gray-900"}`}>{customer.name}</h1>
+            <h1 className={`text-2xl font-bold ${customer.superseded ? "text-ink-4 line-through" : "text-ink"}`}>{customer.name}</h1>
             {customer.superseded ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-200 text-gray-700">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-200 text-ink-2">
                 포기·승계 완료
               </span>
             ) : customer.succeeded_from ? (
@@ -209,7 +209,7 @@ function CustomerDetailInner() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3 text-sm text-gray-500 flex-wrap">
+          <div className="flex items-center gap-3 text-sm text-ink-3 flex-wrap">
             <span>{fmtRRN(customer.rrn_front, customer.rrn_back)}</span>
             {customer.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {customer.phone}</span>}
             {customer.unit_type && <span className="flex items-center gap-1"><Home className="w-3.5 h-3.5" /> {customer.unit_type}{customer.unit_area ? ` · ${customer.unit_area}` : ""}</span>}
@@ -225,20 +225,20 @@ function CustomerDetailInner() {
           className="card mb-5 cursor-pointer hover:border-blue-300 transition-colors"
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 rounded-lg bg-accent-soft text-accent flex items-center justify-center flex-shrink-0">
               <BookOpen className="w-5 h-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[11px] uppercase tracking-wider text-blue-600 font-medium mb-0.5">작업 공고</div>
-              <p className="text-sm font-semibold text-gray-900 truncate">{announcement.title}</p>
-              <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-0.5 flex-wrap">
+              <div className="text-[11px] uppercase tracking-wider text-accent font-medium mb-0.5">작업 공고</div>
+              <p className="text-sm font-semibold text-ink truncate">{announcement.title}</p>
+              <div className="flex items-center gap-3 text-[11px] text-ink-3 mt-0.5 flex-wrap">
                 {regulation && <span>규제: <strong>{regulation}</strong></span>}
                 {typeof minSubscription === "number" && minSubscription > 0 && (
                   <span>최소 통장 <strong>{minSubscription}개월</strong></span>
                 )}
               </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <ChevronRight className="w-4 h-4 text-ink-4 flex-shrink-0" />
           </div>
         </div>
       )}
@@ -328,16 +328,16 @@ function RegistrationStage({
   return (
     <>
       {customer.superseded && (
-        <div className="card border-2 border-gray-300 bg-gray-50">
+        <div className="card border-2 border-gray-300 bg-surface2">
           <div className="flex items-start gap-3">
-            <UserX className="w-5 h-5 text-gray-500 flex-shrink-0 mt-0.5" />
+            <UserX className="w-5 h-5 text-ink-3 flex-shrink-0 mt-0.5" />
             <div className="flex-1 text-sm">
-              <p className="font-semibold text-gray-800">이 고객은 포기·승계 완료 상태입니다</p>
-              <p className="text-xs text-gray-600 mt-1">
+              <p className="font-semibold text-ink">이 고객은 포기·승계 완료 상태입니다</p>
+              <p className="text-xs text-ink-2 mt-1">
                 사유: {customer.supersede_reason || "부적합 판정"}
                 {customer.supersede_at && ` · ${fmtDate(customer.supersede_at)}`}
               </p>
-              <p className="text-[11px] text-gray-500 mt-2">
+              <p className="text-[11px] text-ink-3 mt-2">
                 정보는 읽기 전용으로만 열람됩니다. 검증 단계는 더 이상 유효하지 않습니다.
               </p>
             </div>
@@ -347,8 +347,8 @@ function RegistrationStage({
 
       <div className="card">
         <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <User className="w-4 h-4 text-gray-500" />
-          <h2 className="font-semibold text-gray-800">기본 정보</h2>
+          <User className="w-4 h-4 text-ink-3" />
+          <h2 className="font-semibold text-ink">기본 정보</h2>
           <div className="flex gap-1.5 ml-auto">
             {editMode ? (
               <>
@@ -386,8 +386,8 @@ function RegistrationStage({
           <Field label="연락처" value={form.phone} editable={editMode} placeholder="010-0000-0000"
             onChange={(v) => setForm((p) => ({ ...p, phone: v }))} />
           <div>
-            <label className="text-xs text-gray-500 block mb-1">주민번호</label>
-            <p className="font-medium text-gray-900 font-mono text-xs">{fmtRRN(customer.rrn_front, customer.rrn_back)}</p>
+            <label className="text-xs text-ink-3 block mb-1">주민번호</label>
+            <p className="font-medium text-ink font-mono text-xs">{fmtRRN(customer.rrn_front, customer.rrn_back)}</p>
           </div>
           <Field label="현재 거주 지역" value={form.current_region} editable={editMode}
             onChange={(v) => setForm((p) => ({ ...p, current_region: v }))} />
@@ -400,8 +400,8 @@ function RegistrationStage({
 
       <div className="card">
         <div className="flex items-center gap-2 mb-4">
-          <Calculator className="w-4 h-4 text-gray-500" />
-          <h2 className="font-semibold text-gray-800">청약 가점 입력</h2>
+          <Calculator className="w-4 h-4 text-ink-3" />
+          <h2 className="font-semibold text-ink">청약 가점 입력</h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
           <NumField label="무주택 기간 (년)" icon={Home} value={form.no_home_years ?? 0} editable={editMode}
@@ -411,25 +411,25 @@ function RegistrationStage({
           <NumField label="통장 가입 (개월)" icon={CreditCard} value={form.subscription_months ?? 0} editable={editMode}
             onChange={(v) => setForm((p) => ({ ...p, subscription_months: v }))} />
         </div>
-        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-          <span className="text-xs text-gray-500">총 가점 (적합 판정 시 자동 계산)</span>
-          <span className="font-bold text-lg text-blue-700">{customer.total_score ?? 0}<span className="text-xs text-gray-400 font-normal"> / 84점</span></span>
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-border-soft">
+          <span className="text-xs text-ink-3">총 가점 (적합 판정 시 자동 계산)</span>
+          <span className="font-bold text-lg text-accent">{customer.total_score ?? 0}<span className="text-xs text-ink-4 font-normal"> / 84점</span></span>
         </div>
       </div>
 
       <div className="card">
         <div className="flex items-center gap-2 mb-4">
-          <Landmark className="w-4 h-4 text-gray-500" />
-          <h2 className="font-semibold text-gray-800">소득</h2>
+          <Landmark className="w-4 h-4 text-ink-3" />
+          <h2 className="font-semibold text-ink">소득</h2>
         </div>
         <div>
-          <label className="text-xs text-gray-500 block mb-1">월소득 (원)</label>
+          <label className="text-xs text-ink-3 block mb-1">월소득 (원)</label>
           {editMode ? (
             <input
               type="number"
               value={form.income_monthly ?? ""}
               onChange={(e) => setForm((p) => ({ ...p, income_monthly: e.target.value ? Number(e.target.value) : null }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
             />
           ) : (
             <p className="font-medium text-sm">
@@ -512,7 +512,7 @@ function DocumentsStage({
   };
 
   const SUPPLY_COLORS: Record<string, string> = {
-    "공통": "bg-gray-100 text-gray-700",
+    "공통": "bg-surface2 text-ink-2",
     "일반공급": "bg-indigo-100 text-indigo-700",
     "신혼부부": "bg-red-100 text-red-700",
     "생애최초": "bg-emerald-100 text-emerald-700",
@@ -530,7 +530,7 @@ function DocumentsStage({
           ? "border-green-300 bg-green-50"
           : finalVerdict.verdict === "ineligible"
             ? "border-red-300 bg-red-50"
-            : "border-gray-200 bg-gray-50"
+            : "border-border bg-surface2"
       }`}>
         <div className="flex items-start gap-3">
           {finalVerdict.verdict === "eligible" ? (
@@ -538,13 +538,13 @@ function DocumentsStage({
           ) : finalVerdict.verdict === "ineligible" ? (
             <XCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
           ) : (
-            <ClipboardCheck className="w-6 h-6 text-gray-500 flex-shrink-0 mt-0.5" />
+            <ClipboardCheck className="w-6 h-6 text-ink-3 flex-shrink-0 mt-0.5" />
           )}
           <div className="flex-1">
             <h3 className={`font-bold text-lg ${
               finalVerdict.verdict === "eligible" ? "text-green-900"
                 : finalVerdict.verdict === "ineligible" ? "text-red-900"
-                : "text-gray-800"
+                : "text-ink"
             }`}>
               {finalVerdict.verdict === "eligible" ? "적합"
                 : finalVerdict.verdict === "ineligible" ? "부적합"
@@ -566,7 +566,7 @@ function DocumentsStage({
               </ul>
             )}
             {lastSaved && (
-              <p className="text-[10px] text-gray-500 mt-2">마지막 저장 {fmtDate(lastSaved)}</p>
+              <p className="text-[10px] text-ink-3 mt-2">마지막 저장 {fmtDate(lastSaved)}</p>
             )}
           </div>
         </div>
@@ -582,15 +582,15 @@ function DocumentsStage({
       {/* 진행률 */}
       <div className="card">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-gray-700">서류 제출 진행률</span>
-          <span className="text-sm font-bold text-blue-700">
+          <span className="text-sm font-medium text-ink-2">서류 제출 진행률</span>
+          <span className="text-sm font-bold text-accent">
             {submittedRequired} / {required.length}
-            <span className="text-gray-400 font-normal ml-1">(필수)</span>
+            <span className="text-ink-4 font-normal ml-1">(필수)</span>
           </span>
         </div>
         <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
           <div
-            className={`h-full transition-all ${percent === 100 ? "bg-green-500" : "bg-blue-500"}`}
+            className={`h-full transition-all ${percent === 100 ? "bg-green-500" : "bg-accent-soft0"}`}
             style={{ width: `${percent}%` }}
           />
         </div>
@@ -600,8 +600,8 @@ function DocumentsStage({
       {Object.entries(grouped).map(([category, docs]) => (
         <div key={category} className="card">
           <div className="flex items-center gap-2 mb-3">
-            <FileText className="w-4 h-4 text-gray-500" />
-            <h2 className="font-semibold text-gray-800">{category} 서류</h2>
+            <FileText className="w-4 h-4 text-ink-3" />
+            <h2 className="font-semibold text-ink">{category} 서류</h2>
             <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${SUPPLY_COLORS[category] || SUPPLY_COLORS["공통"]}`}>
               {category === "공통" ? "전원 공통" : `${category} 전용`}
             </span>
@@ -616,7 +616,7 @@ function DocumentsStage({
                       ? "border-green-200 bg-green-50"
                       : d.conditional
                         ? "border-amber-200 bg-amber-50/50"
-                        : "border-gray-200 hover:bg-gray-50"
+                        : "border-border hover:bg-surface2"
                   }`}>
                     <input
                       type="checkbox"
@@ -625,7 +625,7 @@ function DocumentsStage({
                       className="mt-0.5 w-4 h-4 accent-green-600 flex-shrink-0"
                     />
                     <div className="flex-1 min-w-0">
-                      <span className={`text-sm ${isSubmitted ? "text-green-800 font-medium" : "text-gray-700"}`}>
+                      <span className={`text-sm ${isSubmitted ? "text-green-800 font-medium" : "text-ink-2"}`}>
                         {d.name}
                       </span>
                       {d.conditional && (
@@ -668,17 +668,17 @@ function Field({
 }: { label: string; value: any; editable: boolean; placeholder?: string; onChange: (v: string) => void }) {
   return (
     <div>
-      <label className="text-xs text-gray-500 block mb-1">{label}</label>
+      <label className="text-xs text-ink-3 block mb-1">{label}</label>
       {editable ? (
         <input
           type="text"
           value={value ?? ""}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          className="w-full border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
         />
       ) : (
-        <p className="font-medium text-gray-900 text-sm">{value || "—"}</p>
+        <p className="font-medium text-ink text-sm">{value || "—"}</p>
       )}
     </div>
   );
@@ -689,7 +689,7 @@ function NumField({
 }: { label: string; icon: typeof Home; value: number; editable: boolean; onChange: (v: number) => void }) {
   return (
     <div>
-      <label className="text-xs text-gray-500 flex items-center gap-1 mb-1">
+      <label className="text-xs text-ink-3 flex items-center gap-1 mb-1">
         <Icon className="w-3 h-3" /> {label}
       </label>
       {editable ? (
@@ -698,10 +698,10 @@ function NumField({
           min={0}
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="w-full border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          className="w-full border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
         />
       ) : (
-        <p className="font-medium text-gray-900 text-sm">{value}</p>
+        <p className="font-medium text-ink text-sm">{value}</p>
       )}
     </div>
   );
@@ -742,21 +742,21 @@ function StandbyPromotionBlock({
   // 이미 승계된 당첨자
   if (customer.superseded) {
     return (
-      <div className="card border-2 border-gray-300 bg-gray-50">
+      <div className="card border-2 border-gray-300 bg-surface2">
         <div className="flex items-start gap-3">
-          <UserX className="w-5 h-5 text-gray-500 flex-shrink-0 mt-0.5" />
+          <UserX className="w-5 h-5 text-ink-3 flex-shrink-0 mt-0.5" />
           <div className="flex-1 text-sm">
-            <p className="font-semibold text-gray-800">
+            <p className="font-semibold text-ink">
               이 당첨자는 포기·승계 완료되었습니다
             </p>
-            <p className="text-xs text-gray-600 mt-1">
+            <p className="text-xs text-ink-2 mt-1">
               사유: {customer.supersede_reason || "부적합 판정"}
               {customer.supersede_at && ` · ${fmtDate(customer.supersede_at)}`}
             </p>
             {successor && (
               <button
                 onClick={() => router.push(`/customers/${successor.id}`)}
-                className="mt-2 inline-flex items-center gap-1 text-xs text-blue-700 hover:underline"
+                className="mt-2 inline-flex items-center gap-1 text-xs text-accent hover:underline"
               >
                 승계자: {successor.name} (예비에서 이동) <ChevronRight className="w-3 h-3" />
               </button>
@@ -848,24 +848,24 @@ function StandbyPromotionBlock({
         {pickerOpen && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-              <div className="p-5 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+              <div className="p-5 border-b border-border-soft flex items-center justify-between flex-shrink-0">
                 <div>
                   <h2 className="text-lg font-semibold">예비 승계 후보</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-ink-3 mt-0.5">
                     주택형 {customer.unit_type || "미지정"} · 총 {candidates.length}명 · 순위 오름차순
                   </p>
                 </div>
                 <button
                   onClick={() => setPickerOpen(false)}
-                  className="p-1 hover:bg-gray-100 rounded-full"
+                  className="p-1 hover:bg-surface2 rounded-full"
                 >
-                  <X className="w-4 h-4 text-gray-500" />
+                  <X className="w-4 h-4 text-ink-3" />
                 </button>
               </div>
 
               <div className="flex-1 overflow-y-auto p-5">
                 {candidates.length === 0 ? (
-                  <div className="p-8 text-center text-sm text-gray-400 border border-dashed border-gray-300 rounded-lg">
+                  <div className="p-8 text-center text-sm text-ink-4 border border-dashed border-gray-300 rounded-lg">
                     같은 주택형의 가능한 예비 후보가 없습니다.
                     <br />
                     <span className="text-xs">
@@ -875,7 +875,7 @@ function StandbyPromotionBlock({
                 ) : (
                   <>
                     <div className="mb-4">
-                      <label className="text-xs text-gray-500 block mb-1">승계 사유</label>
+                      <label className="text-xs text-ink-3 block mb-1">승계 사유</label>
                       <input
                         type="text"
                         value={reason}
@@ -893,7 +893,7 @@ function StandbyPromotionBlock({
                             <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
                               picked
                                 ? "border-amber-400 bg-amber-50"
-                                : "border-gray-200 hover:border-gray-300"
+                                : "border-border hover:border-gray-300"
                             }`}>
                               <input
                                 type="radio"
@@ -906,14 +906,14 @@ function StandbyPromotionBlock({
                               </span>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-medium text-gray-900">{c.customer.name}</span>
+                                  <span className="font-medium text-ink">{c.customer.name}</span>
                                   {c.customer.supply_type && (
                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">
                                       {c.customer.supply_type}
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-xs text-gray-500 mt-0.5 font-mono">
+                                <p className="text-xs text-ink-3 mt-0.5 font-mono">
                                   {c.customer.rrn_front && (
                                     <span>
                                       {c.customer.rrn_front}-{c.customer.rrn_back?.slice(0, 1) || "•"}••••••
@@ -931,7 +931,7 @@ function StandbyPromotionBlock({
                 )}
               </div>
 
-              <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-2 flex-shrink-0">
+              <div className="p-4 border-t border-border-soft flex items-center justify-end gap-2 flex-shrink-0">
                 <button
                   onClick={() => setPickerOpen(false)}
                   className="btn-secondary text-sm"
@@ -962,7 +962,7 @@ function StandbyPromotionBlock({
 
 export default function CustomerDetailPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-gray-400">로딩 중...</div>}>
+    <Suspense fallback={<div className="p-6 text-ink-4">로딩 중...</div>}>
       <CustomerDetailInner />
     </Suspense>
   );

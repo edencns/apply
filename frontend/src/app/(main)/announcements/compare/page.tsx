@@ -50,13 +50,13 @@ function YesNo({ value, label }: { value: string; label?: string }) {
 function Section({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden">
+    <div className="border border-border rounded-lg overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-5 py-3.5 bg-gray-50 hover:bg-gray-100 transition-colors"
+        className="w-full flex items-center justify-between px-5 py-3.5 bg-surface2 hover:bg-surface2 transition-colors"
       >
-        <span className="font-semibold text-gray-800 text-sm">{title}</span>
-        {open ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        <span className="font-semibold text-ink text-sm">{title}</span>
+        {open ? <ChevronUp className="w-4 h-4 text-ink-4" /> : <ChevronDown className="w-4 h-4 text-ink-4" />}
       </button>
       {open && <div className="p-5">{children}</div>}
     </div>
@@ -67,22 +67,22 @@ function AptCard({ apt, selected, onClick }: { apt: AptAnnouncement; selected: b
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left p-3 rounded-xl border-2 transition-all ${
+      className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
         selected
-          ? "border-blue-500 bg-blue-50 shadow-sm"
-          : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
+          ? "border-blue-500 bg-accent-soft shadow-sm"
+          : "border-border bg-white hover:border-gray-300 hover:shadow-sm"
       }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className={`text-sm font-bold truncate ${selected ? "text-blue-900" : "text-gray-900"}`}>
+          <p className={`text-sm font-bold truncate ${selected ? "text-accent" : "text-ink"}`}>
             {apt.shortName}
           </p>
-          <p className="text-xs text-gray-500 truncate mt-0.5">{apt.location}</p>
+          <p className="text-xs text-ink-3 truncate mt-0.5">{apt.location}</p>
         </div>
         <Badge text={apt.regulation} cls={REG_COLOR[apt.regulation]} />
       </div>
-      <div className="mt-2 flex flex-col gap-1 text-xs text-gray-500">
+      <div className="mt-2 flex flex-col gap-1 text-xs text-ink-3">
         <span>{apt.totalUnits}세대</span>
         {apt.schedule.docSubmit && apt.schedule.docSubmit !== "—" && (
           <span className="flex items-center gap-1">
@@ -106,26 +106,26 @@ function OverviewTab({ apt }: { apt: AptAnnouncement }) {
       <Section title="단지 기본 정보">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <p className="text-xs text-gray-500 mb-1">단지명</p>
+            <p className="text-xs text-ink-3 mb-1">단지명</p>
             <p className="text-sm font-semibold">{apt.name}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-1">위치</p>
+            <p className="text-xs text-ink-3 mb-1">위치</p>
             <p className="text-sm">{apt.location}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-1">입주 예정</p>
+            <p className="text-xs text-ink-3 mb-1">입주 예정</p>
             <p className="text-sm">{apt.moveIn}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-1">총 세대수</p>
+            <p className="text-xs text-ink-3 mb-1">총 세대수</p>
             <p className="text-sm font-semibold">{apt.totalUnits.toLocaleString()}세대
-              <span className="text-gray-400 font-normal"> (일반 {apt.generalUnits} / 특별 {apt.specialUnits})</span>
+              <span className="text-ink-4 font-normal"> (일반 {apt.generalUnits} / 특별 {apt.specialUnits})</span>
             </p>
           </div>
         </div>
 
-        <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+        <div className="mt-4 pt-4 border-t border-border-soft space-y-2">
           <YesNo value={apt.resaleRestriction} label="전매제한" />
           <YesNo value={apt.reWinRestriction} label="재당첨 제한" />
           <YesNo value={apt.residenceObligation} label="거주의무" />
@@ -143,20 +143,20 @@ function OverviewTab({ apt }: { apt: AptAnnouncement }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-2 px-2 text-xs font-medium text-gray-500">타입</th>
-                <th className="text-right py-2 px-2 text-xs font-medium text-gray-500">전용면적</th>
-                <th className="text-right py-2 px-2 text-xs font-medium text-gray-500">세대수</th>
-                <th className="text-right py-2 px-2 text-xs font-medium text-gray-500">분양가</th>
+              <tr className="border-b border-border">
+                <th className="text-left py-2 px-2 text-xs font-medium text-ink-3">타입</th>
+                <th className="text-right py-2 px-2 text-xs font-medium text-ink-3">전용면적</th>
+                <th className="text-right py-2 px-2 text-xs font-medium text-ink-3">세대수</th>
+                <th className="text-right py-2 px-2 text-xs font-medium text-ink-3">분양가</th>
               </tr>
             </thead>
             <tbody>
               {apt.types.map((t) => (
                 <tr key={t.name} className="border-b border-gray-50">
                   <td className="py-2 px-2 font-medium">{t.name}</td>
-                  <td className="py-2 px-2 text-right text-gray-600">{t.area}㎡</td>
+                  <td className="py-2 px-2 text-right text-ink-2">{t.area}㎡</td>
                   <td className="py-2 px-2 text-right">{t.units}세대</td>
-                  <td className="py-2 px-2 text-right text-gray-600">{t.priceRange}</td>
+                  <td className="py-2 px-2 text-right text-ink-2">{t.priceRange}</td>
                 </tr>
               ))}
             </tbody>
@@ -176,7 +176,7 @@ function OverviewTab({ apt }: { apt: AptAnnouncement }) {
             { label: "계약 체결", value: apt.schedule.contract },
           ].map((item) => (
             <div key={item.label} className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">{item.label}</span>
+              <span className="text-ink-3">{item.label}</span>
               <span className="font-medium">{item.value}</span>
             </div>
           ))}
@@ -206,17 +206,17 @@ function EligibilityTab({ apt }: { apt: AptAnnouncement }) {
       <Section title="거주지역 요건">
         <div className="space-y-3">
           <div>
-            <p className="text-xs font-medium text-blue-600 mb-1">해당지역 (우선공급)</p>
+            <p className="text-xs font-medium text-accent mb-1">해당지역 (우선공급)</p>
             <p className="text-sm font-semibold">{apt.region.priority}</p>
           </div>
           <div>
-            <p className="text-xs font-medium text-gray-500 mb-1">기타지역</p>
+            <p className="text-xs font-medium text-ink-3 mb-1">기타지역</p>
             <p className="text-sm">{apt.region.other}</p>
           </div>
           {apt.region.priorityRatio && (
-            <div className="bg-blue-50 rounded-lg p-3">
-              <p className="text-xs font-medium text-blue-700">우선공급 비율</p>
-              <p className="text-sm text-blue-900 mt-0.5">{apt.region.priorityRatio}</p>
+            <div className="bg-accent-soft rounded-lg p-3">
+              <p className="text-xs font-medium text-accent">우선공급 비율</p>
+              <p className="text-sm text-accent mt-0.5">{apt.region.priorityRatio}</p>
             </div>
           )}
         </div>
@@ -224,21 +224,21 @@ function EligibilityTab({ apt }: { apt: AptAnnouncement }) {
 
       <Section title="청약통장 요건">
         <div className="mb-3">
-          <p className="text-xs text-gray-500 mb-1">1순위 최소 가입기간</p>
-          <p className="text-sm font-bold text-blue-700">{apt.subscription.period1st}</p>
+          <p className="text-xs text-ink-3 mb-1">1순위 최소 가입기간</p>
+          <p className="text-sm font-bold text-accent">{apt.subscription.period1st}</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-2 text-xs font-medium text-gray-500">면적 기준</th>
-                <th className="text-right py-2 text-xs font-medium text-gray-500">예치금액</th>
+              <tr className="border-b border-border">
+                <th className="text-left py-2 text-xs font-medium text-ink-3">면적 기준</th>
+                <th className="text-right py-2 text-xs font-medium text-ink-3">예치금액</th>
               </tr>
             </thead>
             <tbody>
               {apt.subscription.deposit.map((d) => (
                 <tr key={d.area} className="border-b border-gray-50">
-                  <td className="py-2 text-gray-700">{d.area}</td>
+                  <td className="py-2 text-ink-2">{d.area}</td>
                   <td className="py-2 text-right font-medium">{d.amount}</td>
                 </tr>
               ))}
@@ -253,11 +253,11 @@ function EligibilityTab({ apt }: { apt: AptAnnouncement }) {
           <p className="text-sm text-indigo-900 mt-0.5 font-semibold">{apt.generalPointSystem.ratio}</p>
         </div>
         <div>
-          <p className="text-xs font-medium text-gray-500 mb-2">가점 항목 (최대 {apt.generalPointSystem.maxPoints}점)</p>
+          <p className="text-xs font-medium text-ink-3 mb-2">가점 항목 (최대 {apt.generalPointSystem.maxPoints}점)</p>
           <div className="space-y-1.5">
             {apt.generalPointSystem.items.map((item, i) => (
               <div key={i} className="flex items-center gap-2 text-sm">
-                <div className="w-5 h-5 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">
+                <div className="w-5 h-5 bg-surface2 rounded-full flex items-center justify-center text-xs font-medium text-ink-2">
                   {i + 1}
                 </div>
                 <span>{item}</span>
@@ -269,20 +269,20 @@ function EligibilityTab({ apt }: { apt: AptAnnouncement }) {
 
       <Section title="규제 현황">
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-500">규제지역</p>
+          <div className="bg-surface2 rounded-lg p-3">
+            <p className="text-xs text-ink-3">규제지역</p>
             <Badge text={apt.regulation} cls={REG_COLOR[apt.regulation]} />
           </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-500">택지유형</p>
+          <div className="bg-surface2 rounded-lg p-3">
+            <p className="text-xs text-ink-3">택지유형</p>
             <p className="text-sm font-medium mt-1">{apt.landType}</p>
           </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-500">전매제한</p>
+          <div className="bg-surface2 rounded-lg p-3">
+            <p className="text-xs text-ink-3">전매제한</p>
             <p className="text-sm font-medium mt-1">{apt.resaleRestriction}</p>
           </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-500">재당첨 제한</p>
+          <div className="bg-surface2 rounded-lg p-3">
+            <p className="text-xs text-ink-3">재당첨 제한</p>
             <p className="text-sm font-medium mt-1">{apt.reWinRestriction}</p>
           </div>
         </div>
@@ -308,7 +308,7 @@ function SpecialTab({ apt }: { apt: AptAnnouncement }) {
       <Section title="특별공급 세대수 배분">
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">총 특별공급</span>
+            <span className="text-sm text-ink-2">총 특별공급</span>
             <span className="text-lg font-bold">{total}세대</span>
           </div>
           <div className="flex h-3 rounded-full overflow-hidden">
@@ -324,11 +324,11 @@ function SpecialTab({ apt }: { apt: AptAnnouncement }) {
         </div>
         <div className="grid grid-cols-2 gap-2">
           {items.map((item) => (
-            <div key={item.label} className="flex items-center gap-2.5 p-2 rounded-lg bg-gray-50">
+            <div key={item.label} className="flex items-center gap-2.5 p-2 rounded-lg bg-surface2">
               <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
-              <span className="text-sm text-gray-700 flex-1">{item.label}</span>
+              <span className="text-sm text-ink-2 flex-1">{item.label}</span>
               <span className="text-sm font-bold">{item.value}세대</span>
-              <span className="text-xs text-gray-400">({((item.value / total) * 100).toFixed(0)}%)</span>
+              <span className="text-xs text-ink-4">({((item.value / total) * 100).toFixed(0)}%)</span>
             </div>
           ))}
         </div>
@@ -357,10 +357,10 @@ function SpecialTab({ apt }: { apt: AptAnnouncement }) {
             <p className="text-xs text-red-700">1단계(25%) 신생아우선 &rarr; 2단계(10%) 신생아일반</p>
             <p className="text-xs text-red-700">3단계(25%) 우선 &rarr; 4단계(10%) 일반 &rarr; 5단계 추첨</p>
           </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs font-medium text-gray-700">순위 구분</p>
-            <p className="text-xs text-gray-600 mt-1">1순위: 현 배우자와 혼인 중 자녀 출산하여 미성년 자녀 있는 분</p>
-            <p className="text-xs text-gray-600">2순위: 그 외</p>
+          <div className="bg-surface2 rounded-lg p-3">
+            <p className="text-xs font-medium text-ink-2">순위 구분</p>
+            <p className="text-xs text-ink-2 mt-1">1순위: 현 배우자와 혼인 중 자녀 출산하여 미성년 자녀 있는 분</p>
+            <p className="text-xs text-ink-2">2순위: 그 외</p>
           </div>
         </div>
       </Section>
@@ -396,9 +396,9 @@ function IncomeTab({ apt }: { apt: AptAnnouncement }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-2 text-xs font-medium text-gray-500">구분</th>
-                <th className="text-right py-2 text-xs font-medium text-gray-500">소득 상한</th>
+              <tr className="border-b border-border">
+                <th className="text-left py-2 text-xs font-medium text-ink-3">구분</th>
+                <th className="text-right py-2 text-xs font-medium text-ink-3">소득 상한</th>
               </tr>
             </thead>
             <tbody>
@@ -406,25 +406,25 @@ function IncomeTab({ apt }: { apt: AptAnnouncement }) {
                 <td className="py-2.5">
                   <div>
                     <p className="font-medium">우선공급 (외벌이 100%)</p>
-                    <p className="text-xs text-gray-400">신생아우선 + 우선공급</p>
+                    <p className="text-xs text-ink-4">신생아우선 + 우선공급</p>
                   </div>
                 </td>
-                <td className="py-2.5 text-right font-medium text-blue-700">{apt.newlywedIncome.single100}</td>
+                <td className="py-2.5 text-right font-medium text-accent">{apt.newlywedIncome.single100}</td>
               </tr>
               <tr className="border-b border-gray-50">
                 <td className="py-2.5">
                   <div>
                     <p className="font-medium">우선공급 (맞벌이 120%)</p>
-                    <p className="text-xs text-gray-400">부부 모두 소득 시</p>
+                    <p className="text-xs text-ink-4">부부 모두 소득 시</p>
                   </div>
                 </td>
-                <td className="py-2.5 text-right font-medium text-blue-700">{apt.newlywedIncome.dual120}</td>
+                <td className="py-2.5 text-right font-medium text-accent">{apt.newlywedIncome.dual120}</td>
               </tr>
               <tr className="border-b border-gray-50">
                 <td className="py-2.5">
                   <div>
                     <p className="font-medium">일반공급 (외벌이 140%)</p>
-                    <p className="text-xs text-gray-400">소득초과~140%</p>
+                    <p className="text-xs text-ink-4">소득초과~140%</p>
                   </div>
                 </td>
                 <td className="py-2.5 text-right font-medium">{apt.newlywedIncome.single140}</td>
@@ -433,7 +433,7 @@ function IncomeTab({ apt }: { apt: AptAnnouncement }) {
                 <td className="py-2.5">
                   <div>
                     <p className="font-medium">일반공급 (맞벌이 160%)</p>
-                    <p className="text-xs text-gray-400">부부 모두 소득 시</p>
+                    <p className="text-xs text-ink-4">부부 모두 소득 시</p>
                   </div>
                 </td>
                 <td className="py-2.5 text-right font-medium">{apt.newlywedIncome.dual160}</td>
@@ -447,9 +447,9 @@ function IncomeTab({ apt }: { apt: AptAnnouncement }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-2 text-xs font-medium text-gray-500">구분</th>
-                <th className="text-right py-2 text-xs font-medium text-gray-500">소득 상한</th>
+              <tr className="border-b border-border">
+                <th className="text-left py-2 text-xs font-medium text-ink-3">구분</th>
+                <th className="text-right py-2 text-xs font-medium text-ink-3">소득 상한</th>
               </tr>
             </thead>
             <tbody>
@@ -457,7 +457,7 @@ function IncomeTab({ apt }: { apt: AptAnnouncement }) {
                 <td className="py-2.5">
                   <div>
                     <p className="font-medium">우선공급 (130% 이하)</p>
-                    <p className="text-xs text-gray-400">신생아우선 + 우선공급</p>
+                    <p className="text-xs text-ink-4">신생아우선 + 우선공급</p>
                   </div>
                 </td>
                 <td className="py-2.5 text-right font-medium text-emerald-700">{apt.firstLifeIncome.pct130}</td>
@@ -466,7 +466,7 @@ function IncomeTab({ apt }: { apt: AptAnnouncement }) {
                 <td className="py-2.5">
                   <div>
                     <p className="font-medium">일반공급 (160% 이하)</p>
-                    <p className="text-xs text-gray-400">신생아일반 + 일반공급</p>
+                    <p className="text-xs text-ink-4">신생아일반 + 일반공급</p>
                   </div>
                 </td>
                 <td className="py-2.5 text-right font-medium text-emerald-700">{apt.firstLifeIncome.pct160}</td>
@@ -492,10 +492,10 @@ function IncomeTab({ apt }: { apt: AptAnnouncement }) {
       </Section>
 
       <Section title="소득 확인 시점">
-        <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1.5">
+        <div className="bg-surface2 rounded-lg p-3 text-sm space-y-1.5">
           <p><strong>상시 근로자:</strong> 전년도(2025년) 소득 기준</p>
           <p><strong>사업자/프리랜서:</strong> 전전년도(2024년) 소득 기준</p>
-          <p className="text-xs text-gray-500 mt-2">* 부산 국제금융은 2024년 공고이므로 2023년 기준 적용</p>
+          <p className="text-xs text-ink-3 mt-2">* 부산 국제금융은 2024년 공고이므로 2023년 기준 적용</p>
         </div>
       </Section>
     </div>
@@ -726,11 +726,11 @@ function ComparePageInner() {
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <a href="/announcements" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-3">
+        <a href="/announcements" className="inline-flex items-center gap-1 text-sm text-ink-3 hover:text-ink-2 mb-3">
           <ArrowLeft className="w-3.5 h-3.5" /> 모집공고 목록
         </a>
-        <h1 className="text-2xl font-bold text-gray-900">공고문 비교 분석</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-ink">공고문 비교 분석</h1>
+        <p className="text-sm text-ink-3 mt-1">
           총 {allApts.length}개 공고의 청약 조건, 특별공급, 소득기준, 필요서류를 한눈에 비교
         </p>
       </div>
@@ -747,22 +747,22 @@ function ComparePageInner() {
             />
           ))}
           {allApts.length === 0 && (
-            <p className="text-xs text-gray-400 text-center py-8">등록된 공고가 없습니다</p>
+            <p className="text-xs text-ink-4 text-center py-8">등록된 공고가 없습니다</p>
           )}
         </div>
 
         {/* Right: Detail */}
         <div className="flex-1 min-w-0">
           {/* Tabs */}
-          <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1">
+          <div className="flex gap-1 mb-5 bg-surface2 rounded-lg p-1">
             {TABS.map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
                 onClick={() => setTab(key)}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all flex-1 justify-center ${
                   tab === key
-                    ? "bg-white text-blue-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
+                    ? "bg-white text-accent shadow-sm"
+                    : "text-ink-3 hover:text-ink-2"
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -787,7 +787,7 @@ function ComparePageInner() {
 
 export default function ComparePage() {
   return (
-    <Suspense fallback={<div className="p-6 text-gray-400">불러오는 중...</div>}>
+    <Suspense fallback={<div className="p-6 text-ink-4">불러오는 중...</div>}>
       <ComparePageInner />
     </Suspense>
   );

@@ -515,8 +515,8 @@ export default function AnnouncementsPage() {
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">모집공고 관리</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-ink">모집공고 관리</h1>
+          <p className="text-sm text-ink-3 mt-1">
             등록한 공고는 자동으로 공고 비교 · 고객 관리 · 서류 검수 · 당첨자 · 방문 계약에 연동됩니다
           </p>
         </div>
@@ -532,7 +532,7 @@ export default function AnnouncementsPage() {
       )}
 
       {/* 진행 중 / 완료 탭 */}
-      <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1">
+      <div className="flex gap-1 mb-5 bg-surface2 rounded-lg p-1">
         {([
           { key: "active" as TabKey, label: "진행 중", count: activeAnns.length },
           { key: "done" as TabKey, label: "완료", count: doneAnns.length },
@@ -542,13 +542,13 @@ export default function AnnouncementsPage() {
             onClick={() => setTab(key)}
             className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all flex-1 ${
               tab === key
-                ? "bg-white text-blue-700 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
+                ? "bg-white text-accent shadow-sm"
+                : "text-ink-3 hover:text-ink-2"
             }`}
           >
             {label}
             <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-              tab === key ? "bg-blue-100 text-blue-700" : "bg-gray-200 text-gray-500"
+              tab === key ? "bg-accent-soft text-accent" : "bg-gray-200 text-ink-3"
             }`}>{count}</span>
           </button>
         ))}
@@ -556,9 +556,9 @@ export default function AnnouncementsPage() {
 
       {/* 공고 목록 */}
       {loading ? (
-        <div className="card text-center py-10 text-gray-400">불러오는 중...</div>
+        <div className="card text-center py-10 text-ink-4">불러오는 중...</div>
       ) : visibleAnns.length === 0 ? (
-        <div className="card text-center py-16 text-gray-400">
+        <div className="card text-center py-16 text-ink-4">
           <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p>{tab === "active" ? "진행 중인 공고가 없습니다" : "완료된 공고가 없습니다"}</p>
         </div>
@@ -584,13 +584,13 @@ export default function AnnouncementsPage() {
                   className="flex items-center gap-3 min-w-0 flex-1"
                 >
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${
-                    tab === "done" ? "bg-gray-100 group-hover:bg-gray-200" : "bg-blue-50 group-hover:bg-blue-100"
+                    tab === "done" ? "bg-surface2 group-hover:bg-gray-200" : "bg-accent-soft group-hover:bg-accent-soft"
                   }`}>
-                    <BookOpen className={`w-5 h-5 ${tab === "done" ? "text-gray-400" : "text-blue-500"}`} />
+                    <BookOpen className={`w-5 h-5 ${tab === "done" ? "text-ink-4" : "text-blue-500"}`} />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-gray-900 truncate">{ann.title}</span>
+                      <span className="font-semibold text-ink truncate">{ann.title}</span>
                       {regulation && (
                         <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
                           regulation === "투기과열" ? "bg-red-100 text-red-700"
@@ -599,9 +599,9 @@ export default function AnnouncementsPage() {
                         }`}>{regulation}</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5 flex-wrap">
+                    <div className="flex items-center gap-3 text-xs text-ink-4 mt-0.5 flex-wrap">
                       {location && (
-                        <span className="text-gray-500">{location}</span>
+                        <span className="text-ink-3">{location}</span>
                       )}
                       {totalUnits > 0 && (
                         <span>{totalUnits}세대</span>
@@ -634,7 +634,7 @@ export default function AnnouncementsPage() {
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDelete(ann); }}
                     disabled={deleting === ann.id}
-                    className="p-2 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                    className="p-2 rounded-lg text-ink-4 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
                     title="삭제"
                   >
                     {deleting === ann.id ? (
@@ -644,7 +644,7 @@ export default function AnnouncementsPage() {
                     )}
                   </button>
                   <a href={linkHref} className="flex-shrink-0">
-                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500 transition-colors" />
+                    <ChevronRight className="w-4 h-4 text-ink-4 group-hover:text-blue-500 transition-colors" />
                   </a>
                 </div>
               </div>
@@ -658,19 +658,19 @@ export default function AnnouncementsPage() {
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-100 sticky top-0 bg-white rounded-t-2xl">
+            <div className="p-6 border-b border-border-soft sticky top-0 bg-white rounded-t-2xl">
               <h2 className="text-lg font-semibold">모집공고 등록</h2>
             </div>
             <form onSubmit={handleCreate} className="p-6 space-y-5">
               {/* PDF 자동 입력 */}
-              <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50/50 p-4">
+              <div className="rounded-lg border border-dashed border-blue-300 bg-accent-soft/50 p-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center flex-shrink-0">
+                  <div className="w-9 h-9 rounded-lg bg-accent text-white flex items-center justify-center flex-shrink-0">
                     <FileUp className="w-4 h-4" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-blue-900">공고 PDF 자동 입력</div>
-                    <p className="text-xs text-blue-700 mt-0.5 mb-2">
+                    <div className="text-sm font-semibold text-accent">공고 PDF 자동 입력</div>
+                    <p className="text-xs text-accent mt-0.5 mb-2">
                       입주자모집공고문 PDF를 업로드하면 제목·번호·일정·자격 기준을 자동으로 채워넣습니다.
                     </p>
                     <div className="flex items-center gap-2">
@@ -716,16 +716,16 @@ export default function AnnouncementsPage() {
 
               {/* 기본 정보 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">공고명 *</label>
+                <label className="block text-sm font-medium text-ink-2 mb-1">공고명 *</label>
                 <input required value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
                   placeholder="예: 힐스테이트 광진 1차 모집공고"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">공고번호 (부동산원)</label>
+                <label className="block text-sm font-medium text-ink-2 mb-1">공고번호 (부동산원)</label>
                 <input value={form.announcement_no} onChange={(e) => setForm((p) => ({ ...p, announcement_no: e.target.value }))}
                   placeholder="예: 2026-서울-0001"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
               </div>
 
               {/* 일정 */}
@@ -737,18 +737,18 @@ export default function AnnouncementsPage() {
                   { key: "contract_start",    label: "계약 시작일" },
                 ].map(({ key, label }) => (
                   <div key={key}>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                    <label className="block text-sm font-medium text-ink-2 mb-1">{label}</label>
                     <input type="datetime-local"
                       value={(form as any)[key]}
                       onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent" />
                   </div>
                 ))}
               </div>
 
               {/* 자격 기준 */}
-              <div className="border border-gray-200 rounded-xl p-4 space-y-4">
-                <h3 className="font-medium text-gray-800">청약 자격 기준</h3>
+              <div className="border border-border rounded-lg p-4 space-y-4">
+                <h3 className="font-medium text-ink">청약 자격 기준</h3>
 
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input type="checkbox" checked={form.rules.no_home_required}
@@ -758,21 +758,21 @@ export default function AnnouncementsPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">최소 거주기간 (개월)</label>
+                    <label className="block text-xs font-medium text-ink-2 mb-1">최소 거주기간 (개월)</label>
                     <input type="number" min={0}
                       value={form.rules.min_region_residence_months}
                       onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, min_region_residence_months: Number(e.target.value) } }))}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">청약통장 최소 납입 (개월)</label>
+                    <label className="block text-xs font-medium text-ink-2 mb-1">청약통장 최소 납입 (개월)</label>
                     <input type="number" min={0}
                       value={form.rules.min_subscription_period}
                       onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, min_subscription_period: Number(e.target.value) } }))}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">소득 상한 (월, 원)</label>
+                    <label className="block text-xs font-medium text-ink-2 mb-1">소득 상한 (월, 원)</label>
                     <input type="number" min={0}
                       value={form.rules.income_limit}
                       onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, income_limit: e.target.value } }))}
@@ -783,7 +783,7 @@ export default function AnnouncementsPage() {
 
                 {/* 지역 우선순위 */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">지역 우선순위</label>
+                  <label className="block text-xs font-medium text-ink-2 mb-1">지역 우선순위</label>
                   <div className="flex gap-2 mb-2">
                     <input value={form.regionInput}
                       onChange={(e) => setForm((p) => ({ ...p, regionInput: e.target.value }))}
@@ -794,7 +794,7 @@ export default function AnnouncementsPage() {
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {form.rules.region_priority.map((r, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full">
+                      <span key={i} className="inline-flex items-center gap-1 bg-accent-soft text-accent text-xs px-2 py-1 rounded-full">
                         {r}
                         <button type="button" onClick={() => removeRegion(i)} className="hover:text-red-500">×</button>
                       </span>

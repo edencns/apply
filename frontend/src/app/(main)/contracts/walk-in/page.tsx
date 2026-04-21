@@ -230,8 +230,8 @@ function WalkInPageInner() {
         }}
         onOpenDetail={(a) => router.push(`/announcements/${a.id}`)}
       />
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">방문 계약</h1>
-      <p className="text-sm text-gray-500 mb-8">
+      <h1 className="text-2xl font-bold text-ink mb-2">방문 계약</h1>
+      <p className="text-sm text-ink-3 mb-8">
         {selectedAnn ? `「${selectedAnn.title}」 · ` : ""}
         성명과 주민번호 앞 6자리를 입력하면 계약서가 자동으로 불러와집니다
       </p>
@@ -245,10 +245,10 @@ function WalkInPageInner() {
           return (
             <div key={s} className="flex items-center gap-2">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
-                ${isActive ? "bg-blue-600 text-white" : isDone ? "bg-green-500 text-white" : "bg-gray-200 text-gray-500"}`}>
+                ${isActive ? "bg-accent text-white" : isDone ? "bg-green-500 text-white" : "bg-gray-200 text-ink-3"}`}>
                 {isDone ? "✓" : i + 1}
               </div>
-              <span className={`text-sm ${isActive ? "text-blue-600 font-medium" : "text-gray-400"}`}>
+              <span className={`text-sm ${isActive ? "text-accent font-medium" : "text-ink-4"}`}>
                 {labels[i]}
               </span>
               {i < 3 && <div className="w-8 h-px bg-gray-300" />}
@@ -270,25 +270,25 @@ function WalkInPageInner() {
           <h2 className="text-lg font-semibold mb-4">고객 정보 입력</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">성명</label>
+              <label className="block text-sm font-medium text-ink-2 mb-1">성명</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="홍길동"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent text-lg"
                 onKeyDown={(e) => e.key === "Enter" && handleLookup()}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">주민등록번호 앞 6자리</label>
+              <label className="block text-sm font-medium text-ink-2 mb-1">주민등록번호 앞 6자리</label>
               <input
                 type="text"
                 value={rrnFront}
                 onChange={(e) => setRrnFront(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder="800101"
                 maxLength={6}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg tracking-widest"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent text-lg tracking-widest"
                 onKeyDown={(e) => e.key === "Enter" && handleLookup()}
               />
             </div>
@@ -326,14 +326,14 @@ function WalkInPageInner() {
             )}
 
             <table className="w-full text-sm">
-              <tbody className="divide-y divide-gray-100">
-                <tr><td className="py-2 text-gray-500 w-32">계약자</td><td className="py-2 font-medium">{contractInfo.customer_name}</td></tr>
-                <tr><td className="py-2 text-gray-500">동호수</td><td className="py-2 font-medium text-blue-600 text-base">{contractInfo.unit_number || "-"}</td></tr>
-                <tr><td className="py-2 text-gray-500">주택형</td><td className="py-2">{contractInfo.unit_type || "-"}</td></tr>
-                <tr><td className="py-2 text-gray-500">총 계약금액</td><td className="py-2 font-bold text-lg">{contractInfo.total_price?.toLocaleString() || 0}원</td></tr>
-                <tr><td className="py-2 text-gray-500">계약서 번호</td><td className="py-2 text-gray-600">{contractInfo.contract_no}</td></tr>
+              <tbody className="divide-y divide-border-soft">
+                <tr><td className="py-2 text-ink-3 w-32">계약자</td><td className="py-2 font-medium">{contractInfo.customer_name}</td></tr>
+                <tr><td className="py-2 text-ink-3">동호수</td><td className="py-2 font-medium text-accent text-base">{contractInfo.unit_number || "-"}</td></tr>
+                <tr><td className="py-2 text-ink-3">주택형</td><td className="py-2">{contractInfo.unit_type || "-"}</td></tr>
+                <tr><td className="py-2 text-ink-3">총 계약금액</td><td className="py-2 font-bold text-lg">{contractInfo.total_price?.toLocaleString() || 0}원</td></tr>
+                <tr><td className="py-2 text-ink-3">계약서 번호</td><td className="py-2 text-ink-2">{contractInfo.contract_no}</td></tr>
                 <tr>
-                  <td className="py-2 text-gray-500">계약금 입금</td>
+                  <td className="py-2 text-ink-3">계약금 입금</td>
                   <td className="py-2">
                     {contractInfo.deposit_confirmed
                       ? <span className="badge-eligible">입금 확인</span>
@@ -350,10 +350,10 @@ function WalkInPageInner() {
               <div className="space-y-2">
                 {contractInfo.payment_schedule.map((item: any, i: number) => (
                   <div key={i} className="flex justify-between items-center text-sm py-1 border-b border-gray-50">
-                    <span className="text-gray-600">{item.name}</span>
+                    <span className="text-ink-2">{item.name}</span>
                     <div className="text-right">
                       <span className="font-medium">{item.amount?.toLocaleString()}원</span>
-                      <span className="text-gray-400 text-xs ml-2">{item.due_date}</span>
+                      <span className="text-ink-4 text-xs ml-2">{item.due_date}</span>
                     </div>
                   </div>
                 ))}
@@ -379,7 +379,7 @@ function WalkInPageInner() {
       {step === "sign" && (
         <div className="card">
           <h2 className="text-lg font-semibold mb-2">전자서명</h2>
-          <p className="text-sm text-gray-500 mb-4">아래 서명란에 서명해주세요</p>
+          <p className="text-sm text-ink-3 mb-4">아래 서명란에 서명해주세요</p>
           <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden bg-white">
             <SignatureCanvas
               ref={sigRef}
@@ -403,9 +403,9 @@ function WalkInPageInner() {
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-8 h-8 text-green-600" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">계약이 완료되었습니다</h2>
-          <p className="text-gray-500 mb-2">계약자: <strong>{contractInfo?.customer_name}</strong></p>
-          <p className="text-gray-500 mb-6">동호수: <strong>{contractInfo?.unit_number || "-"}</strong></p>
+          <h2 className="text-xl font-bold text-ink mb-2">계약이 완료되었습니다</h2>
+          <p className="text-ink-3 mb-2">계약자: <strong>{contractInfo?.customer_name}</strong></p>
+          <p className="text-ink-3 mb-6">동호수: <strong>{contractInfo?.unit_number || "-"}</strong></p>
 
           <div className="flex gap-3 justify-center">
             <button onClick={handleDownloadPdf} className="btn-primary flex items-center gap-2">
@@ -425,7 +425,7 @@ function WalkInPageInner() {
 
 export default function WalkInPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-gray-400">로딩 중...</div>}>
+    <Suspense fallback={<div className="p-6 text-ink-4">로딩 중...</div>}>
       <WalkInPageInner />
     </Suspense>
   );

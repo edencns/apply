@@ -14,7 +14,7 @@ import { Users, Home, Banknote, AlertTriangle, CheckCircle2, XCircle, Circle } f
 function VerdictBadge({ verdict }: { verdict: StageVerdict }) {
   if (verdict.missing) {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600">
+      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-surface2 text-ink-2">
         <Circle className="w-3 h-3" /> 데이터 없음
       </span>
     );
@@ -75,7 +75,7 @@ export function HouseholdPanel({
     <div className="card">
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <Users className="w-4 h-4 text-amber-600" />
-        <h2 className="font-semibold text-gray-800">세대원 확인</h2>
+        <h2 className="font-semibold text-ink">세대원 확인</h2>
         <VerdictBadge verdict={verdict} />
       </div>
 
@@ -87,7 +87,7 @@ export function HouseholdPanel({
       ) : (
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-xs text-gray-500">
+            <tr className="border-b border-border text-xs text-ink-3">
               <th className="text-left py-1.5 font-medium">성명</th>
               <th className="text-left py-1.5 font-medium">주민번호</th>
               <th className="text-left py-1.5 font-medium">비고</th>
@@ -97,7 +97,7 @@ export function HouseholdPanel({
             {members.map((m, i) => (
               <tr key={i} className={`border-b border-gray-50 ${m.errorCode ? "bg-red-50/50" : ""}`}>
                 <td className="py-2 font-medium">{m.name}</td>
-                <td className="py-2 font-mono text-xs text-gray-600">
+                <td className="py-2 font-mono text-xs text-ink-2">
                   {m.rrn ? `${m.rrn.slice(0, 6)}-${m.rrn.slice(6, 7)}••••••` : "—"}
                 </td>
                 <td className="py-2">
@@ -106,7 +106,7 @@ export function HouseholdPanel({
                       오류 {m.errorCode}
                     </span>
                   ) : (
-                    <span className="text-[11px] text-gray-400">정상</span>
+                    <span className="text-[11px] text-ink-4">정상</span>
                   )}
                 </td>
               </tr>
@@ -145,7 +145,7 @@ export function PropertyPanel({
     <div className="card">
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <Home className="w-4 h-4 text-orange-600" />
-        <h2 className="font-semibold text-gray-800">주택소유 전산검색</h2>
+        <h2 className="font-semibold text-ink">주택소유 전산검색</h2>
         <VerdictBadge verdict={verdict} />
         {regulation && (
           <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
@@ -164,11 +164,11 @@ export function PropertyPanel({
           {Object.entries(byOwner).map(([key, owned]) => {
             const [name] = key.split("|");
             return (
-              <div key={key} className="border border-gray-200 rounded-lg p-3">
-                <div className="text-sm font-medium text-gray-700 mb-2">{name}</div>
+              <div key={key} className="border border-border rounded-lg p-3">
+                <div className="text-sm font-medium text-ink-2 mb-2">{name}</div>
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-gray-100 text-gray-500">
+                    <tr className="border-b border-border-soft text-ink-3">
                       <th className="text-left py-1 font-normal">주소</th>
                       <th className="text-right py-1 font-normal">면적</th>
                       <th className="text-left py-1 font-normal pl-2">용도</th>
@@ -180,10 +180,10 @@ export function PropertyPanel({
                       const isCurrent = !p.transferredDate;
                       const isRes = isResidentialUse(p.usage);
                       const statusCls = !isCurrent
-                        ? "text-gray-400"
+                        ? "text-ink-4"
                         : isRes
                           ? "text-amber-700 font-medium"
-                          : "text-gray-500";
+                          : "text-ink-3";
                       const statusLabel = !isCurrent
                         ? `양도 (${p.transferredDate})`
                         : isRes
@@ -191,13 +191,13 @@ export function PropertyPanel({
                           : "비주거";
                       return (
                         <tr key={i} className="border-b border-gray-50 last:border-0">
-                          <td className="py-1.5 text-gray-700 truncate max-w-xs" title={p.address}>
+                          <td className="py-1.5 text-ink-2 truncate max-w-xs" title={p.address}>
                             {p.address}
                           </td>
-                          <td className="py-1.5 text-right text-gray-600">
+                          <td className="py-1.5 text-right text-ink-2">
                             {p.areaM2 ? `${p.areaM2}㎡` : "—"}
                           </td>
-                          <td className="py-1.5 pl-2 text-gray-600">{p.usage || "—"}</td>
+                          <td className="py-1.5 pl-2 text-ink-2">{p.usage || "—"}</td>
                           <td className={`py-1.5 pl-2 ${statusCls}`}>{statusLabel}</td>
                         </tr>
                       );
@@ -212,7 +212,7 @@ export function PropertyPanel({
 
       <VerdictBox verdict={verdict} />
 
-      <p className="text-[11px] text-gray-500 mt-3">
+      <p className="text-[11px] text-ink-3 mt-3">
         * 판정 기준: 현재 보유 + 주거용만 카운트. 공고가 <strong>투기과열/청약과열</strong>이면 1건도 불가, 그 외 지역은 2주택부터 부적격.
       </p>
     </div>
@@ -253,7 +253,7 @@ export function SavingsPanel({
     <div className="card">
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <Banknote className="w-4 h-4 text-teal-600" />
-        <h2 className="font-semibold text-gray-800">청약통장 순위확인</h2>
+        <h2 className="font-semibold text-ink">청약통장 순위확인</h2>
         <VerdictBadge verdict={verdict} />
         {typeof minSubscriptionMonths === "number" && minSubscriptionMonths > 0 && (
           <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
@@ -270,27 +270,27 @@ export function SavingsPanel({
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500">은행</p>
+            <div className="bg-surface2 rounded-lg p-3">
+              <p className="text-xs text-ink-3">은행</p>
               <p className="font-medium mt-0.5">
                 {bankName} {savings?.bankCode && `(${savings.bankCode})`}
               </p>
             </div>
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500">순위확인 결과</p>
+            <div className="bg-surface2 rounded-lg p-3">
+              <p className="text-xs text-ink-3">순위확인 결과</p>
               <p className={`font-medium mt-0.5 ${savings?.verified ? "text-green-700" : "text-red-700"}`}>
                 {savings?.resultLength ? `${savings.resultLength})` : "—"}{" "}
                 {savings?.verified ? "검증완료" : "오류"}
               </p>
             </div>
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500">고객 가입기간</p>
+            <div className="bg-surface2 rounded-lg p-3">
+              <p className="text-xs text-ink-3">고객 가입기간</p>
               <p className="font-medium mt-0.5">
                 {customer.subscription_months ?? 0}개월
               </p>
             </div>
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500">공고 최소 요구</p>
+            <div className="bg-surface2 rounded-lg p-3">
+              <p className="text-xs text-ink-3">공고 최소 요구</p>
               <p className="font-medium mt-0.5">
                 {typeof minSubscriptionMonths === "number" && minSubscriptionMonths > 0
                   ? `${minSubscriptionMonths}개월`
@@ -317,9 +317,9 @@ export function SavingsPanel({
 
 function EmptyState({ hint, action }: { hint: string; action: string }) {
   return (
-    <div className="p-4 text-center border border-dashed border-gray-200 rounded-lg">
-      <p className="text-sm text-gray-500">{hint}</p>
-      <p className="text-[11px] text-gray-400 mt-1">{action}</p>
+    <div className="p-4 text-center border border-dashed border-border rounded-lg">
+      <p className="text-sm text-ink-3">{hint}</p>
+      <p className="text-[11px] text-ink-4 mt-1">{action}</p>
     </div>
   );
 }

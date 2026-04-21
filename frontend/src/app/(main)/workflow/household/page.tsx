@@ -26,7 +26,7 @@ const columns: StageColumn[] = [
     header: "주택형",
     render: (c) => c.unit_type ? (
       <span className="font-mono text-xs">{c.unit_type}</span>
-    ) : <span className="text-gray-400 text-xs">—</span>,
+    ) : <span className="text-ink-4 text-xs">—</span>,
   },
   {
     key: "supply",
@@ -42,7 +42,7 @@ const columns: StageColumn[] = [
     header: "세대원",
     render: (c) => {
       const count = c.household_members?.length ?? 0;
-      if (count === 0) return <span className="text-xs text-gray-400">미등록</span>;
+      if (count === 0) return <span className="text-xs text-ink-4">미등록</span>;
       return (
         <span className="inline-flex items-center gap-1 text-sm">
           <Users className="w-3.5 h-3.5 text-amber-600" />
@@ -66,7 +66,7 @@ const columns: StageColumn[] = [
           </span>
         );
       }
-      return <span className="text-xs text-gray-400">—</span>;
+      return <span className="text-xs text-ink-4">—</span>;
     },
   },
 ];
@@ -263,7 +263,7 @@ export default function HouseholdStepPage() {
               <span className="font-semibold text-emerald-900 mr-3">세대원 검증 결과</span>
               <span className="text-green-700 mr-3">통과 {verifyResult.ok}명</span>
               <span className="text-red-700 mr-3">부적합 {verifyResult.fail}명</span>
-              <span className="text-gray-600">검증 필요 {verifyResult.missing}명</span>
+              <span className="text-ink-2">검증 필요 {verifyResult.missing}명</span>
             </div>
           )}
 

@@ -579,27 +579,27 @@ function CustomersPageInner() {
     <div className="p-6 max-w-6xl mx-auto">
       {/* 단계 헤더 */}
       <div className="mb-5">
-        <div className="flex items-center gap-2 text-xs text-gray-400 mb-1">
+        <div className="flex items-center gap-2 text-xs text-ink-4 mb-1">
           <span>서류 검수 단계</span>
           <ChevronRight className="w-3 h-3" />
           <span>1 / 5</span>
         </div>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white text-sm font-bold">
+            <h1 className="text-2xl font-bold text-ink flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-accent text-white text-sm font-bold">
                 1
               </span>
               당첨자 등록
             </h1>
-            <p className="text-sm text-gray-500 mt-1 max-w-2xl">
+            <p className="text-sm text-ink-3 mt-1 max-w-2xl">
               전산추첨결과·당첨자현황 PDF·예비입주자 명단 등 당첨자 원본 파일을 올려 이 공고에 등록합니다.
             </p>
           </div>
           {/* 다음 단계 */}
           <a
             href="/workflow/household"
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-accent bg-accent-soft hover:bg-accent-soft transition-colors"
           >
             다음 단계 <ChevronRight className="w-3.5 h-3.5" />
           </a>
@@ -617,7 +617,7 @@ function CustomersPageInner() {
       {/* 액션 바 */}
       <div className="mb-6">
         <div className="flex items-baseline gap-3 flex-wrap mb-4">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-ink-3">
             {selectedAnn ? `「${selectedAnn.title}」에 신청자/당첨자/예비 등록 · 관리` : "공고를 먼저 선택해주세요"}
           </p>
         </div>
@@ -673,13 +673,13 @@ function CustomersPageInner() {
             }}
           />
 
-          <div className="w-px h-6 bg-gray-200 mx-1" />
+          <div className="w-px h-6 bg-border mx-1" />
 
           {/* 고객 등록 — 수동 폼 */}
           <button
             onClick={() => { setFormError(null); setShowForm(true); }}
             disabled={!selectedAnn}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-accent hover:bg-accent shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <UserPlus className="w-4 h-4" /> 고객 등록
           </button>
@@ -749,8 +749,8 @@ function CustomersPageInner() {
         <div className={`card mb-4 ${excelResult.failed === 0 ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <div className="text-sm font-semibold text-gray-800">엑셀 일괄 등록 결과</div>
-              <div className="mt-1 text-sm text-gray-700">
+              <div className="text-sm font-semibold text-ink">엑셀 일괄 등록 결과</div>
+              <div className="mt-1 text-sm text-ink-2">
                 성공 <strong className="text-green-700">{excelResult.success}건</strong>
                 {excelResult.failed > 0 && <> · 실패 <strong className="text-red-700">{excelResult.failed}건</strong></>}
               </div>
@@ -758,19 +758,19 @@ function CustomersPageInner() {
                 <ul className="mt-2 text-xs text-red-700 space-y-0.5 list-disc list-inside">
                   {excelResult.errors.map((e, i) => <li key={i}>{e}</li>)}
                   {excelResult.failed > excelResult.errors.length && (
-                    <li className="text-gray-500">…외 {excelResult.failed - excelResult.errors.length}건 더</li>
+                    <li className="text-ink-3">…외 {excelResult.failed - excelResult.errors.length}건 더</li>
                   )}
                 </ul>
               )}
             </div>
-            <button onClick={() => setExcelResult(null)} className="text-gray-400 hover:text-gray-600 text-sm">×</button>
+            <button onClick={() => setExcelResult(null)} className="text-ink-4 hover:text-ink-2 text-sm">×</button>
           </div>
         </div>
       )}
 
       {/* 당첨자 / 예비 / 전체 탭 + 검색 */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <div className="inline-flex rounded-lg bg-gray-100 p-0.5">
+        <div className="inline-flex rounded-lg bg-surface2 p-0.5">
           {[
             { key: "winners" as const, label: "당첨자", count: winnersCount },
             { key: "standbys" as const, label: "예비", count: standbysCount },
@@ -788,8 +788,8 @@ function CustomersPageInner() {
                   active
                     ? t.key === "standbys"
                       ? "bg-white text-amber-700 shadow-sm"
-                      : "bg-white text-blue-700 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900"
+                      : "bg-white text-accent shadow-sm"
+                    : "text-ink-2 hover:text-ink"
                 }`}
               >
                 {t.label}
@@ -797,8 +797,8 @@ function CustomersPageInner() {
                   active
                     ? t.key === "standbys"
                       ? "bg-amber-100 text-amber-700"
-                      : "bg-blue-100 text-blue-700"
-                    : "bg-gray-200 text-gray-600"
+                      : "bg-accent-soft text-accent"
+                    : "bg-border text-ink-2"
                 }`}>
                   {t.count}
                 </span>
@@ -809,7 +809,7 @@ function CustomersPageInner() {
         <select
           value={unitFilter}
           onChange={(e) => setUnitFilter(e.target.value)}
-          className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="px-2.5 py-1.5 rounded-lg border border-border bg-white text-xs font-medium text-ink-2 focus:outline-none focus:ring-2 focus:ring-accent"
         >
           <option value="all">주택형 전체</option>
           {unitOptions.map((u) => (
@@ -819,7 +819,7 @@ function CustomersPageInner() {
         <select
           value={supplyFilter}
           onChange={(e) => setSupplyFilter(e.target.value)}
-          className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="px-2.5 py-1.5 rounded-lg border border-border bg-white text-xs font-medium text-ink-2 focus:outline-none focus:ring-2 focus:ring-accent"
         >
           <option value="all">공급유형 전체</option>
           {supplyOptions.map((s) => (
@@ -827,12 +827,12 @@ function CustomersPageInner() {
           ))}
         </select>
         <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-4" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="이름 또는 연락처 검색"
-            className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-9 pr-4 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
           />
         </div>
         {listTab === "standbys" && (
@@ -846,7 +846,7 @@ function CustomersPageInner() {
       {/* 고객 목록 */}
       <div className="card p-0 overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-100">
+          <thead className="bg-surface2 border-b border-border-soft">
             <tr>
               {selectMode && (
                 <th className="px-4 py-3 w-10">
@@ -864,22 +864,22 @@ function CustomersPageInner() {
                   />
                 </th>
               )}
-              <th className="text-left px-4 py-3 font-medium text-gray-600">성명</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">연락처</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">주택형</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">공급 유형</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">청약 가점</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">서류 검수</th>
+              <th className="text-left px-4 py-3 font-medium text-ink-2">성명</th>
+              <th className="text-left px-4 py-3 font-medium text-ink-2">연락처</th>
+              <th className="text-left px-4 py-3 font-medium text-ink-2">주택형</th>
+              <th className="text-left px-4 py-3 font-medium text-ink-2">공급 유형</th>
+              <th className="text-left px-4 py-3 font-medium text-ink-2">청약 가점</th>
+              <th className="text-left px-4 py-3 font-medium text-ink-2">서류 검수</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-border-soft">
             {!selectedAnn ? (
-              <tr><td colSpan={selectMode ? 8 : 7} className="text-center py-8 text-gray-400">먼저 공고를 선택해주세요</td></tr>
+              <tr><td colSpan={selectMode ? 8 : 7} className="text-center py-8 text-ink-4">먼저 공고를 선택해주세요</td></tr>
             ) : loading ? (
-              <tr><td colSpan={selectMode ? 8 : 7} className="text-center py-8 text-gray-400">불러오는 중...</td></tr>
+              <tr><td colSpan={selectMode ? 8 : 7} className="text-center py-8 text-ink-4">불러오는 중...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={selectMode ? 8 : 7} className="text-center py-8 text-gray-400">이 공고에 등록된 고객이 없습니다</td></tr>
+              <tr><td colSpan={selectMode ? 8 : 7} className="text-center py-8 text-ink-4">이 공고에 등록된 고객이 없습니다</td></tr>
             ) : filtered.map((c) => {
               const displaySupply = c.supply_type || (c.special_types && c.special_types.length > 0 ? c.special_types[0] : "일반공급");
               const supplyCls = displaySupply === "일반공급"
@@ -889,7 +889,7 @@ function CustomersPageInner() {
                 ? "bg-green-100 text-green-700"
                 : c.verification_verdict === "ineligible"
                   ? "bg-red-100 text-red-700"
-                  : "bg-gray-100 text-gray-500";
+                  : "bg-surface2 text-ink-3";
               const vLabel = c.verification_verdict === "eligible"
                 ? "적합"
                 : c.verification_verdict === "ineligible"
@@ -903,8 +903,8 @@ function CustomersPageInner() {
                     selectMode
                       ? isChecked
                         ? "bg-red-50 hover:bg-red-100"
-                        : "hover:bg-gray-50 cursor-pointer"
-                      : "hover:bg-gray-50"
+                        : "hover:bg-surface2 cursor-pointer"
+                      : "hover:bg-surface2"
                   }`}
                   onClick={selectMode ? () => {
                     setSelectedIds((prev) => {
@@ -934,7 +934,7 @@ function CustomersPageInner() {
                       />
                     </td>
                   )}
-                  <td className={`px-4 py-3 font-medium ${c.superseded ? "text-gray-400 line-through" : "text-gray-900"}`}>
+                  <td className={`px-4 py-3 font-medium ${c.superseded ? "text-ink-4 line-through" : "text-ink"}`}>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span>{c.name}</span>
                       {c.is_standby && (
@@ -943,7 +943,7 @@ function CustomersPageInner() {
                         </span>
                       )}
                       {c.superseded && (
-                        <span className="text-[9px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">
+                        <span className="text-[9px] bg-border text-ink-2 px-1.5 py-0.5 rounded font-medium whitespace-nowrap">
                           포기
                         </span>
                       )}
@@ -954,23 +954,23 @@ function CustomersPageInner() {
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{c.phone || "-"}</td>
-                  <td className="px-4 py-3 text-gray-700">
+                  <td className="px-4 py-3 text-ink-2">{c.phone || "-"}</td>
+                  <td className="px-4 py-3 text-ink-2">
                     {c.unit_type ? (
                       <>
                         <span className="font-medium">{c.unit_type}</span>
-                        {c.unit_area && <span className="text-gray-400 text-xs ml-1">{c.unit_area}</span>}
+                        {c.unit_area && <span className="text-ink-4 text-xs ml-1">{c.unit_area}</span>}
                       </>
                     ) : (
-                      <span className="text-xs text-gray-400">-</span>
+                      <span className="text-xs text-ink-4">-</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${supplyCls}`}>{displaySupply}</span>
                   </td>
                   <td className="px-4 py-3">
-                    <span className="font-semibold text-blue-700">{c.total_score}점</span>
-                    <span className="text-gray-400 text-xs ml-1">/ 84점</span>
+                    <span className="font-semibold text-accent">{c.total_score}점</span>
+                    <span className="text-ink-4 text-xs ml-1">/ 84점</span>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${vCls}`}>
@@ -988,7 +988,7 @@ function CustomersPageInner() {
                       </a>
                       <a
                         href={`/customers/${c.id}`}
-                        className="text-blue-600 hover:underline flex items-center gap-0.5 text-xs"
+                        className="text-accent hover:underline flex items-center gap-0.5 text-xs"
                       >
                         상세 <ChevronRight className="w-3 h-3" />
                       </a>
@@ -1000,7 +1000,7 @@ function CustomersPageInner() {
           </tbody>
         </table>
         {filtered.length > 0 && (
-          <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-400 text-right">
+          <div className="px-4 py-2 border-t border-border-soft text-xs text-ink-4 text-right">
             총 {filtered.length}명
           </div>
         )}
@@ -1010,31 +1010,31 @@ function CustomersPageInner() {
       {conflicts.length > 0 && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
+            <div className="p-6 border-b border-border-soft flex items-center justify-between sticky top-0 bg-white z-10">
               <div>
                 <h2 className="text-lg font-semibold">변경사항 검토</h2>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <p className="text-xs text-ink-3 mt-0.5">
                   {conflicts.length}명의 기존 고객과 업로드 내용이 다릅니다. 각각 수정할지 유지할지 선택해 주세요.
                 </p>
               </div>
               <button
                 onClick={() => { setConflicts([]); setConflictDecisions({}); }}
-                className="p-1 hover:bg-gray-100 rounded-full"
+                className="p-1 hover:bg-surface2 rounded-full"
               >
-                <X className="w-4 h-4 text-gray-500" />
+                <X className="w-4 h-4 text-ink-3" />
               </button>
             </div>
 
             {/* 일괄 액션 */}
-            <div className="px-6 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-gray-600">일괄 선택:</span>
+            <div className="px-6 py-3 bg-surface2 border-b border-border-soft flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-ink-2">일괄 선택:</span>
               <button
                 onClick={() => {
                   const next: Record<number, "update" | "keep"> = {};
                   conflicts.forEach((c) => { next[c.existing.id] = "update"; });
                   setConflictDecisions(next);
                 }}
-                className="text-xs px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium"
+                className="text-xs px-2.5 py-1 rounded-md bg-accent-soft text-accent hover:bg-accent-soft font-medium"
               >
                 모두 새 값으로 수정
               </button>
@@ -1044,11 +1044,11 @@ function CustomersPageInner() {
                   conflicts.forEach((c) => { next[c.existing.id] = "keep"; });
                   setConflictDecisions(next);
                 }}
-                className="text-xs px-2.5 py-1 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium"
+                className="text-xs px-2.5 py-1 rounded-md bg-surface2 text-ink-2 hover:bg-border font-medium"
               >
                 모두 기존 값 유지
               </button>
-              <span className="text-xs text-gray-400 ml-auto">
+              <span className="text-xs text-ink-4 ml-auto">
                 선택됨 {Object.keys(conflictDecisions).length} / {conflicts.length}
               </span>
             </div>
@@ -1060,19 +1060,19 @@ function CustomersPageInner() {
                 return (
                   <div
                     key={conflict.existing.id}
-                    className={`border-2 rounded-xl p-4 transition-colors ${
+                    className={`border-2 rounded-lg p-4 transition-colors ${
                       decision === "update"
-                        ? "border-blue-300 bg-blue-50"
+                        ? "border-blue-300 bg-accent-soft"
                         : decision === "keep"
-                          ? "border-gray-300 bg-gray-50"
+                          ? "border-gray-300 bg-surface2"
                           : "border-amber-200 bg-amber-50"
                     }`}
                   >
                     <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                       <div>
-                        <span className="font-semibold text-gray-900">{conflict.existing.name}</span>
+                        <span className="font-semibold text-ink">{conflict.existing.name}</span>
                         {conflict.existing.rrn_front && (
-                          <span className="text-xs text-gray-500 ml-2 font-mono">
+                          <span className="text-xs text-ink-3 ml-2 font-mono">
                             {conflict.existing.rrn_front}-{conflict.existing.rrn_back?.slice(0, 1) || "•"}••••••
                           </span>
                         )}
@@ -1082,8 +1082,8 @@ function CustomersPageInner() {
                           onClick={() => setConflictDecisions((p) => ({ ...p, [conflict.existing.id]: "update" }))}
                           className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${
                             decision === "update"
-                              ? "bg-blue-600 text-white"
-                              : "bg-white border border-blue-300 text-blue-700 hover:bg-blue-50"
+                              ? "bg-accent text-white"
+                              : "bg-white border border-blue-300 text-accent hover:bg-accent-soft"
                           }`}
                         >
                           새 값으로 수정
@@ -1093,7 +1093,7 @@ function CustomersPageInner() {
                           className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${
                             decision === "keep"
                               ? "bg-gray-700 text-white"
-                              : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                              : "bg-white border border-gray-300 text-ink-2 hover:bg-surface2"
                           }`}
                         >
                           기존 값 유지
@@ -1103,7 +1103,7 @@ function CustomersPageInner() {
                     {/* Diff 테이블 */}
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="border-b border-gray-200 text-gray-500">
+                        <tr className="border-b border-border text-ink-3">
                           <th className="text-left py-1.5 pr-4 font-normal w-32">항목</th>
                           <th className="text-left py-1.5 pr-4 font-normal">기존 값</th>
                           <th className="text-left py-1.5 font-normal">새 값 (파일)</th>
@@ -1111,12 +1111,12 @@ function CustomersPageInner() {
                       </thead>
                       <tbody>
                         {conflict.diffs.map((d) => (
-                          <tr key={String(d.key)} className="border-b border-gray-100 last:border-0">
-                            <td className="py-1.5 pr-4 font-medium text-gray-700">{d.label}</td>
-                            <td className="py-1.5 pr-4 text-gray-600 line-through decoration-gray-400">
+                          <tr key={String(d.key)} className="border-b border-border-soft last:border-0">
+                            <td className="py-1.5 pr-4 font-medium text-ink-2">{d.label}</td>
+                            <td className="py-1.5 pr-4 text-ink-2 line-through decoration-gray-400">
                               {formatValue(d.oldValue)}
                             </td>
-                            <td className="py-1.5 text-blue-700 font-medium">
+                            <td className="py-1.5 text-accent font-medium">
                               {formatValue(d.newValue)}
                             </td>
                           </tr>
@@ -1129,8 +1129,8 @@ function CustomersPageInner() {
             </div>
 
             {/* 하단 액션 */}
-            <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 flex items-center justify-between gap-2">
-              <span className="text-xs text-gray-500">
+            <div className="sticky bottom-0 bg-white border-t border-border-soft px-6 py-4 flex items-center justify-between gap-2">
+              <span className="text-xs text-ink-3">
                 미선택 항목은 기존 값 유지로 처리됩니다.
               </span>
               <div className="flex gap-2">
@@ -1179,76 +1179,76 @@ function CustomersPageInner() {
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+            <div className="p-6 border-b border-border-soft flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold">신규 고객 등록</h2>
                 {selectedAnn && (
-                  <p className="text-xs text-gray-500 mt-0.5">대상 공고: {selectedAnn.title}</p>
+                  <p className="text-xs text-ink-3 mt-0.5">대상 공고: {selectedAnn.title}</p>
                 )}
               </div>
-              <button onClick={() => setShowForm(false)} className="p-1 hover:bg-gray-100 rounded-full">
-                <X className="w-4 h-4 text-gray-500" />
+              <button onClick={() => setShowForm(false)} className="p-1 hover:bg-surface2 rounded-full">
+                <X className="w-4 h-4 text-ink-3" />
               </button>
             </div>
             <form onSubmit={handleCreate} className="p-6 space-y-4">
               {pdfFilled.length > 0 && (
-                <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+                <div className="flex items-start gap-2 p-3 bg-accent-soft border border-blue-200 rounded-lg text-sm text-accent">
                   <FileText className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
                     <strong>PDF에서 자동 추출된 항목:</strong>{" "}
                     {pdfFilled.join(" · ")}
-                    <div className="text-xs text-blue-600 mt-0.5">내용을 확인한 뒤 필요 시 수정해주세요.</div>
+                    <div className="text-xs text-accent mt-0.5">내용을 확인한 뒤 필요 시 수정해주세요.</div>
                   </div>
-                  <button type="button" onClick={() => setPdfFilled([])} className="text-blue-400 hover:text-blue-600">
+                  <button type="button" onClick={() => setPdfFilled([])} className="text-blue-400 hover:text-accent">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">성명 *</label>
+                  <label className="block text-sm font-medium text-ink-2 mb-1">성명 *</label>
                   <input required value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">연락처</label>
+                  <label className="block text-sm font-medium text-ink-2 mb-1">연락처</label>
                   <input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
                     placeholder="010-0000-0000"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">주민번호 앞 6자리 *</label>
+                  <label className="block text-sm font-medium text-ink-2 mb-1">주민번호 앞 6자리 *</label>
                   <input required maxLength={6} value={form.rrn_front} onChange={(e) => setForm((p) => ({ ...p, rrn_front: e.target.value.replace(/\D/g,"") }))}
                     placeholder="800101"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">주민번호 뒷 7자리 *</label>
+                  <label className="block text-sm font-medium text-ink-2 mb-1">주민번호 뒷 7자리 *</label>
                   <input required type="password" maxLength={7} value={form.rrn_back} onChange={(e) => setForm((p) => ({ ...p, rrn_back: e.target.value.replace(/\D/g,"") }))}
                     placeholder="•••••••"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">주소</label>
+                <label className="block text-sm font-medium text-ink-2 mb-1">주소</label>
                 <input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">무주택 기간 (년)</label>
+                  <label className="block text-xs font-medium text-ink-2 mb-1">무주택 기간 (년)</label>
                   <input type="number" min={0} value={form.no_home_years} onChange={(e) => setForm((p) => ({ ...p, no_home_years: Number(e.target.value) }))}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">부양가족 수</label>
+                  <label className="block text-xs font-medium text-ink-2 mb-1">부양가족 수</label>
                   <input type="number" min={0} value={form.dependents_count} onChange={(e) => setForm((p) => ({ ...p, dependents_count: Number(e.target.value) }))}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">통장 납입 (개월)</label>
+                  <label className="block text-xs font-medium text-ink-2 mb-1">통장 납입 (개월)</label>
                   <input type="number" min={0} value={form.subscription_months} onChange={(e) => setForm((p) => ({ ...p, subscription_months: Number(e.target.value) }))}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
                 </div>
@@ -1256,14 +1256,14 @@ function CustomersPageInner() {
 
               {/* 공고별 동적 특별공급 체크박스 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-ink-2 mb-2">
                   특별공급 유형
-                  <span className="text-xs text-gray-400 font-normal ml-2">
+                  <span className="text-xs text-ink-4 font-normal ml-2">
                     (이 공고에서 모집하는 유형)
                   </span>
                 </label>
                 {specialTypeOptions.length === 0 ? (
-                  <div className="text-xs text-gray-400 py-1">이 공고는 특별공급 유형이 지정되어 있지 않습니다</div>
+                  <div className="text-xs text-ink-4 py-1">이 공고는 특별공급 유형이 지정되어 있지 않습니다</div>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {specialTypeOptions.map((t) => {
@@ -1274,7 +1274,7 @@ function CustomersPageInner() {
                           className={`px-3 py-1.5 rounded-full text-xs font-medium border cursor-pointer transition-colors ${
                             checked
                               ? "bg-purple-600 text-white border-purple-600"
-                              : "bg-white text-gray-600 border-gray-300 hover:border-purple-400"
+                              : "bg-white text-ink-2 border-gray-300 hover:border-purple-400"
                           }`}
                         >
                           <input
@@ -1313,7 +1313,7 @@ function CustomersPageInner() {
         <div className="mt-8 flex justify-end">
           <a
             href="/workflow/household"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent transition-colors shadow-sm"
           >
             다음 단계 (세대원 확인) 로 진행
             <ChevronRight className="w-4 h-4" />
@@ -1326,7 +1326,7 @@ function CustomersPageInner() {
 
 export default function RegistrationPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-gray-400">로딩 중...</div>}>
+    <Suspense fallback={<div className="p-6 text-ink-4">로딩 중...</div>}>
       <CustomersPageInner />
     </Suspense>
   );

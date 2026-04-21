@@ -51,17 +51,17 @@ const columns: StageColumn[] = [
       const submitted = c.documents_submitted || {};
       const count = Object.values(submitted).filter(Boolean).length;
       const total = Object.keys(submitted).length;
-      if (total === 0) return <span className="text-xs text-gray-400">—</span>;
+      if (total === 0) return <span className="text-xs text-ink-4">—</span>;
       const pct = Math.round((count / total) * 100);
       return (
         <div className="flex items-center gap-2">
-          <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+          <div className="w-16 h-1.5 bg-border rounded-full overflow-hidden">
             <div
-              className={`h-full ${pct === 100 ? "bg-green-500" : "bg-blue-500"}`}
+              className={`h-full ${pct === 100 ? "bg-green-500" : "bg-accent"}`}
               style={{ width: `${pct}%` }}
             />
           </div>
-          <span className="text-xs text-gray-600 whitespace-nowrap">{count}/{total}</span>
+          <span className="text-xs text-ink-2 whitespace-nowrap">{count}/{total}</span>
         </div>
       );
     },
@@ -70,11 +70,11 @@ const columns: StageColumn[] = [
     key: "score",
     header: "가점",
     render: (c) => {
-      if (!c.total_score) return <span className="text-xs text-gray-400">—</span>;
+      if (!c.total_score) return <span className="text-xs text-ink-4">—</span>;
       return (
         <span className="text-sm">
-          <strong className="text-blue-700">{c.total_score}</strong>
-          <span className="text-gray-400 text-[10px]">/84</span>
+          <strong className="text-accent">{c.total_score}</strong>
+          <span className="text-ink-4 text-[10px]">/84</span>
         </span>
       );
     },
@@ -99,7 +99,7 @@ const columns: StageColumn[] = [
         );
       }
       return (
-        <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+        <span className="inline-flex items-center gap-1 text-xs text-ink-3">
           <Clock className="w-3 h-3" /> 미검수
         </span>
       );
@@ -232,7 +232,7 @@ export default function DocumentsStepPage() {
             >
               <Gavel className="w-4 h-4" /> 최종 검증
             </button>
-            <span className="text-[11px] text-gray-500 ml-2">
+            <span className="text-[11px] text-ink-3 ml-2">
               * 세대원/주택/통장 어느 쪽이든 자동 인식하여 반영
             </span>
           </div>
@@ -242,7 +242,7 @@ export default function DocumentsStepPage() {
               <span className="font-semibold text-emerald-900 mr-3">최종 판정 결과</span>
               <span className="text-green-700 mr-3">적합 {verifyResult.eligible}명</span>
               <span className="text-red-700 mr-3">부적합 {verifyResult.ineligible}명</span>
-              <span className="text-gray-600">보류 {verifyResult.pending}명</span>
+              <span className="text-ink-2">보류 {verifyResult.pending}명</span>
             </div>
           )}
 
