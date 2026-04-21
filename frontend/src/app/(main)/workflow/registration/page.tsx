@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { customersApi, eligibilityApi, api } from "@/lib/api";
+import { customersApi, api } from "@/lib/api";
 import {
   localAnnouncements,
   localCustomers,
@@ -12,13 +12,12 @@ import {
   LocalCustomer,
 } from "@/lib/local-store";
 import {
-  UserPlus, Search, ChevronRight, Calculator, FileSpreadsheet, FileText,
-  Loader2, Download, BookOpen, X, Trash2, Sparkles,
+  UserPlus, Search, ChevronRight, Calculator, FileText,
+  Loader2, BookOpen, X, Trash2, Upload,
 } from "lucide-react";
 import AnnouncementPicker from "@/components/AnnouncementPicker";
 import { getSampleAsLocalAnnouncements } from "@/lib/sample-adapter";
 import { classifyIncoming, formatValue, IncomingCustomer, CustomerConflict } from "@/lib/customer-dedup";
-import WinnerIngestModal from "@/components/WinnerIngestModal";
 
 interface Customer {
   id: number;
@@ -61,11 +60,6 @@ function CustomersPageInner() {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
-  // 가점 계산기
-  const [calcInput, setCalcInput] = useState({ no_home_years: 0, dependents_count: 0, subscription_months: 0 });
-  const [calcResult, setCalcResult] = useState<any>(null);
-  const [showCalc, setShowCalc] = useState(false);
-
   // 신규 고객 폼
   const [form, setForm] = useState({
     name: "", rrn_front: "", rrn_back: "", phone: "", address: "",
@@ -76,8 +70,7 @@ function CustomersPageInner() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // 엑셀 업로드
-  const excelInputRef = useRef<HTMLInputElement | null>(null);
+  // 엑셀 업로드 (엑셀 전용 input ref 제거 — PDF/엑셀 통합 업로드 버튼이 pdfInputRef 하나만 사용)
   const [excelUploading, setExcelUploading] = useState(false);
   const [excelResult, setExcelResult] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
 
@@ -93,9 +86,6 @@ function CustomersPageInner() {
   // 업로드 dedup 결과 (충돌 확인 모달)
   const [conflicts, setConflicts] = useState<CustomerConflict[]>([]);
   const [conflictDecisions, setConflictDecisions] = useState<Record<number, "update" | "keep">>({});
-
-  // 당첨자 파일 일괄 분석 모달
-  const [ingestOpen, setIngestOpen] = useState(false);
 
   // 리스트 탭: 당첨자 / 예비 / 전체
   const [listTab, setListTab] = useState<"winners" | "standbys" | "all">("winners");
@@ -283,26 +273,6 @@ function CustomersPageInner() {
     }
   };
 
-  const handleCalc = async () => {
-    try {
-      const r = await eligibilityApi.calculateScore(calcInput);
-      setCalcResult(r.data);
-    } catch (err: any) {
-      if (isNetworkError(err)) {
-        // 로컬 간이 계산
-        const home = Math.min(calcInput.no_home_years, 15) * 2;
-        const dep  = Math.min(calcInput.dependents_count, 6) * 5 + 5;
-        const sub  = Math.min(Math.floor(calcInput.subscription_months / 6), 17);
-        setCalcResult({
-          "무주택_가점": home,
-          "부양가족_가점": dep,
-          "청약통장_가점": sub,
-          "총_가점": home + dep + sub,
-        });
-      }
-    }
-  };
-
   const toggleSpecial = (t: string) => {
     setForm((p) => ({
       ...p,
@@ -310,28 +280,6 @@ function CustomersPageInner() {
         ? p.special_types.filter((x) => x !== t)
         : [...p.special_types, t],
     }));
-  };
-
-  /** 엑셀 템플릿 다운로드 */
-  const downloadTemplate = async () => {
-    const XLSX = await import("xlsx");
-    const ws = XLSX.utils.json_to_sheet([
-      {
-        성명: "홍길동",
-        연락처: "010-1234-5678",
-        주민번호앞: "800101",
-        주민번호뒤: "1234567",
-        주소: "서울 강남구 역삼동",
-        무주택기간_년: 10,
-        부양가족수: 2,
-        통장개월: 120,
-        특별공급: "신혼부부",
-        월소득_원: 5000000,
-      },
-    ]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "고객등록");
-    XLSX.writeFile(wb, "고객등록_템플릿.xlsx");
   };
 
   const handleExcelUpload = async (file: File) => {
@@ -447,7 +395,6 @@ function CustomersPageInner() {
       alert(err?.message || "엑셀 파일 파싱 실패");
     } finally {
       setExcelUploading(false);
-      if (excelInputRef.current) excelInputRef.current.value = "";
     }
   };
 
@@ -604,66 +551,6 @@ function CustomersPageInner() {
     }
   };
 
-  /** 당첨자 파일 일괄 분석 결과를 받아 기존 dedup 흐름으로 등록 */
-  const handleIngestCandidates = async (candidates: IncomingCustomer[]) => {
-    if (!selectedAnn || candidates.length === 0) return;
-    const existing = localCustomers.listByAnnouncement(selectedAnn.id);
-    const { toCreate, duplicates, conflicts: foundConflicts } = classifyIncoming(candidates, existing);
-
-    let created = 0, createFailed = 0;
-    const createErrors: string[] = [];
-    for (const c of toCreate) {
-      try {
-        const anyC = c as any;
-        const payload = {
-          site_id: selectedAnn.site_id,
-          announcement_id: selectedAnn.id,
-          name: c.name,
-          phone: c.phone || "",
-          rrn_front: c.rrn_front || "",
-          rrn_back: c.rrn_back || "0000000",
-          address: c.address || "",
-          no_home_years: c.no_home_years ?? 0,
-          dependents_count: c.dependents_count ?? 0,
-          subscription_months: c.subscription_months ?? 0,
-          current_region: c.current_region || "",
-          income_monthly: c.income_monthly ?? null,
-          special_types: c.special_types || [],
-          supply_type: c.supply_type,
-          unit_type: c.unit_type,
-          unit_area: c.unit_area,
-          // 당첨자 / 예비 구분
-          is_standby: anyC.is_standby === true,
-          standby_rank: anyC.standby_rank,
-          // 공적 검증 데이터 (파일 일괄 분석 경로에서 전달)
-          household_members: anyC.household_members,
-          properties: anyC.properties,
-          savings_priority: anyC.savings_priority,
-        };
-        localCustomers.create(payload);
-        created++;
-      } catch (err: any) {
-        createFailed++;
-        const msg = err?.message || "등록 실패";
-        createErrors.push(`${c.name}: ${msg}`);
-      }
-    }
-
-    setExcelResult({
-      success: created,
-      failed: createFailed,
-      errors: createErrors.slice(0, 10),
-    });
-    if (created > 0) loadCustomers();
-
-    if (foundConflicts.length > 0) {
-      setConflicts(foundConflicts);
-      setConflictDecisions({});
-    } else if (duplicates.length > 0 && created === 0) {
-      alert(`일괄 분석 결과 ${duplicates.length}명이 모두 이미 등록되어 있습니다.`);
-    }
-  };
-
   const winnersCount = customers.filter((c) => !c.is_standby).length;
   const standbysCount = customers.filter((c) => c.is_standby).length;
 
@@ -725,80 +612,42 @@ function CustomersPageInner() {
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
-          {/* ── 도구 그룹 ── */}
-          <button
-            onClick={() => setShowCalc(!showCalc)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 whitespace-nowrap transition-colors"
-          >
-            <Calculator className="w-4 h-4 text-gray-500" /> 가점 계산기
-          </button>
-          <button
-            onClick={downloadTemplate}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 whitespace-nowrap transition-colors"
-            title="엑셀 템플릿 다운로드"
-          >
-            <Download className="w-4 h-4 text-gray-500" /> 템플릿
-          </button>
-
-          <div className="w-px h-6 bg-gray-200 mx-1" />
-
-          {/* ── 파일 업로드 그룹 ── */}
+          {/* 업로드 — PDF·엑셀 자동 판별 */}
           <button
             onClick={() => pdfInputRef.current?.click()}
-            disabled={pdfUploading || !selectedAnn}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            title="주민등록등본/청약신청서 등 PDF 업로드 → 고객 정보 자동 추출"
+            disabled={pdfUploading || excelUploading || !selectedAnn}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-600 hover:to-indigo-600 shadow-sm whitespace-nowrap transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            title="당첨자현황 PDF 또는 엑셀 파일 업로드 (확장자로 자동 판별)"
           >
-            {pdfUploading ? (
-              <><Loader2 className="w-4 h-4 animate-spin text-blue-500" /> 분석 중…</>
+            {pdfUploading || excelUploading ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
             ) : (
-              <><FileText className="w-4 h-4 text-gray-500" /> PDF 업로드</>
+              <><Upload className="w-4 h-4" /> 업로드</>
             )}
           </button>
           <input
             ref={pdfInputRef}
             type="file"
-            accept="application/pdf,.pdf"
+            accept=".pdf,.xlsx,.xls,.xlsm,.csv,application/pdf"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) handlePdfUpload(f);
+              if (!f) return;
+              const lower = f.name.toLowerCase();
+              if (lower.endsWith(".pdf")) {
+                handlePdfUpload(f);
+              } else if (/\.(xlsx|xls|xlsm|csv)$/.test(lower)) {
+                handleExcelUpload(f);
+              } else {
+                alert("지원하지 않는 파일 형식입니다. PDF 또는 엑셀 파일을 올려주세요.");
+              }
+              if (pdfInputRef.current) pdfInputRef.current.value = "";
             }}
           />
-          <button
-            onClick={() => excelInputRef.current?.click()}
-            disabled={excelUploading || !selectedAnn}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            title="엑셀 파일 업로드 → 고객 일괄 등록"
-          >
-            {excelUploading ? (
-              <><Loader2 className="w-4 h-4 animate-spin text-blue-500" /> 등록 중…</>
-            ) : (
-              <><FileSpreadsheet className="w-4 h-4 text-gray-500" /> 엑셀 업로드</>
-            )}
-          </button>
-          <input
-            ref={excelInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleExcelUpload(f);
-            }}
-          />
-          <button
-            onClick={() => setIngestOpen(true)}
-            disabled={!selectedAnn}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-600 hover:to-indigo-600 shadow-sm whitespace-nowrap transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            title="전산추첨결과·당첨자현황·세대원내역·주택소유 등 여러 파일을 한 번에 분석"
-          >
-            <Sparkles className="w-4 h-4" /> 파일 일괄 분석
-          </button>
 
           <div className="w-px h-6 bg-gray-200 mx-1" />
 
-          {/* ── 주요 액션 ── */}
+          {/* 고객 등록 — 수동 폼 */}
           <button
             onClick={() => { setFormError(null); setShowForm(true); }}
             disabled={!selectedAnn}
@@ -806,6 +655,8 @@ function CustomersPageInner() {
           >
             <UserPlus className="w-4 h-4" /> 고객 등록
           </button>
+
+          {/* 삭제 — 선택 모드 토글 */}
           <button
             onClick={() => {
               setSelectMode((prev) => {
@@ -943,40 +794,6 @@ function CustomersPageInner() {
         )}
       </div>
 
-      {/* 가점 계산기 패널 */}
-      {showCalc && (
-        <div className="card mb-4 bg-blue-50 border-blue-200">
-          <h3 className="font-semibold text-blue-900 mb-3">청약 가점 계산기</h3>
-          <div className="grid grid-cols-3 gap-4 mb-3">
-            {[
-              { key: "no_home_years", label: "무주택 기간 (년)", max: 15 },
-              { key: "dependents_count", label: "부양가족 수 (명)", max: 6 },
-              { key: "subscription_months", label: "청약통장 납입 (개월)", max: 200 },
-            ].map(({ key, label, max }) => (
-              <div key={key}>
-                <label className="block text-xs font-medium text-blue-800 mb-1">{label}</label>
-                <input
-                  type="number" min={0} max={max}
-                  value={(calcInput as any)[key]}
-                  onChange={(e) => setCalcInput((p) => ({ ...p, [key]: Number(e.target.value) }))}
-                  className="w-full border border-blue-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                />
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-4">
-            <button onClick={handleCalc} className="btn-primary text-sm px-4 py-1.5">계산하기</button>
-            {calcResult && (
-              <div className="flex gap-4 text-sm">
-                <span>무주택 <strong>{calcResult["무주택_가점"]}점</strong></span>
-                <span>부양가족 <strong>{calcResult["부양가족_가점"]}점</strong></span>
-                <span>통장 <strong>{calcResult["청약통장_가점"]}점</strong></span>
-                <span className="text-blue-700 font-bold text-base">총 {calcResult["총_가점"]}점 / 84점</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* 고객 목록 */}
       <div className="card p-0 overflow-hidden">
@@ -1442,13 +1259,6 @@ function CustomersPageInner() {
           </div>
         </div>
       )}
-
-      {/* 당첨자 파일 일괄 분석 모달 */}
-      <WinnerIngestModal
-        open={ingestOpen}
-        onClose={() => setIngestOpen(false)}
-        onRegister={(candidates) => handleIngestCandidates(candidates)}
-      />
 
       {/* 하단 다음 단계 CTA */}
       {selectedAnn && customers.length > 0 && (
