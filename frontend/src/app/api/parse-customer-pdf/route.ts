@@ -229,41 +229,40 @@ export async function POST(req: NextRequest) {
 
     // 당첨자 명단 포맷이면 lib/winner-ingest.ts 의 4섹션 분할 파서로 처리
     // (특별공급 당첨·예비 + 일반공급 당첨·예비 모두 인식)
+    // 당첨자 명단으로 감지되면 LLM 로 fallback 하지 않고 즉시 반환 (느려지는 원인 제거)
     if (detectWinnerListFormat(text)) {
       const result = parseWinnerPdfText(text, file.name);
-      if (result.winners.length > 0) {
-        const customers: ParsedCustomer[] = result.winners.map((w) => {
-          const rrnFrontFromMasked = w.rrnMasked?.split('-')[0];
-          return {
-            name: w.name,
-            rrnFront: w.rrn ? w.rrn.slice(0, 6) : rrnFrontFromMasked,
-            rrnBack: w.rrn ? w.rrn.slice(6) : undefined,
-            phone: w.phone,
-            specialTypes: w.specialType ? [w.specialType] : undefined,
-            housingType: w.unitType,
-            unitDong: w.dong,
-            unitHo: w.ho,
-            supplyCategory: w.supplyCategory,
-            isStandby: w.isStandby === true,
-            standbyRank: w.standbyRank,
-          };
-        });
-
-        const counts = {
-          spWin:  customers.filter((c) => c.supplyCategory === '특별공급' && !c.isStandby).length,
-          spStd:  customers.filter((c) => c.supplyCategory === '특별공급' &&  c.isStandby).length,
-          genWin: customers.filter((c) => c.supplyCategory === '일반공급' && !c.isStandby).length,
-          genStd: customers.filter((c) => c.supplyCategory === '일반공급' &&  c.isStandby).length,
+      const customers: ParsedCustomer[] = result.winners.map((w) => {
+        const rrnFrontFromMasked = w.rrnMasked?.split('-')[0];
+        return {
+          name: w.name,
+          rrnFront: w.rrn ? w.rrn.slice(0, 6) : rrnFrontFromMasked,
+          rrnBack: w.rrn ? w.rrn.slice(6) : undefined,
+          phone: w.phone,
+          specialTypes: w.specialType ? [w.specialType] : undefined,
+          housingType: w.unitType,
+          unitDong: w.dong,
+          unitHo: w.ho,
+          supplyCategory: w.supplyCategory,
+          isStandby: w.isStandby === true,
+          standbyRank: w.standbyRank,
         };
+      });
 
-        return NextResponse.json({
-          mode: 'batch',
-          count: customers.length,
-          counts,               // 구분별 카운트
-          customers,
-          rawTextPreview: text.slice(0, 500),
-        });
-      }
+      const counts = {
+        spWin:  customers.filter((c) => c.supplyCategory === '특별공급' && !c.isStandby).length,
+        spStd:  customers.filter((c) => c.supplyCategory === '특별공급' &&  c.isStandby).length,
+        genWin: customers.filter((c) => c.supplyCategory === '일반공급' && !c.isStandby).length,
+        genStd: customers.filter((c) => c.supplyCategory === '일반공급' &&  c.isStandby).length,
+      };
+
+      return NextResponse.json({
+        mode: 'batch',
+        count: customers.length,
+        counts,               // 구분별 카운트
+        customers,
+        rawTextPreview: text.slice(0, 500),
+      });
     }
 
     // 단일 고객 문서 (주민등록등본 등) 파싱

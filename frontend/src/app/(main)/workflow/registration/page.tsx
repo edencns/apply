@@ -396,7 +396,7 @@ function CustomersPageInner() {
       const existing = localCustomers.listByAnnouncement(selectedAnn.id);
       const { toCreate, duplicates, conflicts: foundConflicts } = classifyIncoming(candidates, existing);
 
-      // 3) 신규 고객만 즉시 등록
+      // 3) 신규 고객만 즉시 등록 (배치는 로컬 저장만 — 백엔드 지연 회피)
       let created = 0, createFailed = 0;
       const createErrors: string[] = [];
       for (const c of toCreate) {
@@ -419,16 +419,11 @@ function CustomersPageInner() {
             unit_type: c.unit_type,
             unit_area: c.unit_area,
           };
-          try {
-            await customersApi.create(payload as any);
-          } catch (netErr: any) {
-            if (!isNetworkError(netErr)) throw netErr;
-            localCustomers.create(payload);
-          }
+          localCustomers.create(payload);
           created++;
         } catch (err: any) {
           createFailed++;
-          const msg = err?.response?.data?.detail || err?.message || "등록 실패";
+          const msg = err?.message || "등록 실패";
           createErrors.push(`${c.name}: ${msg}`);
         }
       }
@@ -526,7 +521,7 @@ function CustomersPageInner() {
         const existing = localCustomers.listByAnnouncement(selectedAnn.id);
         const { toCreate, duplicates, conflicts: foundConflicts } = classifyIncoming(candidates, existing);
 
-        // 3) 신규 등록
+        // 3) 신규 등록 (로컬 저장 — PDF 배치는 고객 수가 많아 네트워크 왕복 회피)
         let created = 0, createFailed = 0;
         const createErrors: string[] = [];
         for (const cand of toCreate) {
@@ -552,16 +547,11 @@ function CustomersPageInner() {
             standby_rank: anyCand.standby_rank,
           };
           try {
-            try {
-              await customersApi.create(payload as any);
-            } catch (netErr: any) {
-              if (!isNetworkError(netErr)) throw netErr;
-              localCustomers.create(payload);
-            }
+            localCustomers.create(payload);
             created++;
           } catch (err: any) {
             createFailed++;
-            const msg = err?.response?.data?.detail || err?.message || "등록 실패";
+            const msg = err?.message || "등록 실패";
             createErrors.push(`${cand.name}: ${msg}`);
           }
         }
@@ -650,16 +640,11 @@ function CustomersPageInner() {
           properties: anyC.properties,
           savings_priority: anyC.savings_priority,
         };
-        try {
-          await customersApi.create(payload as any);
-        } catch (netErr: any) {
-          if (!isNetworkError(netErr)) throw netErr;
-          localCustomers.create(payload);
-        }
+        localCustomers.create(payload);
         created++;
       } catch (err: any) {
         createFailed++;
-        const msg = err?.response?.data?.detail || err?.message || "등록 실패";
+        const msg = err?.message || "등록 실패";
         createErrors.push(`${c.name}: ${msg}`);
       }
     }
