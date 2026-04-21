@@ -12,7 +12,7 @@ import {
   LocalCustomer,
 } from "@/lib/local-store";
 import {
-  UserPlus, Search, ChevronRight, Calculator, FileText,
+  UserPlus, Search, ChevronRight, Calculator, FileText, FileSpreadsheet,
   Loader2, BookOpen, X, Trash2, Upload,
 } from "lucide-react";
 import AnnouncementPicker from "@/components/AnnouncementPicker";
@@ -70,7 +70,7 @@ function CustomersPageInner() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // 엑셀 업로드 (엑셀 전용 input ref 제거 — PDF/엑셀 통합 업로드 버튼이 pdfInputRef 하나만 사용)
+  const excelInputRef = useRef<HTMLInputElement | null>(null);
   const [excelUploading, setExcelUploading] = useState(false);
   const [excelResult, setExcelResult] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
 
@@ -623,36 +623,53 @@ function CustomersPageInner() {
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
-          {/* 업로드 — PDF·엑셀 자동 판별 */}
+          {/* PDF 업로드 */}
           <button
             onClick={() => pdfInputRef.current?.click()}
             disabled={pdfUploading || excelUploading || !selectedAnn}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-600 hover:to-indigo-600 shadow-sm whitespace-nowrap transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            title="당첨자현황 PDF 또는 엑셀 파일 업로드 (확장자로 자동 판별)"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title="당첨자현황 PDF 업로드"
           >
-            {pdfUploading || excelUploading ? (
+            {pdfUploading ? (
               <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
             ) : (
-              <><Upload className="w-4 h-4" /> 업로드</>
+              <><FileText className="w-4 h-4" /> PDF 업로드</>
             )}
           </button>
           <input
             ref={pdfInputRef}
             type="file"
-            accept=".pdf,.xlsx,.xls,.xlsm,.csv,application/pdf"
+            accept=".pdf,application/pdf"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (!f) return;
-              const lower = f.name.toLowerCase();
-              if (lower.endsWith(".pdf")) {
-                handlePdfUpload(f);
-              } else if (/\.(xlsx|xls|xlsm|csv)$/.test(lower)) {
-                handleExcelUpload(f);
-              } else {
-                alert("지원하지 않는 파일 형식입니다. PDF 또는 엑셀 파일을 올려주세요.");
-              }
+              if (f) handlePdfUpload(f);
               if (pdfInputRef.current) pdfInputRef.current.value = "";
+            }}
+          />
+
+          {/* 엑셀 업로드 */}
+          <button
+            onClick={() => excelInputRef.current?.click()}
+            disabled={pdfUploading || excelUploading || !selectedAnn}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title="전산추첨결과 엑셀 업로드"
+          >
+            {excelUploading ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
+            ) : (
+              <><FileSpreadsheet className="w-4 h-4" /> 엑셀 업로드</>
+            )}
+          </button>
+          <input
+            ref={excelInputRef}
+            type="file"
+            accept=".xlsx,.xls,.xlsm,.csv"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleExcelUpload(f);
+              if (excelInputRef.current) excelInputRef.current.value = "";
             }}
           />
 

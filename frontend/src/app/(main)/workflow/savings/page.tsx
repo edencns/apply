@@ -10,9 +10,11 @@ import {
   type LocalCustomer,
 } from "@/lib/local-store";
 import { parseSavingsPriorityPdfText, type SavingsPriorityRecord } from "@/lib/winner-ingest";
+import { ingestForStage, type WorkflowIngestResult } from "@/lib/workflow-ingest";
 import IndividualVerifyModal from "@/components/workflow/IndividualVerifyModal";
 import {
-  Banknote, AlertTriangle, CheckCircle2, Upload, Loader2, UserCheck,
+  Banknote, AlertTriangle, CheckCircle2, Loader2, UserCheck,
+  FileText, FileSpreadsheet,
 } from "lucide-react";
 
 const step = WORKFLOW_STEPS[3]; // savings
@@ -83,13 +85,6 @@ const columns: StageColumn[] = [
   },
 ];
 
-interface UploadResult {
-  attached: number;
-  unmatched: number;
-  totalRecords: number;
-  errors: string[];
-}
-
 async function extractPdfText(file: File): Promise<string> {
   const fd = new FormData();
   fd.append("file", file);
@@ -114,65 +109,32 @@ export default function SavingsStepPage() {
   const [selected, setSelected] = useState<LocalAnnouncement | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
+  const [uploadResult, setUploadResult] = useState<WorkflowIngestResult | null>(null);
   const [verifyResult, setVerifyResult] = useState<
     { ok: number; fail: number; missing: number } | null
   >(null);
   const [indivOpen, setIndivOpen] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
+  const xlsxRef = useRef<HTMLInputElement>(null);
 
   const evaluate = (c: LocalCustomer, a: LocalAnnouncement) => evaluateSavings(c, a);
   const minMonths = selected?.eligibility_rules?.min_subscription_period as number | undefined;
 
-  const handleUpload = async (file: File) => {
+  const handleFile = async (file: File) => {
     if (!selected) { alert("먼저 공고를 선택해주세요"); return; }
     setUploading(true);
     setUploadResult(null);
     setVerifyResult(null);
     try {
-      const text = await extractPdfText(file);
-      const result = parseSavingsPriorityPdfText(text, file.name);
-      const records = result.savings;
-      if (records.length === 0) {
-        alert("순위확인 레코드를 찾지 못했습니다. '입주자저축 순위확인 통보' PDF인지 확인해 주세요.");
-        return;
-      }
-
-      const customers = localCustomers.listByAnnouncement(selected.id);
-      let attached = 0;
-      let unmatched = 0;
-      const errors: string[] = [];
-
-      for (const r of records) {
-        if (!/^\d{13}$/.test(r.rrn)) { unmatched++; continue; }
-        const front = r.rrn.slice(0, 6);
-        const back = r.rrn.slice(6);
-        const target = customers.find((c) => c.rrn_front === front && c.rrn_back === back);
-        if (!target) {
-          unmatched++;
-          errors.push(`${r.name}: 당첨자 매칭 실패`);
-          continue;
-        }
-        try {
-          saveToCustomer(target, r);
-          attached++;
-        } catch (e: any) {
-          errors.push(`${r.name}: 저장 실패 (${e?.message || ""})`);
-        }
-      }
-
-      setUploadResult({
-        attached,
-        unmatched,
-        totalRecords: records.length,
-        errors: errors.slice(0, 10),
-      });
+      const r = await ingestForStage(file, selected, "savings");
+      setUploadResult(r);
       setReloadKey((k) => k + 1);
     } catch (err: any) {
       alert(err?.message || "청약통장 순위확인 파일 파싱 실패");
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
+      if (pdfRef.current) pdfRef.current.value = "";
+      if (xlsxRef.current) xlsxRef.current.value = "";
     }
   };
 
@@ -235,44 +197,56 @@ export default function SavingsStepPage() {
           {/* 툴바 */}
           <div className="flex items-center gap-1.5 flex-wrap mb-4">
             <button
-              onClick={() => fileRef.current?.click()}
+              onClick={() => pdfRef.current?.click()}
               disabled={uploading}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-600 hover:to-indigo-600 shadow-sm whitespace-nowrap transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              title="입주자저축 순위확인 통보 PDF 업로드"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {uploading ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
               ) : (
-                <><Upload className="w-4 h-4" /> 업로드</>
+                <><FileText className="w-4 h-4" /> PDF 업로드</>
               )}
             </button>
             <input
-              ref={fileRef}
+              ref={pdfRef}
               type="file"
+              accept=".pdf"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (!f) return;
-                const ext = f.name.toLowerCase().split(".").pop() || "";
-                if (ext === "pdf") {
-                  handleUpload(f);
-                } else {
-                  alert("청약통장 순위확인은 PDF 파일(입주자저축 순위확인 통보.pdf)만 지원합니다.");
-                  if (fileRef.current) fileRef.current.value = "";
-                }
+                if (f) handleFile(f);
+              }}
+            />
+            <button
+              onClick={() => xlsxRef.current?.click()}
+              disabled={uploading}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {uploading ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
+              ) : (
+                <><FileSpreadsheet className="w-4 h-4" /> 엑셀 업로드</>
+              )}
+            </button>
+            <input
+              ref={xlsxRef}
+              type="file"
+              accept=".xlsx,.xls,.xlsm,.csv"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFile(f);
               }}
             />
             <button
               onClick={handleVerify}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm whitespace-nowrap transition-colors"
-              title="현재 공고 고객 전원 청약통장 검증"
             >
               <CheckCircle2 className="w-4 h-4" /> 검증
             </button>
             <button
               onClick={() => setIndivOpen(true)}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 shadow-sm whitespace-nowrap transition-colors"
-              title="고객 한 명을 지정해 개별 파일 업로드"
             >
               <UserCheck className="w-4 h-4" /> 추가 검증
             </button>
@@ -284,7 +258,6 @@ export default function SavingsStepPage() {
             customers={localCustomers.listByAnnouncement(selected.id)}
             title="청약통장 개별 검증"
             fileHint="한 명의 순위확인 통보 PDF만 올려 해당 고객에게 붙입니다."
-            accept=".pdf,application/pdf"
             onApply={handleIndividualUpload}
           />
 
@@ -296,6 +269,11 @@ export default function SavingsStepPage() {
                 <span className="text-indigo-800">
                   {uploadResult.attached}명에게 결과 부착 · 총 {uploadResult.totalRecords}건
                 </span>
+                {uploadResult.wrongStage && (
+                  <span className="text-amber-700">
+                    ({uploadResult.wrongStage} 파일로 감지됨)
+                  </span>
+                )}
                 {uploadResult.unmatched > 0 && (
                   <span className="text-red-700">매칭 실패 {uploadResult.unmatched}건</span>
                 )}

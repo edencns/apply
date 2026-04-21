@@ -9,10 +9,14 @@ import {
   type LocalAnnouncement,
   type LocalCustomer,
 } from "@/lib/local-store";
-import { parseHouseholdMembers, ensureXlsx, type HouseholdMemberRecord } from "@/lib/winner-ingest";
+import { ensureXlsx, parseHouseholdMembers } from "@/lib/winner-ingest";
 import { toIdentity, sameIdentity } from "@/lib/identity";
+import { ingestForStage, type WorkflowIngestResult } from "@/lib/workflow-ingest";
 import IndividualVerifyModal from "@/components/workflow/IndividualVerifyModal";
-import { Users, AlertTriangle, Upload, Loader2, CheckCircle2, UserCheck } from "lucide-react";
+import {
+  Users, AlertTriangle, FileText, FileSpreadsheet,
+  Loader2, CheckCircle2, UserCheck,
+} from "lucide-react";
 
 const step = WORKFLOW_STEPS[1]; // household
 
@@ -67,119 +71,46 @@ const columns: StageColumn[] = [
   },
 ];
 
-interface UploadResult {
-  attached: number;      // 세대원 연결된 당첨자 수
-  unmatched: number;     // 매칭 실패한 요청자 수
-  totalMembers: number;  // 총 세대원 레코드 수
-  errors: string[];
-}
-
 export default function HouseholdStepPage() {
   const [selected, setSelected] = useState<LocalAnnouncement | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
+  const [uploadResult, setUploadResult] = useState<WorkflowIngestResult | null>(null);
   const [verifyResult, setVerifyResult] = useState<
     { ok: number; fail: number; missing: number } | null
   >(null);
   const [indivOpen, setIndivOpen] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
+  const xlsxRef = useRef<HTMLInputElement>(null);
 
   const evaluate = (c: LocalCustomer) => evaluateHousehold(c);
 
-  /** 세대원내역 엑셀 업로드 → 각 당첨자에 세대원 정보 연결 */
-  const handleUpload = async (file: File) => {
+  const handleFile = async (file: File) => {
     if (!selected) { alert("먼저 공고를 선택해주세요"); return; }
     setUploading(true);
     setUploadResult(null);
     setVerifyResult(null);
     try {
-      const XLSX = await ensureXlsx();
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array" });
-      const result = parseHouseholdMembers(wb as any, file.name);
-      const records = result.householdMembers;
-      if (records.length === 0) {
-        alert("세대원내역을 찾지 못했습니다. '당첨자세대원내역' 양식인지 확인해 주세요.");
-        return;
-      }
-
-      // 요청자 RRN 기준으로 그룹핑
-      const grouped = new Map<string, HouseholdMemberRecord[]>();
-      for (const r of records) {
-        const key = r.requesterRrn || `${r.requesterName}__nofront`;
-        if (!grouped.has(key)) grouped.set(key, []);
-        grouped.get(key)!.push(r);
-      }
-
-      const customers = localCustomers.listByAnnouncement(selected.id);
-      let attached = 0;
-      let unmatched = 0;
-      const errors: string[] = [];
-
-      grouped.forEach((group) => {
-        const first = group[0];
-        // 요청자 identity 후보
-        const reqIdent = toIdentity({
-          name: first.requesterName,
-          rrn: first.requesterRrn && /^\d{13}$/.test(first.requesterRrn) ? first.requesterRrn : undefined,
-        });
-
-        // 고객 매칭 — 13자리 RRN 우선, 없으면 identity 퍼지 매칭
-        let target: LocalCustomer | undefined;
-        if (first.requesterRrn && /^\d{13}$/.test(first.requesterRrn)) {
-          const front = first.requesterRrn.slice(0, 6);
-          const back = first.requesterRrn.slice(6);
-          target = customers.find(
-            (c) => c.rrn_front === front && c.rrn_back === back,
-          );
-        }
-        if (!target) {
-          for (const c of customers) {
-            if (sameIdentity(reqIdent, toIdentity(c as any))) {
-              target = c;
-              break;
-            }
-          }
-        }
-
-        if (!target) {
-          unmatched++;
-          errors.push(`${first.requesterName}: 등록된 당첨자와 매칭 실패`);
-          return;
-        }
-
-        const members = group.map((m) => ({
-          name: m.memberName || first.requesterName,
-          rrn: m.memberRrn || undefined,
-          errorCode: m.errorCode,
-        }));
-        try {
-          localCustomers.update(target.id, { household_members: members });
-          attached++;
-        } catch (e: any) {
-          errors.push(`${first.requesterName}: 저장 실패 (${e?.message || ""})`);
-        }
-      });
-
-      setUploadResult({
-        attached,
-        unmatched,
-        totalMembers: records.length,
-        errors: errors.slice(0, 10),
-      });
+      const r = await ingestForStage(file, selected, "household");
+      setUploadResult(r);
       setReloadKey((k) => k + 1);
     } catch (err: any) {
-      alert(err?.message || "세대원내역 파싱 실패");
+      alert(err?.message || "파일 처리 실패");
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
+      if (pdfRef.current) pdfRef.current.value = "";
+      if (xlsxRef.current) xlsxRef.current.value = "";
     }
   };
 
-  /** 개별 고객 파일 업로드 → 그 사람의 세대원만 저장 */
+  /** 개별 고객 파일 업로드 — 세대원내역 엑셀만 지원 */
   const handleIndividualUpload = async (c: LocalCustomer, file: File) => {
     try {
+      const ext = file.name.toLowerCase().split(".").pop() || "";
+      if (!["xlsx", "xls", "xlsm", "csv"].includes(ext)) {
+        alert("세대원내역은 엑셀 파일만 지원합니다.");
+        return;
+      }
       const XLSX = await ensureXlsx();
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
@@ -190,7 +121,6 @@ export default function HouseholdStepPage() {
         return;
       }
 
-      // 고객과 매칭되는 요청자 행만 선택 (RRN 13자리 우선, 없으면 identity)
       const cIdent = toIdentity(c as any);
       const mine = records.filter((r) => {
         if (c.rrn_front && c.rrn_back && /^\d{13}$/.test(c.rrn_front + c.rrn_back)) {
@@ -202,32 +132,20 @@ export default function HouseholdStepPage() {
         );
       });
 
-      if (mine.length === 0) {
-        // 파일에 이 사람 기록이 없으면, 파일 내용 전체를 이 사람의 세대원으로 저장
-        // (단일 사용자용 세대원내역 파일이라 요청자 컬럼이 없거나 본인 명의 파일인 경우)
-        const members = records.map((m) => ({
-          name: m.memberName || m.requesterName,
-          rrn: m.memberRrn || undefined,
-          errorCode: m.errorCode,
-        }));
-        localCustomers.update(c.id, { household_members: members });
-        alert(`${c.name}: 파일 내 세대원 ${members.length}명 저장 (요청자 매칭 없음)`);
-      } else {
-        const members = mine.map((m) => ({
-          name: m.memberName || m.requesterName,
-          rrn: m.memberRrn || undefined,
-          errorCode: m.errorCode,
-        }));
-        localCustomers.update(c.id, { household_members: members });
-        alert(`${c.name}: 세대원 ${members.length}명 저장됨`);
-      }
+      const source = mine.length > 0 ? mine : records;
+      const members = source.map((m) => ({
+        name: m.memberName || m.requesterName,
+        rrn: m.memberRrn || undefined,
+        errorCode: m.errorCode,
+      }));
+      localCustomers.update(c.id, { household_members: members });
+      alert(`${c.name}: 세대원 ${members.length}명 저장됨`);
       setReloadKey((k) => k + 1);
     } catch (err: any) {
       alert(err?.message || "파일 파싱 실패");
     }
   };
 
-  /** 현재 공고 고객 전원 재검증 → 요약 표시 */
   const handleVerify = () => {
     if (!selected) return;
     const customers = localCustomers
@@ -251,31 +169,47 @@ export default function HouseholdStepPage() {
           {/* 툴바 */}
           <div className="flex items-center gap-1.5 flex-wrap mb-4">
             <button
-              onClick={() => fileRef.current?.click()}
+              onClick={() => pdfRef.current?.click()}
               disabled={uploading}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-600 hover:to-indigo-600 shadow-sm whitespace-nowrap transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              title="당첨자세대원내역.xlsx 업로드"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="PDF 파일 업로드"
             >
               {uploading ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
               ) : (
-                <><Upload className="w-4 h-4" /> 업로드</>
+                <><FileText className="w-4 h-4" /> PDF 업로드</>
               )}
             </button>
             <input
-              ref={fileRef}
+              ref={pdfRef}
               type="file"
+              accept=".pdf"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (!f) return;
-                const ext = f.name.toLowerCase().split(".").pop() || "";
-                if (["xlsx", "xls", "xlsm", "csv"].includes(ext)) {
-                  handleUpload(f);
-                } else {
-                  alert("세대원 확인은 엑셀 파일(당첨자세대원내역.xlsx)만 지원합니다.");
-                  if (fileRef.current) fileRef.current.value = "";
-                }
+                if (f) handleFile(f);
+              }}
+            />
+            <button
+              onClick={() => xlsxRef.current?.click()}
+              disabled={uploading}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="엑셀 파일 업로드"
+            >
+              {uploading ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
+              ) : (
+                <><FileSpreadsheet className="w-4 h-4" /> 엑셀 업로드</>
+              )}
+            </button>
+            <input
+              ref={xlsxRef}
+              type="file"
+              accept=".xlsx,.xls,.xlsm,.csv"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFile(f);
               }}
             />
             <button
@@ -300,7 +234,6 @@ export default function HouseholdStepPage() {
             customers={localCustomers.listByAnnouncement(selected.id)}
             title="세대원 개별 검증"
             fileHint="한 명의 당첨자 세대원내역 파일만 올려 해당 고객에게 붙입니다."
-            accept=".xlsx,.xls,.xlsm,.csv"
             onApply={handleIndividualUpload}
           />
 
@@ -310,7 +243,7 @@ export default function HouseholdStepPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-semibold text-indigo-900">세대원내역 연결 완료</span>
                 <span className="text-indigo-800">
-                  {uploadResult.attached}명에게 세대원 정보 부착 · 총 {uploadResult.totalMembers}건
+                  {uploadResult.attached}명에게 세대원 정보 부착 · 총 {uploadResult.totalRecords}건
                 </span>
                 {uploadResult.unmatched > 0 && (
                   <span className="text-red-700">매칭 실패 {uploadResult.unmatched}명</span>

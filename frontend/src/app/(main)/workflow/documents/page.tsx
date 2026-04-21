@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import WorkflowShell, { WORKFLOW_STEPS } from "@/components/workflow/WorkflowShell";
 import StageCustomerList, { StageColumn } from "@/components/workflow/StageCustomerList";
 import { evaluateFinal } from "@/lib/verification-rules";
 import { COMMON_DOCUMENTS, SUPPLY_TYPE_DOCUMENTS } from "@/lib/document-checklist";
 import type { LocalAnnouncement, LocalCustomer } from "@/lib/local-store";
-import { CheckCircle2, XCircle, Clock, AlertTriangle, FileText } from "lucide-react";
+import { ingestAutoStage, stageLabel, type WorkflowIngestResult } from "@/lib/workflow-ingest";
+import {
+  CheckCircle2, XCircle, Clock, FileText, FileSpreadsheet, Loader2,
+} from "lucide-react";
 
 const step = WORKFLOW_STEPS[4]; // documents
 
-/** 고객의 공급유형 기반 필수 서류 목록 도출 */
 function computeDocList(
   c: LocalCustomer,
   a: LocalAnnouncement,
@@ -107,12 +109,34 @@ const columns: StageColumn[] = [
 
 export default function DocumentsStepPage() {
   const [selected, setSelected] = useState<LocalAnnouncement | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<WorkflowIngestResult | null>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
+  const xlsxRef = useRef<HTMLInputElement>(null);
 
   const evaluate = (c: LocalCustomer, a: LocalAnnouncement) => {
     const docList = computeDocList(c, a);
     const submitted = c.documents_submitted || {};
     const final = evaluateFinal(c, a, submitted, docList);
     return final.stages.documents;
+  };
+
+  const handleFile = async (file: File) => {
+    if (!selected) { alert("먼저 공고를 선택해주세요"); return; }
+    setUploading(true);
+    setUploadResult(null);
+    try {
+      const r = await ingestAutoStage(file, selected);
+      setUploadResult(r);
+      setReloadKey((k) => k + 1);
+    } catch (err: any) {
+      alert(err?.message || "파일 처리 실패");
+    } finally {
+      setUploading(false);
+      if (pdfRef.current) pdfRef.current.value = "";
+      if (xlsxRef.current) xlsxRef.current.value = "";
+    }
   };
 
   return (
@@ -126,7 +150,79 @@ export default function DocumentsStepPage() {
               부적합 시 같은 주택형의 예비에서 승계 가능합니다.
             </span>
           </div>
+
+          {/* 업로드 툴바 — 세대원/주택/통장 어느 쪽 파일이든 자동 판별해서 반영 */}
+          <div className="flex items-center gap-1.5 flex-wrap mb-4">
+            <button
+              onClick={() => pdfRef.current?.click()}
+              disabled={uploading}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {uploading ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
+              ) : (
+                <><FileText className="w-4 h-4" /> PDF 업로드</>
+              )}
+            </button>
+            <input
+              ref={pdfRef}
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFile(f);
+              }}
+            />
+            <button
+              onClick={() => xlsxRef.current?.click()}
+              disabled={uploading}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {uploading ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
+              ) : (
+                <><FileSpreadsheet className="w-4 h-4" /> 엑셀 업로드</>
+              )}
+            </button>
+            <input
+              ref={xlsxRef}
+              type="file"
+              accept=".xlsx,.xls,.xlsm,.csv"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFile(f);
+              }}
+            />
+            <span className="text-[11px] text-gray-500 ml-2">
+              * 세대원/주택/통장 어느 쪽이든 자동 인식하여 반영
+            </span>
+          </div>
+
+          {uploadResult && (
+            <div className="card mb-4 p-3 text-sm bg-indigo-50/60 border-indigo-100">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-indigo-900">
+                  {stageLabel(uploadResult.stage)} 데이터 반영 완료
+                </span>
+                <span className="text-indigo-800">
+                  {uploadResult.attached}명 · 총 {uploadResult.totalRecords}건
+                </span>
+                {uploadResult.unmatched > 0 && (
+                  <span className="text-red-700">매칭 실패 {uploadResult.unmatched}건</span>
+                )}
+              </div>
+              {uploadResult.errors.length > 0 && (
+                <ul className="mt-2 text-xs text-red-700 list-disc list-inside space-y-0.5">
+                  {uploadResult.errors.map((e, i) => <li key={i}>{e}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
+
           <StageCustomerList
+            key={reloadKey}
             announcement={selected}
             evaluate={evaluate}
             columns={columns}
