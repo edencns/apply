@@ -450,9 +450,15 @@ export default function AnnouncementsPage() {
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/parse-announcement-pdf", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || "파싱 실패");
+      // Vercel 함수 타임아웃/크래시 시 본문이 JSON이 아닐 수 있음 → 방어적 파싱
+      const raw = await res.text();
+      let json: any = null;
+      try { json = JSON.parse(raw); } catch { /* plain-text error */ }
+      if (!res.ok || !json?.success) {
+        const snippet = (raw || "").slice(0, 200).trim();
+        const reason = json?.error
+          || (snippet.startsWith("{") ? "파싱 실패" : `서버 오류(${res.status}): ${snippet || "응답 없음"}`);
+        throw new Error(reason);
       }
       const d = json.data as Record<string, any>;
       // HTML datetime-local 입력은 'YYYY-MM-DDTHH:mm' 정확히 요구.

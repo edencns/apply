@@ -237,22 +237,44 @@ function isRetryableError(err: any): boolean {
   return false;
 }
 
-/** 지수 백오프 + jitter: 1s → 2s → 4s → 8s (최대 4회 시도) */
-async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 4): Promise<T> {
+/** 지수 백오프 + jitter + 전체 데드라인 / 호출당 타임아웃.
+ *  Vercel maxDuration=120s 안에 들어가려면 총 예산 관리가 중요.
+ *  - maxAttempts=3: 1s + 2s = 3s 백오프
+ *  - perAttemptTimeoutMs=45s: 한 번의 Gemini 호출이 너무 오래 걸리면 끊고 재시도
+ *  - overallDeadlineMs=95s: 총 95s 안에 못 끝내면 폴백으로 넘김
+ */
+async function withRetry<T>(
+  fn: (signal: AbortSignal) => Promise<T>,
+  opts: { maxAttempts?: number; perAttemptTimeoutMs?: number; overallDeadlineMs?: number } = {},
+): Promise<T> {
+  const maxAttempts = opts.maxAttempts ?? 3;
+  const perAttemptTimeoutMs = opts.perAttemptTimeoutMs ?? 45_000;
+  const overallDeadlineMs = opts.overallDeadlineMs ?? 95_000;
+  const deadline = Date.now() + overallDeadlineMs;
   let lastErr: any;
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 2000) break; // 2초도 안 남으면 포기
+    const attemptBudget = Math.min(perAttemptTimeoutMs, remaining);
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(new Error(`attempt timeout ${attemptBudget}ms`)), attemptBudget);
     try {
-      return await fn();
+      return await fn(ac.signal);
     } catch (err: any) {
       lastErr = err;
       if (attempt === maxAttempts - 1 || !isRetryableError(err)) throw err;
-      const baseMs = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s, 8s
-      const jitter = Math.floor(Math.random() * 500); // 0~500ms
+      const baseMs = 1000 * Math.pow(2, attempt); // 1s, 2s
+      const jitter = Math.floor(Math.random() * 500);
       const waitMs = baseMs + jitter;
+      const remainAfterWait = deadline - Date.now() - waitMs;
+      if (remainAfterWait <= 2000) throw err; // 대기하고 나면 시간 없음
       console.warn(
         `[gemini] retry ${attempt + 1}/${maxAttempts - 1} after ${waitMs}ms — ${String(err?.message || err).slice(0, 160)}`,
       );
       await new Promise((r) => setTimeout(r, waitMs));
+    } finally {
+      clearTimeout(timer);
     }
   }
   throw lastErr;
@@ -278,8 +300,8 @@ export async function extractWithGemini(
     // inlineData로 PDF 직접 전송 (작은 파일은 업로드 API 안 써도 됨)
     const base64 = Buffer.from(pdfBuffer).toString("base64");
 
-    const response = await withRetry(() =>
-      ai.models.generateContent({
+    const response = await withRetry(async (signal) => {
+      const callP = ai.models.generateContent({
         model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
         contents: [
           {
@@ -296,8 +318,16 @@ export async function extractWithGemini(
           responseMimeType: "application/json",
           responseSchema: GEMINI_SCHEMA,
         },
-      }),
-    );
+      });
+      // SDK가 AbortSignal을 직접 지원하지 않아도 race로 budget 제한
+      return await Promise.race([
+        callP,
+        new Promise<never>((_, rej) => {
+          if (signal.aborted) rej(signal.reason);
+          else signal.addEventListener("abort", () => rej(signal.reason), { once: true });
+        }),
+      ]);
+    });
 
     const text = response.text ?? "";
     const parsed = JSON.parse(text) as Partial<AnnouncementParseResult>;
