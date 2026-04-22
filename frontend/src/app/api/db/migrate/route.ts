@@ -1,12 +1,13 @@
 /**
  * Turso 스키마 확인 + 선택적으로 localStorage 데이터 일괄 이관
  * POST /api/db/migrate
- *   body: { sites?, announcements?, customers? } — 각각 배열
- *   → 기존 레코드는 id 기준 UPSERT
+ *   body: { sites?, announcements?, customers? }
+ *   → 기존 레코드는 id 기준 UPSERT (현재 사용자에게만)
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { ensureSchema, getDb, stringifyData } from "@/lib/db/turso";
+import { getSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -14,18 +15,24 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   try {
     await ensureSchema();
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
+    const userId = Number(session.sub);
+
     const body = await req.json().catch(() => ({}));
     const db = getDb();
-
     const counts = { sites: 0, announcements: 0, customers: 0 };
 
     if (Array.isArray(body.sites)) {
       for (const s of body.sites) {
         if (!s?.id) continue;
         await db.execute({
-          sql: `INSERT INTO sites (id, name, data) VALUES (?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET name=excluded.name, data=excluded.data, updated_at=datetime('now')`,
-          args: [s.id, s.name || "", stringifyData(s)],
+          sql: `INSERT INTO sites (id, user_id, name, data) VALUES (?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                  user_id=excluded.user_id, name=excluded.name, data=excluded.data,
+                  updated_at=datetime('now')
+                WHERE sites.user_id = excluded.user_id`,
+          args: [s.id, userId, s.name || "", stringifyData(s)],
         });
         counts.sites++;
       }
@@ -35,14 +42,15 @@ export async function POST(req: NextRequest) {
       for (const a of body.announcements) {
         if (!a?.id || !a?.title) continue;
         await db.execute({
-          sql: `INSERT INTO announcements (id, site_id, title, announcement_no, status, data)
-                VALUES (?, ?, ?, ?, ?, ?)
+          sql: `INSERT INTO announcements (id, user_id, site_id, title, announcement_no, status, data)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                   site_id=excluded.site_id, title=excluded.title,
                   announcement_no=excluded.announcement_no, status=excluded.status,
-                  data=excluded.data, updated_at=datetime('now')`,
+                  data=excluded.data, updated_at=datetime('now')
+                WHERE announcements.user_id = excluded.user_id`,
           args: [
-            a.id,
+            a.id, userId,
             a.site_id ?? null,
             a.title,
             a.announcement_no ?? null,
@@ -58,32 +66,24 @@ export async function POST(req: NextRequest) {
       for (const c of body.customers) {
         if (!c?.id || !c?.announcement_id || !c?.name) continue;
         await db.execute({
-          sql: `INSERT INTO customers (id, announcement_id, site_id, name, rrn_front, rrn_back,
+          sql: `INSERT INTO customers (id, user_id, announcement_id, site_id, name, rrn_front, rrn_back,
                   is_standby, supply_type, unit_type, superseded, verification_verdict, data)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                   announcement_id=excluded.announcement_id,
-                  site_id=excluded.site_id,
-                  name=excluded.name,
-                  rrn_front=excluded.rrn_front,
-                  rrn_back=excluded.rrn_back,
-                  is_standby=excluded.is_standby,
-                  supply_type=excluded.supply_type,
-                  unit_type=excluded.unit_type,
-                  superseded=excluded.superseded,
+                  site_id=excluded.site_id, name=excluded.name,
+                  rrn_front=excluded.rrn_front, rrn_back=excluded.rrn_back,
+                  is_standby=excluded.is_standby, supply_type=excluded.supply_type,
+                  unit_type=excluded.unit_type, superseded=excluded.superseded,
                   verification_verdict=excluded.verification_verdict,
-                  data=excluded.data,
-                  updated_at=datetime('now')`,
+                  data=excluded.data, updated_at=datetime('now')
+                WHERE customers.user_id = excluded.user_id`,
           args: [
-            c.id,
-            c.announcement_id,
-            c.site_id ?? null,
-            c.name,
-            c.rrn_front ?? null,
-            c.rrn_back ?? null,
+            c.id, userId, c.announcement_id,
+            c.site_id ?? null, c.name,
+            c.rrn_front ?? null, c.rrn_back ?? null,
             c.is_standby ? 1 : 0,
-            c.supply_type ?? null,
-            c.unit_type ?? null,
+            c.supply_type ?? null, c.unit_type ?? null,
             c.superseded ? 1 : 0,
             c.verification_verdict ?? null,
             stringifyData(c),
@@ -101,14 +101,16 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  // 헬스체크 — 스키마 존재 여부만 확인
   try {
     await ensureSchema();
+    const session = await getSession();
+    if (!session) return NextResponse.json({ ok: false, error: "로그인 필요" }, { status: 401 });
+    const userId = Number(session.sub);
     const db = getDb();
     const [sites, anns, custs] = await Promise.all([
-      db.execute("SELECT COUNT(*) AS n FROM sites"),
-      db.execute("SELECT COUNT(*) AS n FROM announcements"),
-      db.execute("SELECT COUNT(*) AS n FROM customers"),
+      db.execute({ sql: "SELECT COUNT(*) AS n FROM sites WHERE user_id=?", args: [userId] }),
+      db.execute({ sql: "SELECT COUNT(*) AS n FROM announcements WHERE user_id=?", args: [userId] }),
+      db.execute({ sql: "SELECT COUNT(*) AS n FROM customers WHERE user_id=?", args: [userId] }),
     ]);
     return NextResponse.json({
       ok: true,

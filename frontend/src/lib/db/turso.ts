@@ -21,26 +21,42 @@ export function getDb(): Client {
 
 /** 스키마 DDL — 멱등. migrate API가 매번 호출 */
 export const SCHEMA_DDL = [
+  // 사용자 계정 (여러 담당자 격리용)
+  `CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
+  // 공고·고객 등은 user_id로 격리
   `CREATE TABLE IF NOT EXISTS sites (
     id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     data TEXT NOT NULL,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
+  `CREATE INDEX IF NOT EXISTS idx_sites_user ON sites(user_id)`,
   `CREATE TABLE IF NOT EXISTS announcements (
     id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
     site_id INTEGER,
     title TEXT NOT NULL,
     announcement_no TEXT,
     status TEXT,
+    original_file_url TEXT,
     data TEXT NOT NULL,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
+  `CREATE INDEX IF NOT EXISTS idx_announcements_user ON announcements(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_announcements_site ON announcements(site_id)`,
   `CREATE TABLE IF NOT EXISTS customers (
     id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
     announcement_id INTEGER NOT NULL,
     site_id INTEGER,
     name TEXT NOT NULL,
@@ -55,17 +71,34 @@ export const SCHEMA_DDL = [
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
+  `CREATE INDEX IF NOT EXISTS idx_customers_user ON customers(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_customers_announcement ON customers(announcement_id)`,
   `CREATE INDEX IF NOT EXISTS idx_customers_rrn ON customers(rrn_front)`,
   `CREATE TABLE IF NOT EXISTS contracts (
     id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
     customer_id INTEGER,
     announcement_id INTEGER,
     data TEXT NOT NULL,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
+  `CREATE INDEX IF NOT EXISTS idx_contracts_user ON contracts(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_contracts_customer ON contracts(customer_id)`,
+  // 업로드된 원본 파일 메타 (Vercel Blob)
+  `CREATE TABLE IF NOT EXISTS files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    announcement_id INTEGER,
+    kind TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    content_type TEXT,
+    size INTEGER,
+    url TEXT NOT NULL,
+    uploaded_at TEXT DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_files_user ON files(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_files_ann ON files(announcement_id)`,
 ];
 
 export async function ensureSchema(): Promise<void> {

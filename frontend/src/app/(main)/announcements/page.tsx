@@ -429,11 +429,24 @@ export default function AnnouncementsPage() {
     setForm((p) => ({ ...p, rules: { ...p.rules, region_priority: p.rules.region_priority.filter((_, idx) => idx !== i) } }));
   };
 
-  /** PDF 업로드 → 서버 파싱 → 폼 자동 채우기 */
+  /** PDF 업로드 → 서버 파싱 → 폼 자동 채우기 + 원본 Blob 백업 */
   const handlePdfUpload = async (file: File) => {
     setPdfParsing(true);
     setPdfFilled([]);
     try {
+      // 원본 파일을 Blob에 저장(실패해도 무시) — 결과 URL을 폼에 기록
+      const blobFd = new FormData();
+      blobFd.append("file", file);
+      blobFd.append("kind", "announcement");
+      fetch("/api/files/upload", { method: "POST", body: blobFd })
+        .then((r) => r.ok ? r.json() : null)
+        .then((j) => {
+          if (j?.url) {
+            setForm((p) => ({ ...p, rules: { ...p.rules, original_file_url: j.url, original_file_name: j.filename } }));
+          }
+        })
+        .catch(() => { /* Blob 실패 무시 */ });
+
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/parse-announcement-pdf", { method: "POST", body: fd });

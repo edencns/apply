@@ -1,26 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureSchema, getDb, parseRowData, stringifyData } from "@/lib/db/turso";
+import { getSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-async function fetchOne(id: number) {
+async function fetchOne(userId: number, id: number) {
   const db = getDb();
   const res = await db.execute({
-    sql: "SELECT data FROM announcements WHERE id = ?",
-    args: [id],
+    sql: "SELECT data FROM announcements WHERE id=? AND user_id=?",
+    args: [id, userId],
   });
   if (res.rows.length === 0) return null;
   return parseRowData<any>(res.rows[0]);
 }
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: { id: string } },
-) {
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     await ensureSchema();
-    const id = Number(params.id);
-    const ann = await fetchOne(id);
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
+    const ann = await fetchOne(Number(session.sub), Number(params.id));
     if (!ann) return NextResponse.json({ error: "not found" }, { status: 404 });
     return NextResponse.json(ann);
   } catch (err: any) {
@@ -28,29 +27,26 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } },
-) {
+export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     await ensureSchema();
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
+    const userId = Number(session.sub);
     const id = Number(params.id);
     const patch = await req.json();
-    const existing = await fetchOne(id);
+    const existing = await fetchOne(userId, id);
     if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
     const merged = { ...existing, ...patch, id };
     const db = getDb();
     await db.execute({
       sql: `UPDATE announcements SET
               site_id=?, title=?, announcement_no=?, status=?, data=?, updated_at=datetime('now')
-            WHERE id=?`,
+            WHERE id=? AND user_id=?`,
       args: [
-        merged.site_id ?? null,
-        merged.title,
-        merged.announcement_no ?? null,
-        merged.status ?? null,
-        stringifyData(merged),
-        id,
+        merged.site_id ?? null, merged.title,
+        merged.announcement_no ?? null, merged.status ?? null,
+        stringifyData(merged), id, userId,
       ],
     });
     return NextResponse.json(merged);
@@ -59,16 +55,22 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: { id: string } },
-) {
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     await ensureSchema();
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
+    const userId = Number(session.sub);
     const id = Number(params.id);
     const db = getDb();
-    await db.execute({ sql: "DELETE FROM announcements WHERE id=?", args: [id] });
-    await db.execute({ sql: "DELETE FROM customers WHERE announcement_id=?", args: [id] });
+    await db.execute({
+      sql: "DELETE FROM announcements WHERE id=? AND user_id=?",
+      args: [id, userId],
+    });
+    await db.execute({
+      sql: "DELETE FROM customers WHERE announcement_id=? AND user_id=?",
+      args: [id, userId],
+    });
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message }, { status: 500 });

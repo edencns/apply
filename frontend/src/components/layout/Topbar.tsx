@@ -1,7 +1,8 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import { ChevronRight, Search, Bell } from "lucide-react";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { ChevronRight, Search, Bell, LogOut } from "lucide-react";
 
 /**
  * 상단 바 — pathname으로 breadcrumb 자동 생성.
@@ -30,7 +31,24 @@ function toCrumb(pathname: string): string[] {
 
 export default function Topbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const crumb = toCrumb(pathname || "/");
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/me").then((r) => r.json()).then((j) => {
+      if (j.user) setUser({ name: j.user.name, email: j.user.email });
+    }).catch(() => {});
+  }, []);
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("user_name");
+      localStorage.removeItem("user_email");
+    }
+    router.push("/login");
+  }
 
   return (
     <div className="h-12 border-b border-border bg-surface flex items-center px-6 gap-2.5 sticky top-0 z-20">
@@ -65,6 +83,20 @@ export default function Topbar() {
       <button className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-surface2 transition-colors">
         <Bell className="w-[15px] h-[15px] text-ink-3" />
       </button>
+      {user && (
+        <div className="flex items-center gap-2 pl-2 ml-1 border-l border-border">
+          <div className="text-[11px] text-ink-2 font-medium" title={user.email}>
+            {user.name}
+          </div>
+          <button
+            onClick={logout}
+            title="로그아웃"
+            className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-surface2 transition-colors"
+          >
+            <LogOut className="w-[14px] h-[14px] text-ink-3" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

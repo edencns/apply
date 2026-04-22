@@ -60,6 +60,47 @@ function nextId(items: { id: number }[]): number {
   return items.length === 0 ? 1 : Math.max(...items.map((i) => i.id)) + 1;
 }
 
+/** 백그라운드로 Turso에 동기화 (fire-and-forget).
+ *  localStorage 가 진짜 소스, DB는 백업/공유 용도. 네트워크 실패 시 무시. */
+function syncBg(path: string, init: RequestInit) {
+  if (typeof window === "undefined") return;
+  fetch(path, init).catch(() => { /* offline OK */ });
+}
+function pushAnnouncementBg(a: LocalAnnouncement) {
+  syncBg("/api/db/announcements", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(a),
+  });
+}
+function patchAnnouncementBg(id: number, patch: Partial<LocalAnnouncement>) {
+  syncBg(`/api/db/announcements/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+}
+function deleteAnnouncementBg(id: number) {
+  syncBg(`/api/db/announcements/${id}`, { method: "DELETE" });
+}
+function pushCustomerBg(c: LocalCustomer) {
+  syncBg("/api/db/customers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(c),
+  });
+}
+function patchCustomerBg(id: number, patch: Partial<LocalCustomer>) {
+  syncBg(`/api/db/customers/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+}
+function deleteCustomerBg(ids: number[]) {
+  syncBg(`/api/db/customers?ids=${ids.join(",")}`, { method: "DELETE" });
+}
+
 // ─── Sites ─────────────────────────────────────────────
 export const localSites = {
   list(): LocalSite[] {
@@ -112,11 +153,13 @@ export const localAnnouncements = {
     };
     items.push(ann);
     write(ANNOUNCEMENTS_KEY, items);
+    pushAnnouncementBg(ann);
     return ann;
   },
   remove(id: number) {
     const items = read<LocalAnnouncement>(ANNOUNCEMENTS_KEY).filter((a) => a.id !== id);
     write(ANNOUNCEMENTS_KEY, items);
+    deleteAnnouncementBg(id);
   },
   update(id: number, patch: Partial<LocalAnnouncement>) {
     const items = read<LocalAnnouncement>(ANNOUNCEMENTS_KEY);
@@ -124,6 +167,7 @@ export const localAnnouncements = {
     if (idx >= 0) {
       items[idx] = { ...items[idx], ...patch };
       write(ANNOUNCEMENTS_KEY, items);
+      patchAnnouncementBg(id, patch);
     }
   },
 };
@@ -244,6 +288,7 @@ export const localCustomers = {
     };
     items.push(c);
     write(CUSTOMERS_KEY, items);
+    pushCustomerBg(c);
     return c;
   },
   update(id: number, patch: Partial<LocalCustomer>): LocalCustomer | null {
@@ -252,11 +297,13 @@ export const localCustomers = {
     if (idx === -1) return null;
     items[idx] = { ...items[idx], ...patch };
     write(CUSTOMERS_KEY, items);
+    patchCustomerBg(id, patch);
     return items[idx];
   },
   remove(id: number) {
     const items = read<LocalCustomer>(CUSTOMERS_KEY).filter((c) => c.id !== id);
     write(CUSTOMERS_KEY, items);
+    deleteCustomerBg([id]);
   },
 };
 
