@@ -82,6 +82,10 @@ export default function AnnouncementsPage() {
   });
   const [pdfParsing, setPdfParsing] = useState(false);
   const [pdfFilled, setPdfFilled] = useState<string[]>([]);
+  /** 최근 업로드한 PDF 파일 — "고급 분석" 버튼에서 재사용 */
+  const [lastPdfFile, setLastPdfFile] = useState<File | null>(null);
+  const [extendedParsing, setExtendedParsing] = useState(false);
+  const [extendedFilled, setExtendedFilled] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
@@ -429,10 +433,12 @@ export default function AnnouncementsPage() {
     setForm((p) => ({ ...p, rules: { ...p.rules, region_priority: p.rules.region_priority.filter((_, idx) => idx !== i) } }));
   };
 
-  /** PDF 업로드 → 서버 파싱 → 폼 자동 채우기 + 원본 Blob 백업 */
+  /** PDF 업로드 → 서버 Core 파싱 → 폼 자동 채우기 + 원본 Blob 백업 */
   const handlePdfUpload = async (file: File) => {
     setPdfParsing(true);
     setPdfFilled([]);
+    setExtendedFilled([]);
+    setLastPdfFile(file);
     try {
       // 원본 파일을 Blob에 저장(실패해도 무시) — 결과 URL을 폼에 기록
       const blobFd = new FormData();
@@ -569,6 +575,75 @@ export default function AnnouncementsPage() {
     } finally {
       setPdfParsing(false);
       if (pdfInputRef.current) pdfInputRef.current.value = "";
+    }
+  };
+
+  /** 고급 분석: Phase A 확장 필드 추출 — 마지막 업로드한 PDF 재사용 */
+  const handleExtendedAnalyze = async () => {
+    if (!lastPdfFile) {
+      alert("먼저 PDF를 업로드하세요.");
+      return;
+    }
+    setExtendedParsing(true);
+    setExtendedFilled([]);
+    try {
+      const fd = new FormData();
+      fd.append("file", lastPdfFile);
+      const res = await fetch("/api/parse-announcement-pdf/extended", { method: "POST", body: fd });
+      const raw = await res.text();
+      let json: any = null;
+      try { json = JSON.parse(raw); } catch { /* plain-text */ }
+      if (!res.ok || !json?.success) {
+        const snippet = (raw || "").slice(0, 200).trim();
+        const reason = json?.error
+          || (snippet.startsWith("{") ? "고급 분석 실패" : `서버 오류(${res.status}): ${snippet || "응답 없음"}`);
+        throw new Error(reason);
+      }
+      const d = (json.data || {}) as Record<string, any>;
+      const filled: string[] = [];
+      // 확장 필드를 rules 객체에 저장 (현재 폼 구조와 느슨하게 결합)
+      setForm((p) => {
+        const next = { ...p, rules: { ...p.rules } as any };
+        const put = (key: string, label: string, val: any) => {
+          if (val === null || val === undefined || val === "") return;
+          if (Array.isArray(val) && val.length === 0) return;
+          next.rules[key] = val;
+          filled.push(label);
+        };
+        put("housing_management_no", "주택관리번호", d.housingManagementNo);
+        put("approval_no", "승인번호", d.approvalNo);
+        put("developer", "사업주체", d.developer);
+        put("builder", "시공사", d.builder);
+        put("location_address", "공급위치", d.locationAddress);
+        put("announcement_base_date", "공고기준일", d.announcementBaseDate);
+        put("general_total_units", "일반공급 세대수", d.generalTotalUnits);
+        put("special_total_units", "특별공급 세대수", d.specialTotalUnits);
+        put("lowest_floor_priority_units", "최하층 우선배정", d.lowestFloorPriorityUnits);
+        put("min_age", "최소나이", d.minAge);
+        put("minor_head_allowed", "미성년세대주", d.minorHeadAllowed);
+        put("eligible_regions", "신청가능지역", d.eligibleRegions);
+        put("foreigner_allowed", "외국인 가능", d.foreignerAllowed);
+        put("regional_priority", `지역우선공급(${(d.regionalPriority || []).length}행)`, d.regionalPriority);
+        put("subscription_deposits", `청약예치금(${(d.subscriptionDeposits || []).length}행)`, d.subscriptionDeposits);
+        put("rank1_criteria", "1순위 요건", d.rank1Criteria);
+        put("rank2_criteria", "2순위 요건", d.rank2Criteria);
+        put("household_head_required", "세대주 요건", d.householdHeadRequired);
+        put("homeless_household_required", "무주택세대구성원", d.homelessHouseholdRequired);
+        put("single_home_owner_rank1_allowed", "1주택자 1순위", d.singleHomeOwnerRank1Allowed);
+        put("point_lottery_ratios", `가점/추첨(${(d.pointLotteryRatios || []).length}행)`, d.pointLotteryRatios);
+        put("required_documents_detailed", `서류상세(${(d.requiredDocumentsDetailed || []).length}건)`, d.requiredDocumentsDetailed);
+        put("duplicate_application_rule", "중복청약 규칙", d.duplicateApplicationRule);
+        put("passbook_reuse_blocked", "통장 재사용 불가", d.passbookReuseBlocked);
+        put("long_term_overseas_restriction", "해외체류 제한", d.longTermOverseasRestriction);
+        return next;
+      });
+      if (filled.length === 0) filled.push("확장 필드 추출 결과 없음");
+      filled.unshift(`⏱️ ${Math.round((json.durationMs || 0) / 100) / 10}s 소요`);
+      setExtendedFilled(filled);
+    } catch (err: any) {
+      alert(err.message || "고급 분석 실패");
+    } finally {
+      setExtendedParsing(false);
     }
   };
 
@@ -758,11 +833,35 @@ export default function AnnouncementsPage() {
                           {pdfFilled.length}개 항목 자동 입력됨
                         </span>
                       )}
+                      {/* 고급 분석 — 기본 업로드 이후에만 노출 */}
+                      {lastPdfFile && !pdfParsing && (
+                        <button
+                          type="button"
+                          disabled={extendedParsing}
+                          onClick={handleExtendedAnalyze}
+                          className="btn-secondary text-xs flex items-center gap-1.5 px-3 py-1.5"
+                          title="주택관리번호·사업주체·지역우선공급·예치금표·가점추첨비율 등 Phase A 확장 필드 추가 추출"
+                        >
+                          {extendedParsing ? (
+                            <><Loader2 className="w-3 h-3 animate-spin" /> 고급 분석 중…</>
+                          ) : (
+                            <>🔬 고급 분석</>
+                          )}
+                        </button>
+                      )}
                     </div>
                     {pdfFilled.length > 0 && !pdfParsing && (
                       <div className="mt-1.5 flex flex-wrap gap-1">
                         {pdfFilled.map((f) => (
                           <span key={f} className="inline-block text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">{f}</span>
+                        ))}
+                      </div>
+                    )}
+                    {extendedFilled.length > 0 && !extendedParsing && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        <span className="inline-block text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-semibold">고급</span>
+                        {extendedFilled.map((f) => (
+                          <span key={f} className="inline-block text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded">{f}</span>
                         ))}
                       </div>
                     )}

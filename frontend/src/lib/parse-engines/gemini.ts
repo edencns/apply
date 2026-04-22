@@ -330,7 +330,13 @@ async function runGemini(
 }
 
 /* ──────────────────────────────────────────────────────────
- * 공개 API: Core + Extended 병렬 호출 후 병합
+ * 공개 API
+ *
+ * Hobby 60s 제약 하에서 안정적으로 작동하도록 **두 함수로 분리**:
+ *  - extractWithGemini         : Core 스키마만 — 기본 업로드 시 자동 호출
+ *  - extractExtendedWithGemini : Phase A 확장 스키마만 — "고급 분석" 버튼
+ *
+ * 각각 벽시계 ~20s 안에 끝나 60s 함수 예산에 안전.
  * ────────────────────────────────────────────────────────── */
 export async function extractWithGemini(
   pdfBuffer: Uint8Array,
@@ -338,19 +344,13 @@ export async function extractWithGemini(
   const started = Date.now();
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY;
   if (!apiKey) {
-    return {
-      engine: "gemini",
-      data: {},
-      durationMs: 0,
-      error: "GEMINI_API_KEY 미설정",
-    };
+    return { engine: "gemini", data: {}, durationMs: 0, error: "GEMINI_API_KEY 미설정" };
   }
 
   try {
     const ai = new GoogleGenAI({ apiKey });
     const base64 = Buffer.from(pdfBuffer).toString("base64");
-
-    const corePromise = runGemini(
+    const data = await runGemini(
       ai,
       base64,
       GEMINI_SCHEMA_CORE,
@@ -358,8 +358,30 @@ export async function extractWithGemini(
       "위 PDF는 한국 청약 모집공고입니다. 핵심 필드(제목/일정/공급유형/면적/규제)를 JSON으로 추출하세요.",
       "gemini-core",
     );
+    return { engine: "gemini", data, durationMs: Date.now() - started };
+  } catch (err: any) {
+    return {
+      engine: "gemini",
+      data: {},
+      durationMs: Date.now() - started,
+      error: err?.message || String(err),
+    };
+  }
+}
 
-    const extendedPromise = runGemini(
+export async function extractExtendedWithGemini(
+  pdfBuffer: Uint8Array,
+): Promise<ParseEngineResult> {
+  const started = Date.now();
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY;
+  if (!apiKey) {
+    return { engine: "gemini", data: {}, durationMs: 0, error: "GEMINI_API_KEY 미설정" };
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const base64 = Buffer.from(pdfBuffer).toString("base64");
+    const data = await runGemini(
       ai,
       base64,
       GEMINI_SCHEMA_EXTENDED,
@@ -367,32 +389,7 @@ export async function extractWithGemini(
       "위 PDF는 한국 청약 모집공고입니다. 주택관리번호·사업주체·지역우선공급·예치금·가점추첨비율·서류상세 등 확장 필드를 JSON으로 추출하세요.",
       "gemini-ext",
     );
-
-    // allSettled: 한쪽 실패해도 다른 쪽 결과는 살림
-    const [coreResult, extResult] = await Promise.allSettled([corePromise, extendedPromise]);
-
-    const core: any = coreResult.status === "fulfilled" ? coreResult.value : {};
-    const ext: any = extResult.status === "fulfilled" ? extResult.value : {};
-    const coreErr = coreResult.status === "rejected" ? String((coreResult.reason as any)?.message || coreResult.reason) : null;
-    const extErr = extResult.status === "rejected" ? String((extResult.reason as any)?.message || extResult.reason) : null;
-
-    // 병합 — Core와 Extended는 필드가 겹치지 않도록 설계됐으므로 단순 스프레드
-    const merged: Partial<AnnouncementParseResult> = { ...core, ...ext };
-
-    // Core 완전 실패 시 에러로 취급 — Groq 폴백이 돌도록
-    if (coreErr && !extErr) {
-      console.warn(`[gemini] core 실패, extended만 성공: ${coreErr}`);
-    }
-    const error = coreErr
-      ? `core: ${coreErr}${extErr ? ` | extended: ${extErr}` : ""}`
-      : undefined;
-
-    return {
-      engine: "gemini",
-      data: merged,
-      durationMs: Date.now() - started,
-      error,
-    };
+    return { engine: "gemini", data, durationMs: Date.now() - started };
   } catch (err: any) {
     return {
       engine: "gemini",
