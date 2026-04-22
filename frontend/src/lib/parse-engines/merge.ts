@@ -40,7 +40,15 @@ function valuesEqual(a: any, b: any): boolean {
   return false;
 }
 
-/** scalar 필드 병합 */
+/** scalar 필드 병합.
+ *  Gemini가 주 엔진. OpenAI는 선택적 교차검증.
+ *  - Gemini + OpenAI 일치 → high (최고 신뢰)
+ *  - Gemini + regex 일치 → high (교차 확인됨)
+ *  - Gemini 단독 → high (주 엔진이 뽑았으면 신뢰)
+ *  - OpenAI 단독 → med
+ *  - regex 단독 → low
+ *  - 전부 없음 → unknown
+ */
 function mergeScalar<T>(
   regex: T | null | undefined,
   gemini: T | null | undefined,
@@ -49,13 +57,16 @@ function mergeScalar<T>(
   if (!isEmpty(gemini) && !isEmpty(openai) && valuesEqual(gemini, openai)) {
     return { value: gemini as T, conf: "high" };
   }
-  if (!isEmpty(gemini)) return { value: gemini as T, conf: "med" };
+  if (!isEmpty(gemini) && !isEmpty(regex) && valuesEqual(gemini, regex)) {
+    return { value: gemini as T, conf: "high" };
+  }
+  if (!isEmpty(gemini)) return { value: gemini as T, conf: "high" };
   if (!isEmpty(openai)) return { value: openai as T, conf: "med" };
   if (!isEmpty(regex)) return { value: regex as T, conf: "low" };
   return { value: null, conf: "unknown" };
 }
 
-/** 배열 필드 — 더 많은 항목 가진 쪽을 채택, 둘 다 유사하면 gemini 우선 */
+/** 배열 필드 — Gemini 우선, OpenAI 있으면 개수 비교로 교차검증 */
 function mergeArray<T>(
   gemini: T[] | null | undefined,
   openai: T[] | null | undefined,
@@ -66,7 +77,7 @@ function mergeArray<T>(
   if (g.length > 0 && o.length > 0 && Math.abs(g.length - o.length) <= 1) {
     return { value: g.length >= o.length ? g : o, conf: "high" };
   }
-  if (g.length >= o.length) return { value: g, conf: "med" };
+  if (g.length > 0) return { value: g, conf: "high" };
   return { value: o, conf: "med" };
 }
 
@@ -120,7 +131,7 @@ export function mergeByConsensus(
   }
   if (Object.keys(rd).length > 0) {
     data.requiredDocuments = rd;
-    confidence.requiredDocuments = g.requiredDocuments && o.requiredDocuments ? "high" : "med";
+    confidence.requiredDocuments = "high";
   }
 
   // incomeTable — 길이로 합의
