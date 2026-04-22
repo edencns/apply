@@ -50,7 +50,7 @@ function Badge({ text, cls }: { text: string; cls: string }) {
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{text}</span>;
 }
 
-function Section({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
+function Section({ title, children, defaultOpen = true, right }: { title: string; children: React.ReactNode; defaultOpen?: boolean; right?: React.ReactNode }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="border border-gray-200 rounded-xl overflow-hidden">
@@ -58,10 +58,32 @@ function Section({ title, children, defaultOpen = true }: { title: string; child
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-5 py-3.5 bg-gray-50 hover:bg-gray-100 transition-colors"
       >
-        <span className="font-semibold text-gray-800 text-sm">{title}</span>
+        <span className="font-semibold text-gray-800 text-sm flex items-center gap-2">{title}{right}</span>
         {open ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
       </button>
       {open && <div className="p-5">{children}</div>}
+    </div>
+  );
+}
+
+/** 근거 페이지 뱃지 — Phase A evidencePage 표시 */
+function EvidencePage({ page }: { page?: number | null }) {
+  if (page === null || page === undefined) return null;
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">
+      📄 공고문 p.{page}
+    </span>
+  );
+}
+
+/** 적용대상 태그 */
+function AppliesTo({ tags }: { tags: string[] }) {
+  if (!tags.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {tags.map((t) => (
+        <span key={t} className="inline-block text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">{t}</span>
+      ))}
     </div>
   );
 }
@@ -108,13 +130,13 @@ function fmtRange(start?: string | null, end?: string | null): string {
 /* ─── Tab: Overview ──────────────────────────────────── */
 
 function OverviewTab({ ann, rules }: { ann: AnnouncementDetail; rules: Record<string, any> }) {
-  const regionFull: string = rules.region_full || (rules.region_priority || []).join(" ") || "—";
+  const regionFull: string = rules.location_address || rules.region_full || (rules.region_priority || []).join(" ") || "—";
   const exclusiveAreas: any[] = rules.exclusive_areas || [];
   const areasSum = exclusiveAreas.reduce((s: number, a: any) => s + (a.totalUnits || 0), 0);
   const totalUnits = rules.total_units || areasSum;
-  const generalSum = exclusiveAreas.reduce((s: number, a: any) => s + (a.generalUnits || 0), 0);
-  const specialSum = exclusiveAreas.reduce((s: number, a: any) => s + (a.specialUnits || 0), 0);
-  const regulation: string = rules.regulation || (rules.no_home_required ? "비규제" : "—");
+  const generalSum = rules.general_total_units ?? exclusiveAreas.reduce((s: number, a: any) => s + (a.generalUnits || 0), 0);
+  const specialSum = rules.special_total_units ?? exclusiveAreas.reduce((s: number, a: any) => s + (a.specialUnits || 0), 0);
+  const lowestFloorUnits: number | undefined = rules.lowest_floor_priority_units;
 
   return (
     <div className="space-y-4">
@@ -128,6 +150,30 @@ function OverviewTab({ ann, rules }: { ann: AnnouncementDetail; rules: Record<st
             <p className="text-xs text-gray-500 mb-1">위치</p>
             <p className="text-sm">{regionFull}</p>
           </div>
+          {rules.developer && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">사업주체</p>
+              <p className="text-sm">{rules.developer}</p>
+            </div>
+          )}
+          {rules.builder && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">시공사</p>
+              <p className="text-sm">{rules.builder}</p>
+            </div>
+          )}
+          {rules.housing_management_no && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">주택관리번호</p>
+              <p className="text-sm font-mono">{rules.housing_management_no}</p>
+            </div>
+          )}
+          {rules.approval_no && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">승인번호</p>
+              <p className="text-sm font-mono">{rules.approval_no}</p>
+            </div>
+          )}
           {(rules._moveIn || rules.move_in_date) && (
             <div>
               <p className="text-xs text-gray-500 mb-1">입주 예정</p>
@@ -139,6 +185,9 @@ function OverviewTab({ ann, rules }: { ann: AnnouncementDetail; rules: Record<st
             <p className="text-sm font-semibold">{totalUnits > 0 ? `${totalUnits}세대` : "—"}
               {generalSum > 0 || specialSum > 0 ? (
                 <span className="text-gray-400 font-normal"> (일반 {generalSum} / 특별 {specialSum})</span>
+              ) : null}
+              {lowestFloorUnits ? (
+                <span className="text-gray-400 font-normal"> · 최하층 우선 {lowestFloorUnits}</span>
               ) : null}
             </p>
           </div>
@@ -251,10 +300,74 @@ function OverviewTab({ ann, rules }: { ann: AnnouncementDetail; rules: Record<st
 
 function EligibilityTab({ rules }: { rules: Record<string, any> }) {
   const regionPriority: string[] = rules.region_priority || [];
+  const regionalPriorityRows: any[] = Array.isArray(rules.regional_priority) ? rules.regional_priority : [];
+  const eligibleRegions: string[] = Array.isArray(rules.eligible_regions) ? rules.eligible_regions : [];
+  const deposits: any[] = Array.isArray(rules.subscription_deposits) ? rules.subscription_deposits : [];
+  const ratios: any[] = Array.isArray(rules.point_lottery_ratios) ? rules.point_lottery_ratios : [];
+
+  // 지역 우선공급 총합 비율로 bar chart 구성
+  const ratioSum = regionalPriorityRows.reduce((s, r) => s + (Number(r.ratioPercent) || 0), 0);
+  const PRIORITY_COLORS = ["bg-blue-500", "bg-sky-500", "bg-indigo-500", "bg-violet-500", "bg-purple-500"];
 
   return (
     <div className="space-y-4">
-      <Section title="거주지역 요건">
+      {/* 신청 가능 대상 — Phase A */}
+      {(rules.min_age !== undefined || rules.minor_head_allowed !== undefined || rules.foreigner_allowed !== undefined || eligibleRegions.length > 0) && (
+        <Section title="신청 가능 대상">
+          <div className="grid grid-cols-2 gap-3">
+            {rules.min_age !== undefined && rules.min_age !== null && (
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs text-gray-500">최소 나이</p>
+                <p className="text-sm font-bold text-blue-700 mt-1">만 {rules.min_age}세 이상</p>
+              </div>
+            )}
+            {rules.minor_head_allowed !== undefined && rules.minor_head_allowed !== null && (
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs text-gray-500">세대주인 미성년자</p>
+                <p className="text-sm font-medium mt-1">{rules.minor_head_allowed ? "허용" : "불가"}</p>
+              </div>
+            )}
+            {rules.foreigner_allowed !== undefined && rules.foreigner_allowed !== null && (
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs text-gray-500">외국인/재외동포</p>
+                <p className="text-sm font-medium mt-1">{rules.foreigner_allowed ? "가능" : "불가"}</p>
+              </div>
+            )}
+            {eligibleRegions.length > 0 && (
+              <div className="bg-gray-50 rounded-lg p-3 col-span-2">
+                <p className="text-xs text-gray-500 mb-1">신청 가능 지역</p>
+                <p className="text-sm">{eligibleRegions.join(", ")}</p>
+              </div>
+            )}
+          </div>
+        </Section>
+      )}
+
+      {/* 지역 우선공급 비율 — Phase A */}
+      {regionalPriorityRows.length > 0 && (
+        <Section title="지역 우선공급 비율">
+          <div className="space-y-3">
+            <div className="flex h-4 rounded-full overflow-hidden border border-gray-200">
+              {regionalPriorityRows.map((r, i) => {
+                const pct = ratioSum > 0 ? ((Number(r.ratioPercent) || 0) / ratioSum) * 100 : 0;
+                return <div key={i} className={PRIORITY_COLORS[i % PRIORITY_COLORS.length]} style={{ width: `${pct}%` }} title={`${r.region} ${r.ratioPercent ?? "?"}%`} />;
+              })}
+            </div>
+            <div className="space-y-1.5">
+              {regionalPriorityRows.map((r, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm">
+                  <div className={`w-2.5 h-2.5 rounded-full ${PRIORITY_COLORS[i % PRIORITY_COLORS.length]}`} />
+                  <span className="flex-1">{r.region}{r.minResidenceMonths ? ` · ${r.minResidenceMonths}개월 이상 거주` : ""}{r.supplyScope ? ` · ${r.supplyScope}` : ""}</span>
+                  <span className="font-semibold text-gray-800">{r.ratioPercent ?? "?"}%</span>
+                  <EvidencePage page={r.evidencePage} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </Section>
+      )}
+
+      <Section title="거주지역 요건" defaultOpen={regionalPriorityRows.length === 0}>
         <div className="space-y-3">
           <div>
             <p className="text-xs font-medium text-blue-600 mb-1">해당지역 (우선공급)</p>
@@ -266,6 +379,102 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
           </div>
         </div>
       </Section>
+
+      {/* 청약예치금 기준표 — Phase A */}
+      {deposits.length > 0 && (
+        <Section title="청약예치금 기준">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-2 text-xs font-medium text-gray-500">면적</th>
+                  <th className="text-left py-2 text-xs font-medium text-gray-500">지역</th>
+                  <th className="text-right py-2 text-xs font-medium text-gray-500">최소 예치금</th>
+                  <th className="text-right py-2 text-xs font-medium text-gray-500">근거</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deposits.map((d, i) => (
+                  <tr key={i} className="border-b border-gray-50">
+                    <td className="py-2.5 font-medium">{d.areaRange || "—"}</td>
+                    <td className="py-2.5 text-gray-700">{d.region || "—"}</td>
+                    <td className="py-2.5 text-right font-bold text-blue-700">{d.minDeposit || "—"}</td>
+                    <td className="py-2.5 text-right"><EvidencePage page={d.evidencePage} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      )}
+
+      {/* 1·2순위 요건 — Phase A */}
+      {(rules.rank1_criteria || rules.rank2_criteria || rules.household_head_required !== undefined || rules.homeless_household_required !== undefined || rules.single_home_owner_rank1_allowed !== undefined) && (
+        <Section title="1·2순위 요건">
+          <div className="space-y-3">
+            {rules.rank1_criteria && (
+              <div className="bg-blue-50 rounded-lg p-3">
+                <p className="text-xs font-semibold text-blue-700 mb-1">1순위</p>
+                <p className="text-sm text-blue-900">{rules.rank1_criteria}</p>
+              </div>
+            )}
+            {rules.rank2_criteria && (
+              <div className="bg-sky-50 rounded-lg p-3">
+                <p className="text-xs font-semibold text-sky-700 mb-1">2순위</p>
+                <p className="text-sm text-sky-900">{rules.rank2_criteria}</p>
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              {rules.household_head_required !== undefined && rules.household_head_required !== null && (
+                <div className="bg-gray-50 rounded-lg p-2.5 text-center">
+                  <p className="text-[10px] text-gray-500">세대주 요건</p>
+                  <p className="text-xs font-semibold mt-0.5">{rules.household_head_required ? "필수" : "무관"}</p>
+                </div>
+              )}
+              {rules.homeless_household_required !== undefined && rules.homeless_household_required !== null && (
+                <div className="bg-gray-50 rounded-lg p-2.5 text-center">
+                  <p className="text-[10px] text-gray-500">무주택세대구성원</p>
+                  <p className="text-xs font-semibold mt-0.5">{rules.homeless_household_required ? "필수" : "무관"}</p>
+                </div>
+              )}
+              {rules.single_home_owner_rank1_allowed !== undefined && rules.single_home_owner_rank1_allowed !== null && (
+                <div className="bg-gray-50 rounded-lg p-2.5 text-center">
+                  <p className="text-[10px] text-gray-500">1주택자 1순위</p>
+                  <p className="text-xs font-semibold mt-0.5">{rules.single_home_owner_rank1_allowed ? "가능" : "불가"}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </Section>
+      )}
+
+      {/* 가점/추첨 비율 — Phase A */}
+      {ratios.length > 0 && (
+        <Section title="주택형별 가점제·추첨제 비율">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-2 text-xs font-medium text-gray-500">주택형</th>
+                  <th className="text-right py-2 text-xs font-medium text-gray-500">가점제</th>
+                  <th className="text-right py-2 text-xs font-medium text-gray-500">추첨제</th>
+                  <th className="text-right py-2 text-xs font-medium text-gray-500">근거</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ratios.map((r, i) => (
+                  <tr key={i} className="border-b border-gray-50">
+                    <td className="py-2.5 font-medium">{r.area || "—"}</td>
+                    <td className="py-2.5 text-right">{r.pointPercent !== null && r.pointPercent !== undefined ? `${r.pointPercent}%` : "—"}</td>
+                    <td className="py-2.5 text-right">{r.lotteryPercent !== null && r.lotteryPercent !== undefined ? `${r.lotteryPercent}%` : "—"}</td>
+                    <td className="py-2.5 text-right"><EvidencePage page={r.evidencePage} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      )}
 
       <Section title="청약통장 요건">
         <div className="mb-3">
@@ -334,6 +543,36 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
             <div className="bg-gray-50 rounded-lg p-3">
               <p className="text-xs text-gray-500">전매제한</p>
               <p className="text-sm font-medium mt-1">{rules._resaleRestriction || rules.resale_restriction}</p>
+            </div>
+          )}
+          {(rules._reWinRestriction || rules.rewin_restriction) && (
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-xs text-gray-500">재당첨 제한</p>
+              <p className="text-sm font-medium mt-1">{rules._reWinRestriction || rules.rewin_restriction}</p>
+            </div>
+          )}
+          {(rules._residenceObligation || rules.residence_obligation) && (
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-xs text-gray-500">거주의무</p>
+              <p className="text-sm font-medium mt-1">{rules._residenceObligation || rules.residence_obligation}</p>
+            </div>
+          )}
+          {rules.passbook_reuse_blocked !== undefined && rules.passbook_reuse_blocked !== null && (
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-xs text-gray-500">통장 재사용</p>
+              <p className="text-sm font-medium mt-1">{rules.passbook_reuse_blocked ? "당첨 시 재사용 불가" : "가능"}</p>
+            </div>
+          )}
+          {rules.duplicate_application_rule && (
+            <div className="bg-amber-50 rounded-lg p-3 col-span-2">
+              <p className="text-xs text-amber-700 font-semibold">중복청약 제한</p>
+              <p className="text-sm text-amber-900 mt-1">{rules.duplicate_application_rule}</p>
+            </div>
+          )}
+          {rules.long_term_overseas_restriction && (
+            <div className="bg-amber-50 rounded-lg p-3 col-span-2">
+              <p className="text-xs text-amber-700 font-semibold">장기 해외체류 제한</p>
+              <p className="text-sm text-amber-900 mt-1">{rules.long_term_overseas_restriction}</p>
             </div>
           )}
         </div>
@@ -471,13 +710,41 @@ function SpecialTab({ rules }: { rules: Record<string, any> }) {
                   )}
                 </div>
                 {st.conditions && st.conditions.length > 0 && (
-                  <div className="mt-2 space-y-1.5">
-                    {st.conditions.map((c: string, ci: number) => (
-                      <div key={ci} className="flex items-start gap-2 text-sm">
-                        <span className="text-blue-500 mt-0.5">&#8226;</span>
-                        <span>{c}</span>
-                      </div>
-                    ))}
+                  <div className="mt-2">
+                    <p className="text-xs font-semibold text-gray-600 mb-1.5">판정 기준</p>
+                    <div className="space-y-1.5">
+                      {st.conditions.map((c: string, ci: number) => (
+                        <div key={ci} className="flex items-start gap-2 text-sm">
+                          <span className="text-blue-500 mt-0.5">&#8226;</span>
+                          <span>{c}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {st.selectionMethod && (
+                  <div className="mt-2 bg-indigo-50 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-indigo-700 mb-1">선정 방식</p>
+                    <p className="text-sm text-indigo-900">{st.selectionMethod}</p>
+                  </div>
+                )}
+                {Array.isArray(st.ineligibleReasons) && st.ineligibleReasons.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs font-semibold text-red-700 mb-1.5">신청 불가 사유</p>
+                    <div className="space-y-1">
+                      {st.ineligibleReasons.map((r: string, ri: number) => (
+                        <div key={ri} className="flex items-start gap-2 text-sm text-red-800">
+                          <AlertTriangle className="w-3.5 h-3.5 text-red-500 mt-0.5 flex-shrink-0" />
+                          <span>{r}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {st.evidenceQuote && (
+                  <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-500 border-t border-gray-100 pt-2">
+                    <span className="italic">"{st.evidenceQuote.slice(0, 120)}{st.evidenceQuote.length > 120 ? "…" : ""}"</span>
+                    <EvidencePage page={st.evidencePage} />
                   </div>
                 )}
               </div>
@@ -616,6 +883,14 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
 function DocumentsTab({ rules }: { rules: Record<string, any> }) {
   const parsedDocs: Record<string, string[]> = rules.required_documents || {};
   const specialTypes: string[] = rules.special_supply_types || [];
+  const detailed: any[] = Array.isArray(rules.required_documents_detailed) ? rules.required_documents_detailed : [];
+  // category별 그룹화
+  const detailedByCategory: Record<string, any[]> = {};
+  for (const d of detailed) {
+    const k = d.category || "기타";
+    if (!detailedByCategory[k]) detailedByCategory[k] = [];
+    detailedByCategory[k].push(d);
+  }
 
   // 문서 체크리스트 폴백: 파싱된 서류가 부족하면 기본 체크리스트로 보충
   const enrichedDocs: Record<string, string[]> = {};
@@ -667,13 +942,60 @@ function DocumentsTab({ rules }: { rules: Record<string, any> }) {
 
   return (
     <div className="space-y-4">
-      {isDefault && (
+      {isDefault && detailed.length === 0 && (
         <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg text-sm text-amber-800">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           <span>공고에서 서류 목록이 충분히 추출되지 않아 <strong>표준 체크리스트</strong>가 적용되었습니다.</span>
         </div>
       )}
-      {Object.entries(enrichedDocs).map(([category, docs]) => (
+
+      {/* Phase A — 서류 상세 가이드 뷰 */}
+      {detailed.length > 0 && (
+        Object.entries(detailedByCategory).map(([category, docs]) => (
+          <Section
+            key={`detailed-${category}`}
+            title={`${category} 서류 (상세)`}
+            defaultOpen={category === "공통"}
+            right={<span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-medium">{docs.length}건</span>}
+          >
+            <div className="space-y-2">
+              {docs.map((d, i) => (
+                <div key={i} className="border border-gray-200 rounded-lg p-3 hover:border-gray-300 transition-colors">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <FileText className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
+                        <p className="text-sm font-semibold">{d.name}</p>
+                        {d.required && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${d.required === "필수" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
+                            {d.required}
+                          </span>
+                        )}
+                        {d.detailedVersion && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">상세본</span>}
+                        {d.originalRequired && <span className="text-[10px] bg-red-50 text-red-700 px-1.5 py-0.5 rounded font-medium">원본</span>}
+                      </div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-600 mt-1">
+                        {d.issuer && <span>발급처: <span className="text-gray-800 font-medium">{d.issuer}</span></span>}
+                        {d.validityDays && <span>유효기간: <span className="text-gray-800 font-medium">{d.validityDays}일 이내</span></span>}
+                        {d.submitTiming && <span>제출: <span className="text-gray-800 font-medium">{d.submitTiming}</span></span>}
+                      </div>
+                      {Array.isArray(d.alternativeDocs) && d.alternativeDocs.length > 0 && (
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          대체 가능: {d.alternativeDocs.join(", ")}
+                        </p>
+                      )}
+                    </div>
+                    <EvidencePage page={d.evidencePage} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+        ))
+      )}
+
+      {/* 기존 간단 리스트 뷰 (detailed가 없거나 보충용) */}
+      {detailed.length === 0 && Object.entries(enrichedDocs).map(([category, docs]) => (
         docs.length > 0 && (
           <Section key={category} title={`${category} 서류`} defaultOpen={category === "공통"}>
             <ul className="space-y-2">
@@ -913,6 +1235,32 @@ export default function AnnouncementDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Phase B 상단 고정 메타 바 — 공고 기준일 + 식별 번호 */}
+      {(rules.announcement_base_date || rules.housing_management_no || rules.approval_no || rules.announcement_date) && (
+        <div className="mb-5 border border-blue-200 bg-blue-50 rounded-xl p-3">
+          <div className="flex items-center gap-4 flex-wrap text-xs">
+            <div className="flex items-center gap-1.5">
+              <CalendarDays className="w-3.5 h-3.5 text-blue-600" />
+              <span className="text-blue-700 font-semibold">공고 기준일</span>
+              <span className="text-blue-900 font-bold">{fmtDate(rules.announcement_base_date || rules.announcement_date)}</span>
+              <span className="text-blue-500">— 자격 판정은 이 날짜 기준</span>
+            </div>
+            {rules.housing_management_no && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-500">주택관리번호</span>
+                <span className="font-mono font-semibold text-gray-800">{rules.housing_management_no}</span>
+              </div>
+            )}
+            {rules.approval_no && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-500">승인번호</span>
+                <span className="font-mono font-semibold text-gray-800">{rules.approval_no}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1">
