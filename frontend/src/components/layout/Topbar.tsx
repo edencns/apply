@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronRight, Search, Bell, LogOut } from "lucide-react";
+import { ChevronRight, LogOut } from "lucide-react";
 
 /**
  * 상단 바 — pathname으로 breadcrumb 자동 생성.
@@ -22,6 +22,9 @@ const LABELS: Record<string, string> = {
   contracts: "계약",
   "walk-in": "방문 계약",
   winners: "당첨자",
+  settings: "설정",
+  admin: "관리",
+  users: "계정 관리",
 };
 
 function toCrumb(pathname: string): string[] {
@@ -78,16 +81,6 @@ export default function Topbar() {
         )}
       </div>
       <div className="flex-1" />
-      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface2 text-[11.5px] text-ink-3">
-        <Search className="w-3 h-3 text-ink-4" />
-        <span>빠른 검색</span>
-        <span className="ml-3 px-1.5 py-px rounded-sm bg-surface text-[10px] text-ink-4 border border-border font-mono">
-          ⌘K
-        </span>
-      </div>
-      <button className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-surface2 transition-colors">
-        <Bell className="w-[15px] h-[15px] text-ink-3" />
-      </button>
       {user && (
         <div className="flex items-center gap-2 pl-2 ml-1 border-l border-border">
           <div className="text-[11px] text-ink-2 font-medium" title={user.email}>

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Building2, LayoutDashboard, Users, FileText,
   BookOpen, LogOut, PenLine, GitCompareArrows,
-  UserCheck, Home, Banknote,
+  UserCheck, Home, Banknote, Settings,
 } from "lucide-react";
 
 interface NavItem {
@@ -30,6 +30,7 @@ const workflowItems: NavItem[] = [
 
 const bottomItems: NavItem[] = [
   { href: "/contracts/walk-in", icon: PenLine, label: "방문 계약" },
+  { href: "/settings", icon: Settings, label: "설정" },
 ];
 
 function NavLink({
