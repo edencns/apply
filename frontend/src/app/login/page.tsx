@@ -2,8 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
-import { Building2, Lock, Mail, Loader2 } from "lucide-react";
+import { Building2, Lock, User, Loader2 } from "lucide-react";
 
 function LoginInner() {
   const router = useRouter();
@@ -51,14 +50,14 @@ function LoginInner() {
 
         <form onSubmit={handleLogin} className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-ink-2 mb-1">이메일</label>
+            <label className="block text-xs font-medium text-ink-2 mb-1">아이디</label>
             <div className="relative">
-              <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-4" />
+              <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-4" />
               <input
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="example@company.com"
+                placeholder="관리자 아이디"
                 required
                 className="w-full pl-8 pr-3 py-2 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
               />
@@ -96,11 +95,8 @@ function LoginInner() {
           </button>
         </form>
 
-        <div className="mt-4 text-center text-xs text-ink-3">
-          처음이신가요?{" "}
-          <Link href="/signup" className="text-accent font-medium hover:underline">
-            계정 만들기
-          </Link>
+        <div className="mt-4 text-center text-[11px] text-ink-4">
+          계정은 관리자에게 문의해 발급받으세요
         </div>
       </div>
     </div>
