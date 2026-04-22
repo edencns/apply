@@ -455,19 +455,39 @@ export default function AnnouncementsPage() {
         throw new Error(json.error || "파싱 실패");
       }
       const d = json.data as Record<string, any>;
+      // HTML datetime-local 입력은 'YYYY-MM-DDTHH:mm' 정확히 요구.
+      // 파서가 ISO 8601 다양한 변형('YYYY-MM-DDTHH:mm:ss', 'YYYY-MM-DD', 'YYYY-MM-DD HH:mm' 등)을 돌려줄 수 있으니 여기서 통일.
+      const toDateInput = (raw: any): string => {
+        if (!raw || typeof raw !== "string") return "";
+        const s = raw.trim().replace(" ", "T");
+        // 날짜만 있으면 기본 시간 00:00 붙임
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T00:00`;
+        // HH:mm:ss면 초 제거
+        const m = s.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/);
+        return m ? m[1] : "";
+      };
       const filled: string[] = [];
       setForm((p) => {
         const next = { ...p, rules: { ...p.rules } };
         if (d.title && !p.title) { next.title = d.title; filled.push("공고명"); }
         if (d.announcementNo && !p.announcement_no) { next.announcement_no = d.announcementNo; filled.push("공고번호"); }
-        if (d.applicationStart && !p.application_start) { next.application_start = d.applicationStart; filled.push("청약 접수 시작일"); }
-        if (d.applicationEnd && !p.application_end) { next.application_end = d.applicationEnd; filled.push("청약 접수 종료일"); }
-        if (d.winnerAnnounceDate && !p.winner_announce_date) { next.winner_announce_date = d.winnerAnnounceDate; filled.push("당첨자 발표일"); }
-        if (d.contractStart && !p.contract_start) { next.contract_start = d.contractStart; filled.push("계약 시작일"); }
-        if (d.contractEnd) { next.contract_end = d.contractEnd; filled.push("계약 종료일"); }
-        // 서류접수 날짜는 eligibility_rules에 저장
-        if (d.docSubmitStart && !p.document_submit_start) { next.document_submit_start = d.docSubmitStart; filled.push("서류접수 시작일"); }
-        if (d.docSubmitEnd && !p.document_submit_end) { next.document_submit_end = d.docSubmitEnd; filled.push("서류접수 종료일"); }
+        const appStart = toDateInput(d.applicationStart);
+        const appEnd = toDateInput(d.applicationEnd);
+        const winDate = toDateInput(d.winnerAnnounceDate);
+        const cStart = toDateInput(d.contractStart);
+        const cEnd = toDateInput(d.contractEnd);
+        const dStart = toDateInput(d.docSubmitStart);
+        const dEnd = toDateInput(d.docSubmitEnd);
+        const spApply = toDateInput(d.specialApplyDate);
+        const g1 = toDateInput(d.general1stDate);
+        const g2 = toDateInput(d.general2ndDate);
+        if (appStart && !p.application_start) { next.application_start = appStart; filled.push("청약 접수 시작일"); }
+        if (appEnd && !p.application_end) { next.application_end = appEnd; filled.push("청약 접수 종료일"); }
+        if (winDate && !p.winner_announce_date) { next.winner_announce_date = winDate; filled.push("당첨자 발표일"); }
+        if (cStart && !p.contract_start) { next.contract_start = cStart; filled.push("계약 시작일"); }
+        if (cEnd) { next.contract_end = cEnd; filled.push("계약 종료일"); }
+        if (dStart && !p.document_submit_start) { next.document_submit_start = dStart; filled.push("서류접수 시작일"); }
+        if (dEnd && !p.document_submit_end) { next.document_submit_end = dEnd; filled.push("서류접수 종료일"); }
         if (d.totalUnits) { next.rules.total_units = d.totalUnits; filled.push(`총 ${d.totalUnits}세대`); }
         if (typeof d.noHomeRequired === "boolean") { next.rules.no_home_required = d.noHomeRequired; filled.push("무주택 필수"); }
         if (d.minSubscriptionMonths) { next.rules.min_subscription_period = d.minSubscriptionMonths; filled.push("통장 납입 기간"); }
@@ -506,10 +526,10 @@ export default function AnnouncementsPage() {
         if (d.landType) { next.rules.land_type = d.landType; filled.push("택지유형"); }
         if (d.moveInDate) { next.rules.move_in_date = d.moveInDate; filled.push("입주예정"); }
         if (d.pointSystemRatio) { next.rules.point_system = d.pointSystemRatio; filled.push("가점제/추첨제"); }
-        if (d.announcementDate) { next.rules.announcement_date = d.announcementDate; }
-        if (d.specialApplyDate) { next.rules.special_apply_date = d.specialApplyDate; }
-        if (d.general1stDate) { next.rules.general_1st_date = d.general1stDate; }
-        if (d.general2ndDate) { next.rules.general_2nd_date = d.general2ndDate; }
+        if (d.announcementDate) { next.rules.announcement_date = toDateInput(d.announcementDate); }
+        if (spApply) { next.rules.special_apply_date = spApply; filled.push("특별공급 접수일"); }
+        if (g1) { next.rules.general_1st_date = g1; filled.push("일반 1순위"); }
+        if (g2) { next.rules.general_2nd_date = g2; filled.push("일반 2순위"); }
         return next;
       });
       // 엔진별 성공 여부 배지
