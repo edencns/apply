@@ -237,20 +237,18 @@ function isRetryableError(err: any): boolean {
   return false;
 }
 
-/** 지수 백오프 + jitter + 전체 데드라인 / 호출당 타임아웃.
- *  Vercel maxDuration=300s 안에 들어가려면 총 예산 관리가 중요.
- *  Phase A 확장 스키마 때문에 Gemini 생성 시간이 길어져 타임아웃을 넉넉히.
- *  - maxAttempts=3: 1s + 2s = 3s 백오프
- *  - perAttemptTimeoutMs=120s: 한 번 호출은 길게 허용
- *  - overallDeadlineMs=260s: 총 260s 안에 못 끝내면 폴백으로 넘김
- */
+/** Vercel Hobby maxDuration=60s. thinking 비활성화 시 Gemini 2.5 Flash는
+ *  대부분 15~30s 내 완료되므로 한 번만 제대로 시도 + 아주 짧은 재시도 1회.
+ *  - maxAttempts=2: 즉시 재시도 (백오프 없음 또는 0.5s)
+ *  - perAttemptTimeoutMs=40s: 한 번 호출 예산
+ *  - overallDeadlineMs=50s: Groq 폴백 여지 남김 */
 async function withRetry<T>(
   fn: (signal: AbortSignal) => Promise<T>,
   opts: { maxAttempts?: number; perAttemptTimeoutMs?: number; overallDeadlineMs?: number } = {},
 ): Promise<T> {
-  const maxAttempts = opts.maxAttempts ?? 3;
-  const perAttemptTimeoutMs = opts.perAttemptTimeoutMs ?? 120_000;
-  const overallDeadlineMs = opts.overallDeadlineMs ?? 260_000;
+  const maxAttempts = opts.maxAttempts ?? 2;
+  const perAttemptTimeoutMs = opts.perAttemptTimeoutMs ?? 40_000;
+  const overallDeadlineMs = opts.overallDeadlineMs ?? 50_000;
   const deadline = Date.now() + overallDeadlineMs;
   let lastErr: any;
 
@@ -265,9 +263,8 @@ async function withRetry<T>(
     } catch (err: any) {
       lastErr = err;
       if (attempt === maxAttempts - 1 || !isRetryableError(err)) throw err;
-      const baseMs = 1000 * Math.pow(2, attempt); // 1s, 2s
-      const jitter = Math.floor(Math.random() * 500);
-      const waitMs = baseMs + jitter;
+      // Hobby 예산이 빡빡해 백오프 짧게 (0.5s + jitter)
+      const waitMs = 500 + Math.floor(Math.random() * 300);
       const remainAfterWait = deadline - Date.now() - waitMs;
       if (remainAfterWait <= 2000) throw err; // 대기하고 나면 시간 없음
       console.warn(
@@ -318,6 +315,9 @@ export async function extractWithGemini(
           temperature: 0,
           responseMimeType: "application/json",
           responseSchema: GEMINI_SCHEMA,
+          // 2.5 Flash 내부 reasoning 비활성화 → 레이턴시 절반 이하로 감소.
+          // Vercel Hobby 60s 제약 하에서 필수.
+          thinkingConfig: { thinkingBudget: 0 },
         },
       });
       // SDK가 AbortSignal을 직접 지원하지 않아도 race로 budget 제한
