@@ -13,8 +13,9 @@ import AnnouncementPicker from "@/components/AnnouncementPicker";
 import { evaluateFinal } from "@/lib/verification-rules";
 import { COMMON_DOCUMENTS, SUPPLY_TYPE_DOCUMENTS } from "@/lib/document-checklist";
 import {
-  Upload, Download, Check, ArrowRight,
+  Upload, Download, Check, ArrowRight, Cloud, CloudDownload, CloudUpload, Loader2,
 } from "lucide-react";
+import { pushAll, pullAll, checkCloudStatus } from "@/lib/cloud-sync";
 
 const WORKFLOW_STEPS_META = [
   { n: 1, key: "registration", label: "당첨자 등록", href: "/workflow/registration" },
@@ -44,6 +45,37 @@ export default function DashboardPage() {
   const [announcements, setAnnouncements] = useState<LocalAnnouncement[]>([]);
   const [activeAnn, setActiveAnn] = useState<LocalAnnouncement | null>(null);
   const [customers, setCustomers] = useState<LocalCustomer[]>([]);
+  const [syncBusy, setSyncBusy] = useState<"push" | "pull" | null>(null);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [cloudCounts, setCloudCounts] = useState<{ sites: number; announcements: number; customers: number } | null>(null);
+
+  async function handlePush() {
+    if (syncBusy) return;
+    setSyncBusy("push"); setSyncMsg(null);
+    const r = await pushAll();
+    setSyncBusy(null);
+    setSyncMsg(r.ok
+      ? `☁️ 업로드 완료 — 공고 ${r.counts.announcements}건 · 고객 ${r.counts.customers}명`
+      : `❌ 업로드 실패: ${r.error}`);
+    const s = await checkCloudStatus();
+    if (s.ok && s.counts) setCloudCounts(s.counts);
+  }
+
+  async function handlePull() {
+    if (syncBusy) return;
+    if (!confirm("클라우드 데이터로 로컬을 덮어씁니다. 현재 로컬 변경사항은 사라져요. 진행할까요?")) return;
+    setSyncBusy("pull"); setSyncMsg(null);
+    const r = await pullAll();
+    setSyncBusy(null);
+    setSyncMsg(r.ok
+      ? `⬇️ 다운로드 완료 — 공고 ${r.counts.announcements}건 · 고객 ${r.counts.customers}명`
+      : `❌ 다운로드 실패: ${r.error}`);
+    if (r.ok) setTimeout(() => window.location.reload(), 800);
+  }
+
+  useEffect(() => {
+    checkCloudStatus().then((s) => { if (s.ok && s.counts) setCloudCounts(s.counts); });
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -177,7 +209,31 @@ export default function DashboardPage() {
           </div>
           <h1 className="text-xl font-bold text-ink tracking-[-0.3px]">현장 현황</h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center flex-wrap">
+          {cloudCounts && (
+            <span className="text-[10.5px] text-ink-3 mr-1 inline-flex items-center gap-1">
+              <Cloud className="w-3 h-3 text-ink-4" />
+              DB {cloudCounts.announcements}공고 · {cloudCounts.customers}고객
+            </span>
+          )}
+          <button
+            onClick={handlePush}
+            disabled={!!syncBusy}
+            className="btn-secondary inline-flex items-center gap-1"
+            title="로컬 데이터를 클라우드 DB로 업로드"
+          >
+            {syncBusy === "push" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudUpload className="w-3.5 h-3.5" />}
+            업로드
+          </button>
+          <button
+            onClick={handlePull}
+            disabled={!!syncBusy}
+            className="btn-secondary inline-flex items-center gap-1"
+            title="클라우드 DB → 로컬로 다운로드 (덮어쓰기)"
+          >
+            {syncBusy === "pull" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudDownload className="w-3.5 h-3.5" />}
+            다운로드
+          </button>
           <button className="btn-secondary inline-flex items-center gap-1">
             <Download className="w-3.5 h-3.5" /> 보고서
           </button>
@@ -186,6 +242,11 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+      {syncMsg && (
+        <div className="mb-3 px-3 py-2 rounded-md bg-accent-soft border border-accent-line text-[11.5px] text-ink-2">
+          {syncMsg}
+        </div>
+      )}
 
       {/* Block B — Announcement picker */}
       <div className="mb-3.5">
