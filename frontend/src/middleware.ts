@@ -5,7 +5,7 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getSessionFromRequest } from "@/lib/auth";
+import { getSessionFromRequestEdge } from "@/lib/auth-edge";
 
 const PUBLIC_PATHS = ["/login", "/signup"];
 const PUBLIC_PREFIXES = ["/api/auth", "/_next", "/favicon"];
@@ -17,7 +17,7 @@ export async function middleware(req: NextRequest) {
 
   // 페이지 라우트(api 외)만 세션 가드
   if (!pathname.startsWith("/api/")) {
-    const session = await getSessionFromRequest(req);
+    const session = await getSessionFromRequestEdge(req);
     if (!session) {
       const url = req.nextUrl.clone();
       url.pathname = "/login";
