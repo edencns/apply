@@ -83,13 +83,26 @@ function mergeArray<T>(
 
 const SCALAR_FIELDS: (keyof AnnouncementParseResult)[] = [
   "title", "announcementNo", "region", "totalUnits",
+  // Phase A — 공고 메타
+  "housingManagementNo", "approvalNo", "developer", "builder",
+  "locationAddress", "announcementBaseDate",
+  "generalTotalUnits", "specialTotalUnits", "lowestFloorPriorityUnits",
+  // 일정
   "announcementDate", "applicationStart", "applicationEnd",
   "specialApplyDate", "general1stDate", "general2ndDate",
   "winnerAnnounceDate", "docSubmitStart", "docSubmitEnd",
   "contractStart", "contractEnd", "moveInDate",
+  // 자격 기본
   "noHomeRequired", "minSubscriptionMonths", "regulation", "landType",
+  // Phase A — 신청 대상
+  "minAge", "minorHeadAllowed", "foreignerAllowed",
+  "rank1Criteria", "rank2Criteria",
+  "householdHeadRequired", "homelessHouseholdRequired", "singleHomeOwnerRank1Allowed",
+  // 상세
   "assetLimit", "carValueLimit",
+  // 제한
   "resaleRestriction", "reWinRestriction", "residenceObligation", "priceCapApplied",
+  "duplicateApplicationRule", "passbookReuseBlocked", "longTermOverseasRestriction",
 ];
 
 export function mergeByConsensus(
