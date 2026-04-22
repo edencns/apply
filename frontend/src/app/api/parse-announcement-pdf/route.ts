@@ -288,34 +288,42 @@ function extractTotalUnits(text: string): number | undefined {
   return undefined;
 }
 
+/** 숫자+년 패턴을 라벨 직후 좁은 범위에서만 찾는다. 다른 라벨이 먼저 나오면 중단. */
+function findNumericYears(text: string, labelRe: RegExp): string | undefined {
+  const labelMatch = text.match(labelRe);
+  if (!labelMatch) return undefined;
+  const start = (labelMatch.index ?? 0) + labelMatch[0].length;
+  // 라벨 바로 뒤 40자 이내에서 첫 "N년" 찾기. 단 다른 라벨(가-힣 3자+) 사이 끼어들면 포기.
+  const window = text.slice(start, start + 40);
+  // 다음 한글 라벨(2자 이상)이 먼저 나오면 숫자 없음
+  const nextLabel = window.search(/[가-힣]{3,}/);
+  const yearMatch = window.match(/(\d+)\s*년(?:\s*(\d+)\s*개월)?/);
+  if (!yearMatch) return undefined;
+  const yearIdx = window.indexOf(yearMatch[0]);
+  if (nextLabel >= 0 && nextLabel < yearIdx) return undefined;
+  return yearMatch[2] ? `${yearMatch[1]}년 ${yearMatch[2]}개월` : `${yearMatch[1]}년`;
+}
+
 function extractResaleRestriction(text: string): string | undefined {
-  // "전매행위 제한기간", "전매제한" 근처
-  const m = text.match(/전매(?:행위)?\s*제한\s*(?:기간)?\s*[:：]?\s*([가-힣\d\s~·\-()（）]+?)(?:\n|, |\.)/);
-  if (m) return m[1].trim().slice(0, 60);
-  // "소유권이전등기일까지" 등
-  const m2 = text.match(/전매(?:행위)?\s*제한[^.]*?(소유권이전등기[가-힣]*|당첨[가-힣]*로부터\s*\d+[가-힣]*)/);
-  if (m2) return m2[1].trim();
+  const yr = findNumericYears(text, /전매(?:행위)?\s*제한\s*(?:기간)?[:：]?/);
+  if (yr) return yr;
+  const m = text.match(/(소유권이전등기(?:일)?까지)/);
+  if (m && /전매/.test(text)) return m[1];
+  if (/전매\s*제한[^\n.]{0,15}?(없음|미적용|해당\s*없)/.test(text)) return "없음";
   return undefined;
 }
 
 function extractReWinRestriction(text: string): string | undefined {
-  const m = text.match(/재당첨\s*제한\s*[:：]?\s*([가-힣\d\s~·\-()（）]+?)(?:\n|, |\.)/);
-  if (m) {
-    const val = m[1].trim();
-    if (/없|미적용|해당\s*없/.test(val)) return "없음";
-    return val.slice(0, 60);
-  }
-  if (/재당첨\s*제한\s*(?:이|을)\s*(?:받지|적용[가-힣]*않)/.test(text)) return "없음";
+  const yr = findNumericYears(text, /재당첨\s*제한\s*(?:기간)?[:：]?/);
+  if (yr) return yr;
+  if (/재당첨\s*제한[^\n.]{0,20}?(없음|미적용|해당\s*없|받지\s*않|적용하지\s*않)/.test(text)) return "없음";
   return undefined;
 }
 
 function extractResidenceObligation(text: string): string | undefined {
-  const m = text.match(/거주\s*의무\s*(?:기간)?\s*[:：]?\s*([가-힣\d\s~·\-()（）]+?)(?:\n|, |\.)/);
-  if (m) {
-    const val = m[1].trim();
-    if (/없|미적용|해당\s*없/.test(val)) return "없음";
-    return val.slice(0, 60);
-  }
+  const yr = findNumericYears(text, /거주\s*의무\s*(?:기간)?[:：]?/);
+  if (yr) return yr;
+  if (/거주\s*의무[^\n.]{0,20}?(없음|미적용|해당\s*없)/.test(text)) return "없음";
   return undefined;
 }
 
