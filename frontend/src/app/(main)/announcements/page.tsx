@@ -514,11 +514,12 @@ export default function AnnouncementsPage() {
       });
       // 엔진별 성공 여부 배지
       if (Array.isArray(json.engines)) {
-        const successEngines = json.engines.filter((e: any) => e.success).map((e: any) => e.engine);
+        const activeEngines = json.engines.filter((e: any) => e.error !== "disabled");
+        const successEngines = activeEngines.filter((e: any) => e.success).map((e: any) => e.engine);
         if (successEngines.length > 0) {
           filled.push(`🤖 ${successEngines.join(" + ")} 추출 성공`);
         }
-        const failedEngines = json.engines.filter((e: any) => !e.success && e.error !== "skipped");
+        const failedEngines = json.engines.filter((e: any) => !e.success && e.error !== "skipped" && e.error !== "disabled");
         for (const f of failedEngines) {
           filled.push(`⚠️ ${f.engine} 실패: ${(f.error || "").slice(0, 40)}`);
         }

@@ -19,7 +19,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 import { extractKoreanPdfText } from '@/lib/pdf-helper';
 import { extractWithGemini } from '@/lib/parse-engines/gemini';
-import { extractWithOpenAI } from '@/lib/parse-engines/openai';
+// OpenAI 파서는 사용자 요청으로 비활성화됨 (별도 API 과금 회피)
+// import { extractWithOpenAI } from '@/lib/parse-engines/openai';
 import { verifyWithClaude } from '@/lib/parse-engines/claude';
 import { mergeByConsensus, applyClaudePatch } from '@/lib/parse-engines/merge';
 import type { ParseEngineResult } from '@/lib/announcement-schema';
@@ -743,31 +744,21 @@ export async function POST(req: NextRequest) {
       || process.env.PARSER_VERIFY_CLAUDE === 'true';
     const pipelineStart = Date.now();
 
+    // OpenAI는 별도 청구라 제외. Gemini + regex + Groq 폴백 구조.
     let geminiRes: ParseEngineResult;
-    let openaiRes: ParseEngineResult;
+    const openaiRes: ParseEngineResult = { engine: 'openai', data: {}, durationMs: 0, error: 'disabled' };
 
-    if (engineFlag === 'gemini') {
-      geminiRes = await extractWithGemini(new Uint8Array(buf));
-      openaiRes = { engine: 'openai', data: {}, durationMs: 0, error: 'skipped' };
-    } else if (engineFlag === 'openai') {
+    if (engineFlag === 'groq') {
       geminiRes = { engine: 'gemini', data: {}, durationMs: 0, error: 'skipped' };
-      openaiRes = await extractWithOpenAI(fullText, file.name);
-    } else if (engineFlag === 'groq') {
-      geminiRes = { engine: 'gemini', data: {}, durationMs: 0, error: 'skipped' };
-      openaiRes = { engine: 'openai', data: {}, durationMs: 0, error: 'skipped' };
     } else {
-      // hybrid 기본값
-      [geminiRes, openaiRes] = await Promise.all([
-        extractWithGemini(new Uint8Array(buf)),
-        extractWithOpenAI(fullText, file.name),
-      ]);
+      geminiRes = await extractWithGemini(new Uint8Array(buf));
     }
 
     let consensus = mergeByConsensus(regexSeed, geminiRes, openaiRes);
 
     // ── 4단계: 둘 다 실패 시 Groq 폴백 ──
     let groqUsed = false;
-    if (geminiRes.error && openaiRes.error) {
+    if (geminiRes.error) {
       try {
         const sections = splitSections(fullText);
         const groqResult = await parseWithGroq(sections);
@@ -852,7 +843,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: parsed,
-      llmUsed: !geminiRes.error || !openaiRes.error,
+      llmUsed: !geminiRes.error,
       confidence: consensus.confidence,
       engines: consensus.engines,
       groqFallback: groqUsed,
