@@ -466,8 +466,8 @@ export default function AnnouncementsPage() {
         if (d.contractStart && !p.contract_start) { next.contract_start = d.contractStart; filled.push("계약 시작일"); }
         if (d.contractEnd) { next.contract_end = d.contractEnd; filled.push("계약 종료일"); }
         // 서류접수 날짜는 eligibility_rules에 저장
-        if (d.docSubmitStart) { next.rules.doc_submit_start = d.docSubmitStart; filled.push("서류접수 시작일"); }
-        if (d.docSubmitEnd) { next.rules.doc_submit_end = d.docSubmitEnd; filled.push("서류접수 종료일"); }
+        if (d.docSubmitStart && !p.document_submit_start) { next.document_submit_start = d.docSubmitStart; filled.push("서류접수 시작일"); }
+        if (d.docSubmitEnd && !p.document_submit_end) { next.document_submit_end = d.docSubmitEnd; filled.push("서류접수 종료일"); }
         if (d.totalUnits) { next.rules.total_units = d.totalUnits; filled.push(`총 ${d.totalUnits}세대`); }
         if (typeof d.noHomeRequired === "boolean") { next.rules.no_home_required = d.noHomeRequired; filled.push("무주택 필수"); }
         if (d.minSubscriptionMonths) { next.rules.min_subscription_period = d.minSubscriptionMonths; filled.push("통장 납입 기간"); }
