@@ -73,6 +73,8 @@ export default function AnnouncementsPage() {
     application_start: "",
     application_end: "",
     winner_announce_date: "",
+    document_submit_start: "",
+    document_submit_end: "",
     contract_start: "",
     contract_end: "",
     rules: { ...DEFAULT_RULES },
@@ -338,6 +340,8 @@ export default function AnnouncementsPage() {
         winner_announce_date: normalizeDateTime(form.winner_announce_date),
         contract_start: normalizeDateTime(form.contract_start),
         contract_end: normalizeDateTime(form.contract_end),
+        document_submit_start: normalizeDateTime(form.document_submit_start),
+        document_submit_end: normalizeDateTime(form.document_submit_end),
       };
 
       let useSiteId = siteId;
@@ -401,7 +405,7 @@ export default function AnnouncementsPage() {
 
       setShowForm(false);
       setPdfFilled([]);
-      setForm({ title: "", announcement_no: "", application_start: "", application_end: "", winner_announce_date: "", contract_start: "", contract_end: "", rules: { ...DEFAULT_RULES }, regionInput: "" });
+      setForm({ title: "", announcement_no: "", application_start: "", application_end: "", winner_announce_date: "", document_submit_start: "", document_submit_end: "", contract_start: "", contract_end: "", rules: { ...DEFAULT_RULES }, regionInput: "" });
       loadAnnouncements();
     } catch (err: any) {
       console.error("[announcements] create failed", err);
@@ -729,21 +733,85 @@ export default function AnnouncementsPage() {
               </div>
 
               {/* 일정 */}
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  { key: "application_start", label: "청약 접수 시작일" },
-                  { key: "application_end",   label: "청약 접수 종료일" },
-                  { key: "winner_announce_date", label: "당첨자 발표일" },
-                  { key: "contract_start",    label: "계약 시작일" },
-                ].map(({ key, label }) => (
-                  <div key={key}>
-                    <label className="block text-sm font-medium text-ink-2 mb-1">{label}</label>
-                    <input type="datetime-local"
-                      value={(form as any)[key]}
-                      onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent" />
+              <div className="space-y-5">
+                {/* 청약 접수 시작일 — 특별/일반1/일반2 분리 */}
+                <div>
+                  <div className="text-sm font-medium text-ink-2 mb-2">청약 접수 시작일</div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs text-ink-3 mb-1">특별공급</label>
+                      <input type="datetime-local"
+                        value={form.rules.special_apply_date}
+                        onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, special_apply_date: e.target.value } }))}
+                        className="w-full border border-border rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-ink-3 mb-1">일반 1순위</label>
+                      <input type="datetime-local"
+                        value={form.rules.general_1st_date}
+                        onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, general_1st_date: e.target.value } }))}
+                        className="w-full border border-border rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-ink-3 mb-1">일반 2순위</label>
+                      <input type="datetime-local"
+                        value={form.rules.general_2nd_date}
+                        onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, general_2nd_date: e.target.value } }))}
+                        className="w-full border border-border rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent" />
+                    </div>
                   </div>
-                ))}
+                </div>
+
+                {/* 당첨자 발표 날짜 */}
+                <div>
+                  <label className="block text-sm font-medium text-ink-2 mb-2">당첨자 발표 날짜</label>
+                  <input type="datetime-local"
+                    value={form.winner_announce_date}
+                    onChange={(e) => setForm((p) => ({ ...p, winner_announce_date: e.target.value }))}
+                    className="w-full max-w-sm border border-border rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent" />
+                </div>
+
+                {/* 당첨자 서류접수 기간 */}
+                <div>
+                  <div className="text-sm font-medium text-ink-2 mb-2">당첨자 서류접수 기간</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-ink-3 mb-1">시작</label>
+                      <input type="datetime-local"
+                        value={form.document_submit_start}
+                        onChange={(e) => setForm((p) => ({ ...p, document_submit_start: e.target.value }))}
+                        className="w-full border border-border rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-ink-3 mb-1">종료</label>
+                      <input type="datetime-local"
+                        value={form.document_submit_end}
+                        onChange={(e) => setForm((p) => ({ ...p, document_submit_end: e.target.value }))}
+                        className="w-full border border-border rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 계약체결 기간 */}
+                <div>
+                  <div className="text-sm font-medium text-ink-2 mb-2">계약체결 기간</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-ink-3 mb-1">시작</label>
+                      <input type="datetime-local"
+                        value={form.contract_start}
+                        onChange={(e) => setForm((p) => ({ ...p, contract_start: e.target.value }))}
+                        className="w-full border border-border rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-ink-3 mb-1">종료</label>
+                      <input type="datetime-local"
+                        value={form.contract_end}
+                        onChange={(e) => setForm((p) => ({ ...p, contract_end: e.target.value }))}
+                        className="w-full border border-border rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent" />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* 자격 기준 */}

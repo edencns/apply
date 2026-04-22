@@ -27,6 +27,9 @@ export interface LocalAnnouncement {
   winner_announce_date?: string | null;
   contract_start?: string | null;
   contract_end?: string | null;
+  /** 당첨자 서류접수 기간 */
+  document_submit_start?: string | null;
+  document_submit_end?: string | null;
   eligibility_rules?: Record<string, any>;
   created_at: string;
 }
@@ -101,6 +104,8 @@ export const localAnnouncements = {
       winner_announce_date: input.winner_announce_date ?? null,
       contract_start: input.contract_start ?? null,
       contract_end: input.contract_end ?? null,
+      document_submit_start: input.document_submit_start ?? null,
+      document_submit_end: input.document_submit_end ?? null,
       eligibility_rules: input.eligibility_rules ?? {},
       status: input.status ?? "draft",
       created_at: new Date().toISOString(),
