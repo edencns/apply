@@ -112,7 +112,7 @@ export async function extractWithOpenAI(
   fileName: string,
 ): Promise<ParseEngineResult> {
   const started = Date.now();
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY || process.env.GPT_API_KEY;
   if (!apiKey) {
     return {
       engine: "openai",
