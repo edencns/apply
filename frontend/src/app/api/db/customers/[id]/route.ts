@@ -4,11 +4,11 @@ import { getSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-async function fetchOne(userId: number, id: number) {
+async function fetchOne(id: number) {
   const db = getDb();
   const r = await db.execute({
-    sql: "SELECT data FROM customers WHERE id=? AND user_id=?",
-    args: [id, userId],
+    sql: "SELECT data FROM customers WHERE id=?",
+    args: [id],
   });
   if (r.rows.length === 0) return null;
   return parseRowData<any>(r.rows[0]);
@@ -19,7 +19,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     await ensureSchema();
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
-    const c = await fetchOne(Number(session.sub), Number(params.id));
+    const c = await fetchOne(Number(params.id));
     if (!c) return NextResponse.json({ error: "not found" }, { status: 404 });
     return NextResponse.json(c);
   } catch (err: any) {
@@ -32,10 +32,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     await ensureSchema();
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
-    const userId = Number(session.sub);
     const id = Number(params.id);
     const patch = await req.json();
-    const existing = await fetchOne(userId, id);
+    const existing = await fetchOne(id);
     if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
     const merged = { ...existing, ...patch, id };
     const db = getDb();
@@ -45,7 +44,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
               is_standby=?, supply_type=?, unit_type=?,
               superseded=?, verification_verdict=?,
               data=?, updated_at=datetime('now')
-            WHERE id=? AND user_id=?`,
+            WHERE id=?`,
       args: [
         merged.announcement_id, merged.site_id ?? null,
         merged.name, merged.rrn_front ?? null, merged.rrn_back ?? null,
@@ -53,7 +52,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         merged.supply_type ?? null, merged.unit_type ?? null,
         merged.superseded ? 1 : 0,
         merged.verification_verdict ?? null,
-        stringifyData(merged), id, userId,
+        stringifyData(merged), id,
       ],
     });
     return NextResponse.json(merged);
@@ -69,8 +68,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     if (!session) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
     const db = getDb();
     await db.execute({
-      sql: "DELETE FROM customers WHERE id=? AND user_id=?",
-      args: [Number(params.id), Number(session.sub)],
+      sql: "DELETE FROM customers WHERE id=?",
+      args: [Number(params.id)],
     });
     return NextResponse.json({ ok: true });
   } catch (err: any) {

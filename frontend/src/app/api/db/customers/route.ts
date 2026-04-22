@@ -4,23 +4,21 @@ import { getSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
+/** 공유 모드: user_id 필터 없음 */
+
 export async function GET(req: NextRequest) {
   try {
     await ensureSchema();
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
-    const userId = Number(session.sub);
     const annIdRaw = req.nextUrl.searchParams.get("announcement_id");
     const db = getDb();
     const res = annIdRaw
       ? await db.execute({
-          sql: "SELECT data FROM customers WHERE announcement_id=? AND user_id=? ORDER BY id DESC",
-          args: [Number(annIdRaw), userId],
+          sql: "SELECT data FROM customers WHERE announcement_id=? ORDER BY id DESC",
+          args: [Number(annIdRaw)],
         })
-      : await db.execute({
-          sql: "SELECT data FROM customers WHERE user_id=? ORDER BY id DESC LIMIT 2000",
-          args: [userId],
-        });
+      : await db.execute("SELECT data FROM customers ORDER BY id DESC LIMIT 2000");
     return NextResponse.json(res.rows.map((r) => parseRowData<any>(r)));
   } catch (err: any) {
     return NextResponse.json({ error: err?.message }, { status: 500 });
@@ -46,8 +44,7 @@ export async function POST(req: NextRequest) {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               announcement_id=excluded.announcement_id, name=excluded.name,
-              data=excluded.data, updated_at=datetime('now')
-            WHERE customers.user_id = excluded.user_id`,
+              data=excluded.data, updated_at=datetime('now')`,
       args: [
         id, userId, cust.announcement_id,
         cust.site_id ?? null, cust.name,
@@ -70,15 +67,14 @@ export async function DELETE(req: NextRequest) {
     await ensureSchema();
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
-    const userId = Number(session.sub);
     const idsParam = req.nextUrl.searchParams.get("ids") || "";
     const ids = idsParam.split(",").map((s) => Number(s)).filter((n) => Number.isFinite(n));
     if (ids.length === 0) return NextResponse.json({ error: "ids 필요" }, { status: 400 });
     const db = getDb();
     const placeholders = ids.map(() => "?").join(",");
     await db.execute({
-      sql: `DELETE FROM customers WHERE id IN (${placeholders}) AND user_id=?`,
-      args: [...ids, userId],
+      sql: `DELETE FROM customers WHERE id IN (${placeholders})`,
+      args: ids,
     });
     return NextResponse.json({ ok: true, deleted: ids.length });
   } catch (err: any) {

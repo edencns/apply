@@ -29,9 +29,8 @@ export async function POST(req: NextRequest) {
         await db.execute({
           sql: `INSERT INTO sites (id, user_id, name, data) VALUES (?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
-                  user_id=excluded.user_id, name=excluded.name, data=excluded.data,
-                  updated_at=datetime('now')
-                WHERE sites.user_id = excluded.user_id`,
+                  name=excluded.name, data=excluded.data,
+                  updated_at=datetime('now')`,
           args: [s.id, userId, s.name || "", stringifyData(s)],
         });
         counts.sites++;
@@ -47,8 +46,7 @@ export async function POST(req: NextRequest) {
                 ON CONFLICT(id) DO UPDATE SET
                   site_id=excluded.site_id, title=excluded.title,
                   announcement_no=excluded.announcement_no, status=excluded.status,
-                  data=excluded.data, updated_at=datetime('now')
-                WHERE announcements.user_id = excluded.user_id`,
+                  data=excluded.data, updated_at=datetime('now')`,
           args: [
             a.id, userId,
             a.site_id ?? null,
@@ -76,8 +74,7 @@ export async function POST(req: NextRequest) {
                   is_standby=excluded.is_standby, supply_type=excluded.supply_type,
                   unit_type=excluded.unit_type, superseded=excluded.superseded,
                   verification_verdict=excluded.verification_verdict,
-                  data=excluded.data, updated_at=datetime('now')
-                WHERE customers.user_id = excluded.user_id`,
+                  data=excluded.data, updated_at=datetime('now')`,
           args: [
             c.id, userId, c.announcement_id,
             c.site_id ?? null, c.name,
@@ -105,12 +102,11 @@ export async function GET() {
     await ensureSchema();
     const session = await getSession();
     if (!session) return NextResponse.json({ ok: false, error: "로그인 필요" }, { status: 401 });
-    const userId = Number(session.sub);
     const db = getDb();
     const [sites, anns, custs] = await Promise.all([
-      db.execute({ sql: "SELECT COUNT(*) AS n FROM sites WHERE user_id=?", args: [userId] }),
-      db.execute({ sql: "SELECT COUNT(*) AS n FROM announcements WHERE user_id=?", args: [userId] }),
-      db.execute({ sql: "SELECT COUNT(*) AS n FROM customers WHERE user_id=?", args: [userId] }),
+      db.execute("SELECT COUNT(*) AS n FROM sites"),
+      db.execute("SELECT COUNT(*) AS n FROM announcements"),
+      db.execute("SELECT COUNT(*) AS n FROM customers"),
     ]);
     return NextResponse.json({
       ok: true,

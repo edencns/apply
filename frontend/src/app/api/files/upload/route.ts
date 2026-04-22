@@ -68,13 +68,10 @@ export async function GET(req: NextRequest) {
     const db = getDb();
     const res = annIdRaw
       ? await db.execute({
-          sql: "SELECT id, kind, filename, content_type, size, url, uploaded_at FROM files WHERE user_id=? AND announcement_id=? ORDER BY id DESC",
-          args: [userId, Number(annIdRaw)],
+          sql: "SELECT id, kind, filename, content_type, size, url, uploaded_at FROM files WHERE announcement_id=? ORDER BY id DESC",
+          args: [Number(annIdRaw)],
         })
-      : await db.execute({
-          sql: "SELECT id, kind, filename, content_type, size, url, uploaded_at FROM files WHERE user_id=? ORDER BY id DESC LIMIT 200",
-          args: [userId],
-        });
+      : await db.execute("SELECT id, kind, filename, content_type, size, url, uploaded_at FROM files ORDER BY id DESC LIMIT 200");
     return NextResponse.json(res.rows);
   } catch (err: any) {
     return NextResponse.json({ error: err?.message }, { status: 500 });
