@@ -126,7 +126,7 @@ export async function extractWithGemini(
     const base64 = Buffer.from(pdfBuffer).toString("base64");
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-pro",
+      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
       contents: [
         {
           role: "user",

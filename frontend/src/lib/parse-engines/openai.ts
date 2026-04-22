@@ -118,7 +118,7 @@ export async function extractWithOpenAI(
       engine: "openai",
       data: {},
       durationMs: 0,
-      error: "OPENAI_API_KEY 미설정",
+      error: "OPENAI_API_KEY 또는 GPT_API_KEY 환경변수 필요",
     };
   }
 
