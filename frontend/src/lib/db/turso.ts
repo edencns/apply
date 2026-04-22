@@ -13,7 +13,7 @@ let _client: Client | null = null;
 export function getDb(): Client {
   if (_client) return _client;
   const url = process.env.TURSO_URL;
-  const authToken = process.env.TURSO_TOKEN;
+  const authToken = process.env.TURSO_TOKEN || process.env.TURSO_API_KEY;
   if (!url) throw new Error("TURSO_URL 환경변수가 필요합니다");
   _client = createClient({ url, authToken });
   return _client;
