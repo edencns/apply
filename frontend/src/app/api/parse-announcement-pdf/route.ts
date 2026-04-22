@@ -26,7 +26,7 @@ import { mergeByConsensus, applyClaudePatch } from '@/lib/parse-engines/merge';
 import type { ParseEngineResult } from '@/lib/announcement-schema';
 
 export const runtime = 'nodejs';
-export const maxDuration = 120;
+export const maxDuration = 300; // Vercel Pro 최대. Phase A 확장 스키마는 Gemini 응답 생성에 60~100s 소요.
 
 /* ─────────────────────────────────────────────
    Types

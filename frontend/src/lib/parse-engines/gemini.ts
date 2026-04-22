@@ -238,18 +238,19 @@ function isRetryableError(err: any): boolean {
 }
 
 /** 지수 백오프 + jitter + 전체 데드라인 / 호출당 타임아웃.
- *  Vercel maxDuration=120s 안에 들어가려면 총 예산 관리가 중요.
+ *  Vercel maxDuration=300s 안에 들어가려면 총 예산 관리가 중요.
+ *  Phase A 확장 스키마 때문에 Gemini 생성 시간이 길어져 타임아웃을 넉넉히.
  *  - maxAttempts=3: 1s + 2s = 3s 백오프
- *  - perAttemptTimeoutMs=45s: 한 번의 Gemini 호출이 너무 오래 걸리면 끊고 재시도
- *  - overallDeadlineMs=95s: 총 95s 안에 못 끝내면 폴백으로 넘김
+ *  - perAttemptTimeoutMs=120s: 한 번 호출은 길게 허용
+ *  - overallDeadlineMs=260s: 총 260s 안에 못 끝내면 폴백으로 넘김
  */
 async function withRetry<T>(
   fn: (signal: AbortSignal) => Promise<T>,
   opts: { maxAttempts?: number; perAttemptTimeoutMs?: number; overallDeadlineMs?: number } = {},
 ): Promise<T> {
   const maxAttempts = opts.maxAttempts ?? 3;
-  const perAttemptTimeoutMs = opts.perAttemptTimeoutMs ?? 45_000;
-  const overallDeadlineMs = opts.overallDeadlineMs ?? 95_000;
+  const perAttemptTimeoutMs = opts.perAttemptTimeoutMs ?? 120_000;
+  const overallDeadlineMs = opts.overallDeadlineMs ?? 260_000;
   const deadline = Date.now() + overallDeadlineMs;
   let lastErr: any;
 
