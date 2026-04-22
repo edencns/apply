@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { getSession } from "@/lib/auth";
 import { ensureSchema, getDb } from "@/lib/db/turso";
+import { broadcast } from "@/lib/realtime/ably-server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -46,6 +47,9 @@ export async function POST(req: NextRequest) {
       ],
     });
     const id = Number(ins.rows[0]?.id);
+    await broadcast("file:uploaded", {
+      id, announcement_id: announcementId ?? undefined, by: userId,
+    });
 
     return NextResponse.json({
       id, url: blob.url, filename: file.name,

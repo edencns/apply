@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureSchema, getDb, parseRowData, stringifyData } from "@/lib/db/turso";
 import { getSession } from "@/lib/auth";
+import { broadcast } from "@/lib/realtime/ably-server";
 
 export const runtime = "nodejs";
 
@@ -55,6 +56,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         stringifyData(merged), id,
       ],
     });
+    await broadcast("customer:updated", {
+      id, announcement_id: merged.announcement_id, by: Number(session.sub),
+    });
     return NextResponse.json(merged);
   } catch (err: any) {
     return NextResponse.json({ error: err?.message }, { status: 500 });
@@ -67,10 +71,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
     const db = getDb();
+    const id = Number(params.id);
     await db.execute({
       sql: "DELETE FROM customers WHERE id=?",
-      args: [Number(params.id)],
+      args: [id],
     });
+    await broadcast("customer:deleted", { id, by: Number(session.sub) });
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message }, { status: 500 });

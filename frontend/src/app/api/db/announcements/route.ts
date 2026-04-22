@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureSchema, getDb, parseRowData, stringifyData } from "@/lib/db/turso";
 import { getSession } from "@/lib/auth";
+import { broadcast } from "@/lib/realtime/ably-server";
 
 export const runtime = "nodejs";
 
@@ -43,6 +44,10 @@ export async function POST(req: NextRequest) {
         ann.announcement_no ?? null, ann.status ?? "draft",
         stringifyData(ann),
       ],
+    });
+    const isNew = !body.id;
+    await broadcast(isNew ? "announcement:created" : "announcement:updated", {
+      id, by: userId,
     });
     return NextResponse.json(ann);
   } catch (err: any) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureSchema, getDb, parseRowData, stringifyData } from "@/lib/db/turso";
 import { getSession } from "@/lib/auth";
+import { broadcast } from "@/lib/realtime/ably-server";
 
 export const runtime = "nodejs";
 
@@ -48,6 +49,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         stringifyData(merged), id,
       ],
     });
+    await broadcast("announcement:updated", { id, by: Number(session.sub) });
     return NextResponse.json(merged);
   } catch (err: any) {
     return NextResponse.json({ error: err?.message }, { status: 500 });
@@ -63,6 +65,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     const db = getDb();
     await db.execute({ sql: "DELETE FROM announcements WHERE id=?", args: [id] });
     await db.execute({ sql: "DELETE FROM customers WHERE announcement_id=?", args: [id] });
+    await broadcast("announcement:deleted", { id, by: Number(session.sub) });
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message }, { status: 500 });

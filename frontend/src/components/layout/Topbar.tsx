@@ -37,7 +37,12 @@ export default function Topbar() {
 
   useEffect(() => {
     fetch("/api/auth/me").then((r) => r.json()).then((j) => {
-      if (j.user) setUser({ name: j.user.name, email: j.user.email });
+      if (j.user) {
+        setUser({ name: j.user.name, email: j.user.email });
+        if (typeof window !== "undefined") {
+          localStorage.setItem("user_id", String(j.user.id));
+        }
+      }
     }).catch(() => {});
   }, []);
 

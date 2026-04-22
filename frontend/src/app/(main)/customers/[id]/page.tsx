@@ -27,6 +27,8 @@ import {
 import { calculateSubscriptionScore } from "@/lib/score-calculator";
 import { evaluateFinal } from "@/lib/verification-rules";
 import { findStandbyCandidates, buildPromotionUpdates, PromotionCandidate } from "@/lib/standby-promotion";
+import { pullAll } from "@/lib/cloud-sync";
+import { useRealtimeSync } from "@/lib/realtime/useRealtimeSync";
 import StageSidebar from "@/components/verification/StageSidebar";
 import { parseStageParam, STAGE_NUMBER, StageKey } from "@/components/verification/stage-utils";
 import { HouseholdPanel, PropertyPanel, SavingsPanel } from "@/components/verification/panels";
@@ -116,6 +118,23 @@ function CustomerDetailInner() {
 
     return () => { cancelled = true; };
   }, [customerId]);
+
+  // 실시간: 이 고객·관련 공고가 바뀌면 자동 재조회
+  useRealtimeSync({
+    announcementId: customer?.announcement_id,
+    onCustomerChange: async () => {
+      await pullAll().catch(() => {});
+      const fresh = localCustomers.get(customerId);
+      if (fresh) setCustomer(fresh);
+    },
+    onAnnouncementChange: async () => {
+      await pullAll().catch(() => {});
+      if (customer) {
+        const ann = localAnnouncements.get(customer.announcement_id);
+        if (ann) setAnnouncement(ann);
+      }
+    },
+  });
 
   // 서류 리스트 (Stage 5 + 최종 판정에 쓰임)
   const supplyType = customer?.supply_type

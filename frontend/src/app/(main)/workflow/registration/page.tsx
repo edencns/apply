@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { customersApi, api } from "@/lib/api";
+import { pullAll } from "@/lib/cloud-sync";
+import { useRealtimeSync } from "@/lib/realtime/useRealtimeSync";
 import {
   localAnnouncements,
   localCustomers,
@@ -193,6 +195,19 @@ function CustomersPageInner() {
   }, [selectedAnn]);
 
   useEffect(() => { loadCustomers(); }, [loadCustomers]);
+
+  // 실시간: 다른 사용자 변경 시 자동 재동기·재조회
+  useRealtimeSync({
+    announcementId: selectedAnn?.id,
+    onCustomerChange: async () => {
+      await pullAll().catch(() => {});
+      loadCustomers();
+    },
+    onFileUploaded: async () => {
+      await pullAll().catch(() => {});
+      loadCustomers();
+    },
+  });
 
   // ─── 공고별 특별공급 유형 (동적) ────────────────────────
   const specialTypeOptions: string[] = (() => {

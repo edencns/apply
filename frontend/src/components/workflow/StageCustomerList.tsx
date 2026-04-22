@@ -17,6 +17,8 @@ import {
   LocalAnnouncement,
 } from "@/lib/local-store";
 import { customersApi } from "@/lib/api";
+import { pullAll } from "@/lib/cloud-sync";
+import { useRealtimeSync } from "@/lib/realtime/useRealtimeSync";
 import type { StageVerdict } from "@/lib/verification-rules";
 import {
   ChevronRight, Loader2, Search,
@@ -75,6 +77,19 @@ export default function StageCustomerList({ announcement, evaluate, columns, sta
   }, [announcement.id, announcement.site_id]);
 
   useEffect(() => { loadCustomers(); }, [loadCustomers]);
+
+  // 실시간: 다른 사용자 변경 시 클라우드에서 최신 데이터 pull → 재조회
+  useRealtimeSync({
+    announcementId: announcement.id,
+    onCustomerChange: async () => {
+      await pullAll().catch(() => {});
+      loadCustomers();
+    },
+    onFileUploaded: async () => {
+      await pullAll().catch(() => {});
+      loadCustomers();
+    },
+  });
 
   const rows = useMemo(() => {
     return customers

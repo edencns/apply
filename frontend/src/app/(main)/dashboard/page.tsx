@@ -16,6 +16,7 @@ import {
   Upload, Download, Check, ArrowRight, Cloud, CloudDownload, CloudUpload, Loader2,
 } from "lucide-react";
 import { pushAll, pullAll, checkCloudStatus } from "@/lib/cloud-sync";
+import { useRealtimeSync } from "@/lib/realtime/useRealtimeSync";
 
 const WORKFLOW_STEPS_META = [
   { n: 1, key: "registration", label: "당첨자 등록", href: "/workflow/registration" },
@@ -111,6 +112,22 @@ export default function DashboardPage() {
     );
     setCustomers(localCustomers.listByAnnouncement(activeAnn.id));
   }, [activeAnn]);
+
+  // 실시간: 다른 사용자가 변경하면 리스트·카운트 재계산
+  async function refetchFromCloud() {
+    const r = await pullAll();
+    if (r.ok && activeAnn) {
+      setCustomers(localCustomers.listByAnnouncement(activeAnn.id));
+    }
+    const s = await checkCloudStatus();
+    if (s.ok && s.counts) setCloudCounts(s.counts);
+  }
+
+  useRealtimeSync({
+    onCustomerChange: refetchFromCloud,
+    onAnnouncementChange: refetchFromCloud,
+    onFileUploaded: refetchFromCloud,
+  });
 
   // 통계 계산
   const stats = useMemo(() => {
