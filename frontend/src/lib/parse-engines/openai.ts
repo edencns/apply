@@ -112,16 +112,13 @@ export async function extractWithOpenAI(
   fileName: string,
 ): Promise<ParseEngineResult> {
   const started = Date.now();
-  const apiKey =
-    process.env.OPENAI_API_KEY ||
-    process.env.GPT_API_KEY ||
-    process.env.OPENAI_GPI_KEY; // 오타 호환
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return {
       engine: "openai",
       data: {},
       durationMs: 0,
-      error: "OPENAI_API_KEY 또는 GPT_API_KEY 환경변수 필요",
+      error: "OPENAI_API_KEY 환경변수 필요",
     };
   }
 
