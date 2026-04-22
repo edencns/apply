@@ -18,6 +18,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 import { extractKoreanPdfText } from '@/lib/pdf-helper';
+import { extractWithGemini } from '@/lib/parse-engines/gemini';
+import { extractWithOpenAI } from '@/lib/parse-engines/openai';
+import { verifyWithClaude } from '@/lib/parse-engines/claude';
+import { mergeByConsensus, applyClaudePatch } from '@/lib/parse-engines/merge';
+import type { ParseEngineResult } from '@/lib/announcement-schema';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -97,7 +102,7 @@ function findAllDates(text: string): DateMatch[] {
   const push = (y: string, mo: string, d: string, offset: number, raw: string) => {
     const yy = y.length === 2 ? `20${y}` : y;
     const yi = parseInt(yy, 10);
-    if (yi < 2020 || yi > 2035) return;
+    if (yi < 2020 || yi > 2040) return;
     const iso = `${yy}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}T00:00:00`;
     results.push({ iso, offset, raw });
   };
@@ -361,8 +366,8 @@ function extractSpecialTypes(text: string): string[] {
     ['신생아', /신생아/],
   ];
   for (const [name, re] of checks) {
-    const matches = normalized.match(new RegExp(re.source, 'g'));
-    if (matches && matches.length >= 2) {
+    // "2회 이상 등장" 규칙 완화 — 1회만 등장해도 인식 (단 부정문 제외)
+    if (re.test(normalized)) {
       const negRe = new RegExp(re.source + '\\s*[^가-힣]*(?:해당\\s*없음|미시행|미실시)');
       if (!negRe.test(normalized)) types.push(name);
     }
@@ -702,49 +707,22 @@ export async function POST(req: NextRequest) {
       return { h, m: 0 };
     };
 
-    // ── 2단계: 섹션 분리 + Groq LLM ──
-    const sections = splitSections(fullText);
-    const groqResult = await parseWithGroq(sections);
-
-    // ── 3단계: 병합 ──
+    // ── 2단계: regex seed 구성 (LLM 교차검증의 baseline) ──
     const regexSpecialTypes = extractSpecialTypes(fullText);
-
-    // LLM에서 나온 supplyTypes의 type 목록으로 specialTypes 보강
-    let mergedSpecialTypes = [...regexSpecialTypes];
-    if (groqResult?.supplyTypes) {
-      for (const st of groqResult.supplyTypes) {
-        const normalized = st.type.replace(/가구$/, '가구');
-        if (!mergedSpecialTypes.includes(normalized) && normalized !== '일반공급') {
-          mergedSpecialTypes.push(normalized);
-        }
-      }
-    }
-
-    const parsed: ParsedAnnouncement = {
-      // regex 기반
+    const regexSeed: any = {
       title: extractTitle(fullText, file.name),
       announcementNo: extractAnnouncementNo(fullText, file.name),
-      applicationStart: appStart ? withTime(appStart, applyH(applyOpen)) : undefined,
-      applicationEnd: appEnd ? withTime(appEnd, applyH(applyClose)) : undefined,
-      winnerAnnounceDate: winDate ? withTime(winDate, null) : undefined,
-      docSubmitStart: docStart ? withTime(docStart, null) : undefined,
-      docSubmitEnd: docEnd ? withTime(docEnd, null) : undefined,
-      contractStart: conStart ? withTime(conStart, null) : undefined,
-      contractEnd: conEnd ? withTime(conEnd, null) : undefined,
+      applicationStart: appStart ? withTime(appStart, applyH(applyOpen)) : null,
+      applicationEnd: appEnd ? withTime(appEnd, applyH(applyClose)) : null,
+      winnerAnnounceDate: winDate ? withTime(winDate, null) : null,
+      docSubmitStart: docStart ? withTime(docStart, null) : null,
+      docSubmitEnd: docEnd ? withTime(docEnd, null) : null,
+      contractStart: conStart ? withTime(conStart, null) : null,
+      contractEnd: conEnd ? withTime(conEnd, null) : null,
       region: extractRegion(fullText),
       totalUnits: extractTotalUnits(fullText),
-      noHomeRequired: /무주택\s*세대구성원/.test(fullText),
+      noHomeRequired: /무주택\s*세대구성원/.test(fullText) ? true : null,
       minSubscriptionMonths: extractMinSubscription(fullText),
-      specialTypes: mergedSpecialTypes,
-
-      // LLM 기반 (없으면 undefined)
-      supplyTypes: groqResult?.supplyTypes || undefined,
-      exclusiveAreas: groqResult?.exclusiveAreas || undefined,
-      requiredDocuments: groqResult?.requiredDocuments || undefined,
-      incomeTable: groqResult?.incomeTable || undefined,
-      assetLimit: groqResult?.assetLimit || undefined,
-      carValueLimit: groqResult?.carValueLimit || undefined,
-
       resaleRestriction: extractResaleRestriction(fullText),
       reWinRestriction: extractReWinRestriction(fullText),
       residenceObligation: extractResidenceObligation(fullText),
@@ -752,18 +730,134 @@ export async function POST(req: NextRequest) {
       landType: extractLandType(fullText),
       moveInDate: extractMoveInDate(fullText),
       pointSystemRatio: extractPointSystemRatio(fullText),
-      announcementDate: schedule.announcementDate || findDateNearKeyword(fullText, allDates, ['모집공고일', '입주자모집공고']) || undefined,
-      specialApplyDate: schedule.specialApplyDate || undefined,
-      general1stDate: schedule.general1stDate || findDateNearKeyword(fullText, allDates, ['1순위 접수', '일순위']) || undefined,
-      general2ndDate: schedule.general2ndDate || findDateNearKeyword(fullText, allDates, ['2순위 접수', '이순위']) || undefined,
+      announcementDate: schedule.announcementDate || findDateNearKeyword(fullText, allDates, ['모집공고일', '입주자모집공고']) || null,
+      specialApplyDate: schedule.specialApplyDate || null,
+      general1stDate: schedule.general1stDate || findDateNearKeyword(fullText, allDates, ['1순위 접수', '일순위']) || null,
+      general2ndDate: schedule.general2ndDate || findDateNearKeyword(fullText, allDates, ['2순위 접수', '이순위']) || null,
+    };
 
+    // ── 3단계: Gemini + OpenAI 병렬 추출 ──
+    const url = new URL(req.url);
+    const engineFlag = (url.searchParams.get('engine') || process.env.PARSER_ENGINE || 'hybrid').toLowerCase();
+    const wantClaudeVerify = url.searchParams.get('verify') === 'claude'
+      || process.env.PARSER_VERIFY_CLAUDE === 'true';
+    const pipelineStart = Date.now();
+
+    let geminiRes: ParseEngineResult;
+    let openaiRes: ParseEngineResult;
+
+    if (engineFlag === 'gemini') {
+      geminiRes = await extractWithGemini(new Uint8Array(buf));
+      openaiRes = { engine: 'openai', data: {}, durationMs: 0, error: 'skipped' };
+    } else if (engineFlag === 'openai') {
+      geminiRes = { engine: 'gemini', data: {}, durationMs: 0, error: 'skipped' };
+      openaiRes = await extractWithOpenAI(fullText, file.name);
+    } else if (engineFlag === 'groq') {
+      geminiRes = { engine: 'gemini', data: {}, durationMs: 0, error: 'skipped' };
+      openaiRes = { engine: 'openai', data: {}, durationMs: 0, error: 'skipped' };
+    } else {
+      // hybrid 기본값
+      [geminiRes, openaiRes] = await Promise.all([
+        extractWithGemini(new Uint8Array(buf)),
+        extractWithOpenAI(fullText, file.name),
+      ]);
+    }
+
+    let consensus = mergeByConsensus(regexSeed, geminiRes, openaiRes);
+
+    // ── 4단계: 둘 다 실패 시 Groq 폴백 ──
+    let groqUsed = false;
+    if (geminiRes.error && openaiRes.error) {
+      try {
+        const sections = splitSections(fullText);
+        const groqResult = await parseWithGroq(sections);
+        if (groqResult) {
+          consensus.data = {
+            ...consensus.data,
+            supplyTypes: (groqResult.supplyTypes as any) ?? consensus.data.supplyTypes,
+            exclusiveAreas: (groqResult.exclusiveAreas as any) ?? consensus.data.exclusiveAreas,
+            requiredDocuments: groqResult.requiredDocuments ?? consensus.data.requiredDocuments,
+            incomeTable: groqResult.incomeTable as any,
+            assetLimit: groqResult.assetLimit ?? consensus.data.assetLimit,
+            carValueLimit: groqResult.carValueLimit ?? consensus.data.carValueLimit,
+          };
+          groqUsed = true;
+        }
+      } catch (e: any) {
+        console.error('[parse-announcement-pdf] Groq fallback failed', e?.message);
+      }
+    }
+
+    // ── 5단계: 선택적 Claude 검증 ──
+    let claudeUsed = false;
+    if (wantClaudeVerify) {
+      const claudeRes = await verifyWithClaude(new Uint8Array(buf), consensus.data);
+      if (!claudeRes.error && Object.keys(claudeRes.data).length > 0) {
+        consensus = applyClaudePatch(consensus, claudeRes.data);
+        claudeUsed = true;
+      }
+      consensus.engines.push({
+        engine: 'claude',
+        success: !claudeRes.error,
+        durationMs: claudeRes.durationMs,
+        error: claudeRes.error,
+      });
+    }
+
+    // ── 6단계: specialTypes 리스트 보강 (하위호환 필드) ──
+    const llmSupplyTypes = consensus.data.supplyTypes || [];
+    const mergedSpecialTypes = [...regexSpecialTypes];
+    for (const st of llmSupplyTypes) {
+      const t = st.canonicalType || st.type;
+      if (!t || t === '일반공급' || t === '기타') continue;
+      if (!mergedSpecialTypes.includes(t)) mergedSpecialTypes.push(t);
+    }
+
+    // ── 기존 ParsedAnnouncement 필드 형태로 정규화 (UI 호환) ──
+    const parsed: ParsedAnnouncement = {
+      title: consensus.data.title || regexSeed.title,
+      announcementNo: consensus.data.announcementNo || regexSeed.announcementNo,
+      applicationStart: consensus.data.applicationStart || regexSeed.applicationStart || undefined,
+      applicationEnd: consensus.data.applicationEnd || regexSeed.applicationEnd || undefined,
+      winnerAnnounceDate: consensus.data.winnerAnnounceDate || regexSeed.winnerAnnounceDate || undefined,
+      docSubmitStart: consensus.data.docSubmitStart || regexSeed.docSubmitStart || undefined,
+      docSubmitEnd: consensus.data.docSubmitEnd || regexSeed.docSubmitEnd || undefined,
+      contractStart: consensus.data.contractStart || regexSeed.contractStart || undefined,
+      contractEnd: consensus.data.contractEnd || regexSeed.contractEnd || undefined,
+      region: consensus.data.region || regexSeed.region,
+      totalUnits: consensus.data.totalUnits ?? regexSeed.totalUnits,
+      noHomeRequired: consensus.data.noHomeRequired ?? regexSeed.noHomeRequired ?? false,
+      minSubscriptionMonths: consensus.data.minSubscriptionMonths ?? regexSeed.minSubscriptionMonths,
+      specialTypes: mergedSpecialTypes,
+      supplyTypes: llmSupplyTypes.length > 0 ? (llmSupplyTypes as any) : undefined,
+      exclusiveAreas: consensus.data.exclusiveAreas && consensus.data.exclusiveAreas.length > 0 ? (consensus.data.exclusiveAreas as any) : undefined,
+      requiredDocuments: consensus.data.requiredDocuments,
+      incomeTable: consensus.data.incomeTable as any,
+      assetLimit: consensus.data.assetLimit || undefined,
+      carValueLimit: consensus.data.carValueLimit || undefined,
+      resaleRestriction: consensus.data.resaleRestriction || regexSeed.resaleRestriction,
+      reWinRestriction: consensus.data.reWinRestriction || regexSeed.reWinRestriction,
+      residenceObligation: consensus.data.residenceObligation || regexSeed.residenceObligation,
+      priceCapApplied: consensus.data.priceCapApplied ?? regexSeed.priceCapApplied,
+      landType: consensus.data.landType || regexSeed.landType,
+      moveInDate: consensus.data.moveInDate || regexSeed.moveInDate,
+      pointSystemRatio: (consensus.data.pointSystemRatio as any) || regexSeed.pointSystemRatio,
+      announcementDate: consensus.data.announcementDate || regexSeed.announcementDate || undefined,
+      specialApplyDate: consensus.data.specialApplyDate || regexSeed.specialApplyDate || undefined,
+      general1stDate: consensus.data.general1stDate || regexSeed.general1stDate || undefined,
+      general2ndDate: consensus.data.general2ndDate || regexSeed.general2ndDate || undefined,
       rawTextPreview: fullText.slice(0, 500),
     };
 
     return NextResponse.json({
       success: true,
       data: parsed,
-      llmUsed: !!groqResult,
+      llmUsed: !geminiRes.error || !openaiRes.error,
+      confidence: consensus.confidence,
+      engines: consensus.engines,
+      groqFallback: groqUsed,
+      claudeVerified: claudeUsed,
+      totalDurationMs: Date.now() - pipelineStart,
     });
   } catch (err: any) {
     console.error('[parse-announcement-pdf]', err);

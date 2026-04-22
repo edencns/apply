@@ -499,8 +499,30 @@ export default function AnnouncementsPage() {
         if (d.general2ndDate) { next.rules.general_2nd_date = d.general2ndDate; }
         return next;
       });
-      if (json.llmUsed) filled.push("✅ AI 분석 완료");
-      else filled.push("⚠️ 기본 파싱만 적용");
+      // 엔진별 성공 여부 배지
+      if (Array.isArray(json.engines)) {
+        const successEngines = json.engines.filter((e: any) => e.success).map((e: any) => e.engine);
+        if (successEngines.length > 0) {
+          filled.push(`🤖 ${successEngines.join(" + ")} 추출 성공`);
+        }
+        const failedEngines = json.engines.filter((e: any) => !e.success && e.error !== "skipped");
+        for (const f of failedEngines) {
+          filled.push(`⚠️ ${f.engine} 실패: ${(f.error || "").slice(0, 40)}`);
+        }
+      } else if (json.llmUsed) {
+        filled.push("✅ AI 분석 완료");
+      } else {
+        filled.push("⚠️ 기본 파싱만 적용");
+      }
+      if (json.groqFallback) filled.push("↩️ Groq 폴백 사용됨");
+      if (json.claudeVerified) filled.push("🔒 Claude 최종 검증 완료");
+      // 신뢰도 요약
+      if (json.confidence && typeof json.confidence === "object") {
+        const conf = json.confidence as Record<string, string>;
+        const counts: Record<string, number> = { high: 0, med: 0, low: 0, unknown: 0 };
+        for (const v of Object.values(conf)) counts[v] = (counts[v] || 0) + 1;
+        filled.push(`📊 신뢰도: 高 ${counts.high} · 中 ${counts.med} · 低 ${counts.low + counts.unknown}`);
+      }
       setPdfFilled(filled);
     } catch (err: any) {
       alert(err.message || "PDF 파싱 실패");
