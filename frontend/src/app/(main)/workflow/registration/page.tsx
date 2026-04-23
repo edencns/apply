@@ -20,6 +20,7 @@ import {
 import AnnouncementPicker from "@/components/AnnouncementPicker";
 import { getSampleAsLocalAnnouncements } from "@/lib/sample-adapter";
 import { classifyIncoming, formatValue, IncomingCustomer, CustomerConflict } from "@/lib/customer-dedup";
+import { formatHousingCode, housingAreaString } from "@/lib/housing-code";
 
 interface Customer {
   id: number;
@@ -439,7 +440,9 @@ function CustomersPageInner() {
             income_monthly: null,
             special_types: meta.canonical === "일반공급" ? [] : [meta.canonical],
             supply_type: meta.canonical,
-            unit_type: housingCode,
+            // 주택형 — 전산 코드(0848636)를 "84.8636(84)" 형식으로 표시, 면적 문자열 별도 저장
+            unit_type: formatHousingCode(housingCode) || housingCode,
+            unit_area: housingAreaString(housingCode) || undefined,
             is_standby: meta.isStandby,
             standby_rank: standbyRank,
             _winnerInfo: {
