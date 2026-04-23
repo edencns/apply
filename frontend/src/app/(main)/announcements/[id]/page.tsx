@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { getRequiredDocuments, COMMON_DOCUMENTS, SUPPLY_TYPE_DOCUMENTS } from "@/lib/document-checklist";
 import PdfEvidenceModal from "@/components/PdfEvidenceModal";
+import { lintAnnouncement, lintSummary, type LintIssue } from "@/lib/announcement-lint";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -69,6 +70,69 @@ function Section({ title, children, defaultOpen = true, right }: { title: string
 
 /** 공고 PDF URL context — EvidencePage가 모달 오픈할 때 사용 */
 const EvidenceContext = createContext<{ pdfUrl?: string; onOpen: (page: number) => void }>({ onOpen: () => {} });
+
+/** Phase #2 — 검토 필요 항목 lint 배너 */
+function LintBanner({
+  issues, counts, onClickIssue,
+}: {
+  issues: LintIssue[];
+  counts: { error: number; warning: number; info: number; total: number };
+  onClickIssue: (issue: LintIssue) => void;
+}) {
+  const [open, setOpen] = useState(counts.error > 0);
+  const severityColor = counts.error > 0 ? "red" : counts.warning > 0 ? "amber" : "blue";
+  const bgClass = severityColor === "red"
+    ? "bg-red-50 border-red-200"
+    : severityColor === "amber"
+    ? "bg-amber-50 border-amber-200"
+    : "bg-blue-50 border-blue-200";
+  const textClass = severityColor === "red" ? "text-red-800" : severityColor === "amber" ? "text-amber-800" : "text-blue-800";
+
+  return (
+    <div className={`border rounded-xl ${bgClass} overflow-hidden`}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-black/5 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <AlertTriangle className={`w-4 h-4 ${textClass}`} />
+          <span className={`text-sm font-semibold ${textClass}`}>
+            검토 필요 {counts.total}건
+          </span>
+          <div className="flex items-center gap-2 text-xs">
+            {counts.error > 0 && <span className="text-red-700 font-semibold">🔴 오류 {counts.error}</span>}
+            {counts.warning > 0 && <span className="text-amber-700 font-semibold">🟡 경고 {counts.warning}</span>}
+            {counts.info > 0 && <span className="text-blue-700">🔵 정보 {counts.info}</span>}
+          </div>
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+      </button>
+      {open && (
+        <div className="px-4 py-3 border-t border-black/10 space-y-1.5 max-h-64 overflow-y-auto">
+          {issues.map((issue, i) => {
+            const dot = issue.severity === "error" ? "🔴" : issue.severity === "warning" ? "🟡" : "🔵";
+            const canClick = !!(issue.tab || issue.page);
+            return (
+              <button
+                key={i}
+                type="button"
+                disabled={!canClick}
+                onClick={() => onClickIssue(issue)}
+                className={`w-full text-left flex items-start gap-2 text-xs px-2 py-1 rounded ${canClick ? "hover:bg-white cursor-pointer" : "cursor-default"}`}
+              >
+                <span className="flex-shrink-0">{dot}</span>
+                <span className="font-semibold text-gray-800 min-w-[120px]">{issue.label}</span>
+                <span className="text-gray-700 flex-1">{issue.message}</span>
+                {canClick && <span className="text-[10px] text-gray-500">→ 이동</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** 근거 페이지 뱃지 — Phase A evidencePage 표시. PDF URL 있으면 클릭해서 원본 열기 */
 function EvidencePage({ page }: { page?: number | null }) {
@@ -1461,6 +1525,8 @@ export default function AnnouncementDetailPage() {
   const regulation: string = rules.regulation || (rules.no_home_required ? "비규제" : "");
   const totalUnits = rules.total_units || (rules.exclusive_areas || []).reduce((s: number, a: any) => s + (a.totalUnits || 0), 0);
   const pdfUrl: string | undefined = rules.original_file_url;
+  const lintIssues = lintAnnouncement(ann, rules);
+  const lintCounts = lintSummary(lintIssues);
 
   return (
     <EvidenceContext.Provider value={{ pdfUrl, onOpen: (page) => setPdfModal({ open: true, page }) }}>
@@ -1524,6 +1590,20 @@ export default function AnnouncementDetailPage() {
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Phase #2 lint 배너 — 검토 필요 항목 */}
+      {lintCounts.total > 0 && (
+        <div className="mb-5">
+          <LintBanner
+            issues={lintIssues}
+            counts={lintCounts}
+            onClickIssue={(issue) => {
+              if (issue.tab) setTab(issue.tab as Tab);
+              if (issue.page && pdfUrl) setPdfModal({ open: true, page: issue.page });
+            }}
+          />
         </div>
       )}
 
