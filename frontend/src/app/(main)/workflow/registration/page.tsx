@@ -319,7 +319,8 @@ function CustomersPageInner() {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
 
-      /** 시트명 → 공급유형·대기여부 매핑 */
+      /** 시트명 → 공급유형·대기여부 매핑.
+       *  데이터가 없는 '안내'·'최저당첨정보' 같은 시트는 매핑하지 않음(자동 건너뜀). */
       const SHEET_MAP: Record<string, { canonical: string; isStandby: boolean }> = {
         "일반공급당첨자": { canonical: "일반공급", isStandby: false },
         "다자녀당첨자": { canonical: "다자녀가구", isStandby: false },
@@ -335,7 +336,6 @@ function CustomersPageInner() {
         "노부모부양예비입주자": { canonical: "노부모부양", isStandby: true },
         "기관추천예비입주자": { canonical: "기관추천", isStandby: true },
         "이전기관예비입주자": { canonical: "이전기관", isStandby: true },
-        "잔여추첨명단": { canonical: "일반공급", isStandby: false },
       };
 
       const toStr = (v: any): string => (v === undefined || v === null ? "" : String(v).trim());
@@ -343,6 +343,15 @@ function CustomersPageInner() {
         if (v === undefined || v === "" || v === null) return undefined;
         const n = Number(String(v).replace(/[^\d.-]/g, ""));
         return Number.isFinite(n) ? n : undefined;
+      };
+      /** 여러 후보 컬럼명에서 값 추출 — 일반공급과 특별공급 시트 헤더가 달라서 필요.
+       *  예: 주민번호(일반) vs 주민등록번호(특공), 전화번호 vs 연락전화번호, 주소 vs 연락주소 */
+      const pick = (row: Record<string, any>, ...keys: string[]): string => {
+        for (const k of keys) {
+          const v = row[k];
+          if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
+        }
+        return "";
       };
       /** "강원도 강릉시 주문진읍 ..." → "강원도" */
       const extractRegion = (addr: string): string => {
@@ -379,22 +388,45 @@ function CustomersPageInner() {
         const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: "" });
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
-          const name = toStr(row["성명"]);
-          if (!name) { parseFailed++; parseErrors.push(`[${sheetName}] ${i + 2}행 성명 누락`); continue; }
+          const name = pick(row, "성명");
+          if (!name) {
+            // 완전 빈 행은 에러 아님 (이전기관당첨자 등은 헤더만 있고 데이터 없는 시트)
+            const anyFilled = Object.values(row).some((v) => v !== "" && v !== null && v !== undefined);
+            if (anyFilled) { parseFailed++; parseErrors.push(`[${sheetName}] ${i + 2}행 성명 누락`); }
+            continue;
+          }
 
-          const rrnFull = toStr(row["주민번호"]).replace(/\D/g, "");
+          // 주민번호 (일반공급=주민번호 / 특별공급=주민등록번호)
+          const rrnFull = pick(row, "주민번호", "주민등록번호").replace(/\D/g, "");
           const rrnFront = rrnFull.slice(0, 6);
           const rrnBack = rrnFull.slice(6, 13);
           if (!rrnFront || rrnFront.length < 6) { parseFailed++; parseErrors.push(`[${sheetName}] ${i + 2}행(${name}) 주민번호 불량`); continue; }
 
-          const address = toStr(row["주소"]);
-          const phoneRaw = toStr(row["전화번호"]);
+          // 주소 / 전화 (특별공급은 '연락주소', '연락전화번호')
+          const address = pick(row, "주소", "연락주소");
+          const phoneRaw = pick(row, "전화번호", "연락전화번호");
           const phone = phoneRaw.replace(/\s+/g, "-");
-          const housingCode = toStr(row["주택형"]);
-          const noHomeRaw = toStr(row["무주택기간"]);
-          const subPeriodRaw = toStr(row["입주자저축가입기간"]);
+          const housingCode = pick(row, "주택형");
+          const noHomeRaw = pick(row, "무주택기간", "무주택기간 배점");
+          const subPeriodRaw = pick(row, "입주자저축가입기간", "청약통장 가입기간 배점", "입주자저축 가입기간 배점");
+          // 접수일자 (일반=접수일자 / 특공=청약신청일)
+          const applicationDate = pick(row, "접수일자", "청약신청일");
+          // 저층신청 (일반=저층신청여부 Y/N / 특공=최하층 신청구분 텍스트)
+          const lowFloorRaw = pick(row, "저층신청여부", "최하층 신청구분", "최하층신청구분");
+          const lowFloorApply = lowFloorRaw.toUpperCase() === "Y" || /우선|해당/.test(lowFloorRaw);
+          // 총점 (특공 일부는 '가점제 총점')
+          const totalScore = toNum(pick(row, "총점", "가점제 총점"));
+          // 순위 — 일반공급은 '순위', 특공은 '선정순위' 또는 '예비순위'
+          const rank = pick(row, "순위", "선정순위", "예비순위", "예비순번");
+          // 당첨구분 — 일반공급만 존재 (가점제/추첨제)
+          const selectionMethod = pick(row, "당첨구분");
+          // 예비순위 — 예비입주자 시트만
+          const standbyRank = meta.isStandby ? pick(row, "예비순위", "예비순번", "선정순위") : undefined;
+          // 부양가족수 텍스트에서 숫자 추출 (다자녀 시트엔 없음)
+          const dependentsRaw = pick(row, "부양가족수", "전체 미성년 자녀수(태아포함)");
+          const dependents = dependentsRaw ? (toNum(dependentsRaw.match(/\d+/)?.[0]) ?? 0) : 0;
 
-          const cand: IncomingCustomer & { _winnerInfo?: LocalCustomer["winner_info"] } = {
+          const cand: IncomingCustomer & { _winnerInfo?: LocalCustomer["winner_info"]; is_standby?: boolean; standby_rank?: string } = {
             name,
             phone,
             rrn_front: rrnFront,
@@ -402,31 +434,32 @@ function CustomersPageInner() {
             address,
             current_region: extractRegion(address),
             no_home_years: Math.round(parseRangeYears(noHomeRaw)),
-            dependents_count: toNum(toStr(row["부양가족수"]).match(/\d+/)?.[0]) ?? 0,
+            dependents_count: dependents,
             subscription_months: Math.round(parseRangeYears(subPeriodRaw) * 12),
             income_monthly: null,
             special_types: meta.canonical === "일반공급" ? [] : [meta.canonical],
             supply_type: meta.canonical,
             unit_type: housingCode,
             is_standby: meta.isStandby,
+            standby_rank: standbyRank,
             _winnerInfo: {
               sheet_source: sheetName,
-              building: toStr(row["동수"]),
-              unit_no: toStr(row["호수"]),
-              selection_method: toStr(row["당첨구분"]),
-              application_date: formatYmd(toStr(row["접수일자"])),
-              savings_opened: formatYmd(toStr(row["청약통장개설일"])),
-              low_floor_apply: toStr(row["저층신청여부"]).toUpperCase() === "Y",
-              bank: toStr(row["개설은행"]),
-              account_type: toStr(row["예금종목"]),
-              account: toStr(row["계좌번호"]),
-              rank: toStr(row["순위"]),
-              region_priority_kind: toStr(row["당해여부(신청기준)"]) || toStr(row["당해여부(당첨기준)"]),
+              building: pick(row, "동수"),
+              unit_no: pick(row, "호수"),
+              selection_method: selectionMethod,
+              application_date: formatYmd(applicationDate),
+              savings_opened: formatYmd(pick(row, "청약통장개설일")),
+              low_floor_apply: lowFloorApply,
+              bank: pick(row, "개설은행"),
+              account_type: pick(row, "예금종목"),
+              account: pick(row, "계좌번호"),
+              rank,
+              region_priority_kind: pick(row, "당해여부(신청기준)", "당해여부(당첨기준)"),
               ga_score: toNum(row["가점"]),
               penalty: toNum(row["감점"]),
-              total_score: toNum(row["총점"]),
+              total_score: totalScore,
               housing_type_code: housingCode,
-              ga_point_type: toStr(row["당첨구분"]),
+              ga_point_type: selectionMethod,
             } as any,
           } as any;
 
