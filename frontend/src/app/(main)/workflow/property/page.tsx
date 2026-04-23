@@ -11,9 +11,10 @@ import {
 } from "@/lib/local-store";
 import { parsePropertyOwnership, ensureXlsx } from "@/lib/winner-ingest";
 import { ingestForStage, type WorkflowIngestResult } from "@/lib/workflow-ingest";
+import { formatHousingCode } from "@/lib/housing-code";
 import IndividualVerifyModal from "@/components/workflow/IndividualVerifyModal";
 import {
-  Home, AlertTriangle, FileText, FileSpreadsheet,
+  Home, AlertTriangle, FileSpreadsheet,
   Loader2, CheckCircle2, UserCheck,
 } from "lucide-react";
 
@@ -24,7 +25,7 @@ const columns: StageColumn[] = [
     key: "unit",
     header: "주택형",
     render: (c) => c.unit_type ? (
-      <span className="font-mono text-xs">{c.unit_type}</span>
+      <span className="font-medium text-sm">{formatHousingCode(c.unit_type)}</span>
     ) : <span className="text-ink-4 text-xs">—</span>,
   },
   {
@@ -87,7 +88,6 @@ export default function PropertyStepPage() {
     { ok: number; fail: number; warn: number; missing: number } | null
   >(null);
   const [indivOpen, setIndivOpen] = useState(false);
-  const pdfRef = useRef<HTMLInputElement>(null);
   const xlsxRef = useRef<HTMLInputElement>(null);
 
   const evaluate = (c: LocalCustomer, a: LocalAnnouncement) => evaluateProperty(c, a);
@@ -106,7 +106,6 @@ export default function PropertyStepPage() {
       alert(err?.message || "파일 처리 실패");
     } finally {
       setUploading(false);
-      if (pdfRef.current) pdfRef.current.value = "";
       if (xlsxRef.current) xlsxRef.current.value = "";
     }
   };
@@ -193,35 +192,15 @@ export default function PropertyStepPage() {
           {/* 툴바 */}
           <div className="flex items-center gap-1.5 flex-wrap mb-4">
             <button
-              onClick={() => pdfRef.current?.click()}
-              disabled={uploading}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {uploading ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
-              ) : (
-                <><FileText className="w-4 h-4" /> PDF 업로드</>
-              )}
-            </button>
-            <input
-              ref={pdfRef}
-              type="file"
-              accept=".pdf"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }}
-            />
-            <button
               onClick={() => xlsxRef.current?.click()}
               disabled={uploading}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="주택소유정보 전산검색 엑셀 업로드"
             >
               {uploading ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
               ) : (
-                <><FileSpreadsheet className="w-4 h-4" /> 엑셀 업로드</>
+                <><FileSpreadsheet className="w-4 h-4" /> 주택소유 조회 업로드</>
               )}
             </button>
             <input

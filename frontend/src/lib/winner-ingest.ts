@@ -1174,7 +1174,20 @@ export function consolidate(files: FileIngestResult[]): ConsolidatedResult {
           attached = true;
         }
       });
-      if (!attached) unmatchedProperties.push(p);
+      if (!attached) {
+        // 프로필 없으면 소유자 단위 provisional 생성.
+        // registerProfile로 등록해야 profilesList(반환 리스트)에 포함됨 —
+        // 주택소유 파일만 단독 업로드 시 profiles 빈 배열 방지.
+        const provisional: WinnerProfile = {
+          name: p.ownerName,
+          rrn: p.ownerRrn,
+          properties: [p],
+          sourceKinds: [file.kind],
+          sourceFiles: [file.fileName],
+        };
+        registerProfile(provisional);
+        unmatchedProperties.push(p);
+      }
     }
   }
 
