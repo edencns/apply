@@ -1125,6 +1125,8 @@ export function consolidate(files: FileIngestResult[]): ConsolidatedResult {
       const profile = profilesByRrn.get(h.requesterRrn);
       if (!profile) {
         // 아직 프로필이 없으면 이름+주민번호로 임시 프로필 생성 (고객 미등록 상태 대비)
+        // registerProfile로 등록해야 profilesList에도 들어가 consolidate 결과에 포함됨.
+        // (이전엔 map에만 넣어서 세대원 파일만 단독 업로드 시 profiles 빈 배열 반환 버그)
         const provisional: WinnerProfile = {
           name: h.requesterName,
           rrn: h.requesterRrn,
@@ -1132,7 +1134,7 @@ export function consolidate(files: FileIngestResult[]): ConsolidatedResult {
           sourceKinds: [file.kind],
           sourceFiles: [file.fileName],
         };
-        profilesByRrn.set(h.requesterRrn, provisional);
+        registerProfile(provisional);
         continue;
       }
       if (!profile.householdMembers) profile.householdMembers = [];

@@ -12,6 +12,7 @@ import {
 import { ensureXlsx, parseHouseholdMembers } from "@/lib/winner-ingest";
 import { toIdentity, sameIdentity } from "@/lib/identity";
 import { ingestForStage, type WorkflowIngestResult } from "@/lib/workflow-ingest";
+import { formatHousingCode } from "@/lib/housing-code";
 import IndividualVerifyModal from "@/components/workflow/IndividualVerifyModal";
 import {
   Users, AlertTriangle, FileSpreadsheet,
@@ -25,7 +26,7 @@ const columns: StageColumn[] = [
     key: "unit",
     header: "주택형",
     render: (c) => c.unit_type ? (
-      <span className="font-mono text-xs">{c.unit_type}</span>
+      <span className="font-medium text-sm">{formatHousingCode(c.unit_type)}</span>
     ) : <span className="text-ink-4 text-xs">—</span>,
   },
   {
