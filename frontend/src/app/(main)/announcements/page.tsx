@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { sitesApi, api } from "@/lib/api";
 import { localSites, localAnnouncements, isNetworkError, isAnnouncementDone } from "@/lib/local-store";
-import { Plus, BookOpen, CalendarDays, ChevronRight, FileUp, Loader2, CheckCircle2, Trash2, FileText, PenTool } from "lucide-react";
+import { Plus, BookOpen, CalendarDays, ChevronRight, ChevronUp, ChevronDown, FileUp, Loader2, CheckCircle2, Trash2, FileText, PenTool } from "lucide-react";
 import { announcements as sampleAnnouncements } from "./compare/data";
 
 interface Announcement {
@@ -86,6 +86,8 @@ export default function AnnouncementsPage() {
   const [lastPdfFile, setLastPdfFile] = useState<File | null>(null);
   const [extendedParsing, setExtendedParsing] = useState(false);
   const [extendedFilled, setExtendedFilled] = useState<string[]>([]);
+  /** 상세 설정 토글 — Phase D */
+  const [advancedMode, setAdvancedMode] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
@@ -336,6 +338,24 @@ export default function AnnouncementsPage() {
       if (form.rules.special_apply_date) eligibilityRules.special_apply_date = form.rules.special_apply_date;
       if (form.rules.general_1st_date) eligibilityRules.general_1st_date = form.rules.general_1st_date;
       if (form.rules.general_2nd_date) eligibilityRules.general_2nd_date = form.rules.general_2nd_date;
+      // Phase A 확장 필드 — 고급 분석 또는 상세 설정에서 입력한 값 pass-through
+      const PHASE_A_KEYS = [
+        "housing_management_no", "approval_no", "developer", "builder",
+        "location_address", "announcement_base_date",
+        "general_total_units", "special_total_units", "lowest_floor_priority_units",
+        "min_age", "minor_head_allowed", "eligible_regions", "foreigner_allowed",
+        "regional_priority", "subscription_deposits",
+        "rank1_criteria", "rank2_criteria",
+        "household_head_required", "homeless_household_required", "single_home_owner_rank1_allowed",
+        "point_lottery_ratios", "required_documents_detailed",
+        "duplicate_application_rule", "passbook_reuse_blocked", "long_term_overseas_restriction",
+      ];
+      for (const k of PHASE_A_KEYS) {
+        const v = (form.rules as any)[k];
+        if (v === undefined || v === null || v === "") continue;
+        if (Array.isArray(v) && v.length === 0) continue;
+        eligibilityRules[k] = v;
+      }
       const annPayload = {
         title: form.title.trim(),
         announcement_no: form.announcement_no || null,
@@ -1033,6 +1053,245 @@ export default function AnnouncementsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Phase D — 상세 설정 토글 */}
+              <button
+                type="button"
+                onClick={() => setAdvancedMode((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 border border-dashed border-accent/50 rounded-lg bg-accent-soft/30 hover:bg-accent-soft/50 transition-colors text-sm font-medium text-accent"
+              >
+                <span className="flex items-center gap-2">
+                  ⚙️ 상세 설정 (Phase A 확장 필드)
+                  {advancedMode ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </span>
+                <span className="text-xs text-accent/70">
+                  {advancedMode ? "접기" : "공고 메타·자격 상세·규제 상세 수동 편집"}
+                </span>
+              </button>
+
+              {advancedMode && (
+                <div className="space-y-4">
+                  {/* 8.1 공고 메타 */}
+                  <div className="border border-border rounded-lg p-4 space-y-3">
+                    <h3 className="font-medium text-ink text-sm">공고 메타</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-ink-2 mb-1">주택관리번호</label>
+                        <input value={(form.rules as any).housing_management_no || ""}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, housing_management_no: e.target.value } as any }))}
+                          placeholder="예: 2026000049"
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-ink-2 mb-1">승인번호</label>
+                        <input value={(form.rules as any).approval_no || ""}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, approval_no: e.target.value } as any }))}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-ink-2 mb-1">사업주체</label>
+                        <input value={(form.rules as any).developer || ""}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, developer: e.target.value } as any }))}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-ink-2 mb-1">시공사</label>
+                        <input value={(form.rules as any).builder || ""}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, builder: e.target.value } as any }))}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-ink-2 mb-1">공급위치 (지번 포함)</label>
+                        <input value={(form.rules as any).location_address || ""}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, location_address: e.target.value } as any }))}
+                          placeholder="예: 경기도 양주시 옥정동 962-9"
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-ink-2 mb-1">공고 기준일 (자격 판정)</label>
+                        <input type="datetime-local"
+                          value={(form.rules as any).announcement_base_date || ""}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, announcement_base_date: e.target.value } as any }))}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 8.2 세대수 구성 */}
+                  <div className="border border-border rounded-lg p-4 space-y-3">
+                    <h3 className="font-medium text-ink text-sm">세대수 구성</h3>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-ink-2 mb-1">일반공급 세대수</label>
+                        <input type="number" min={0}
+                          value={(form.rules as any).general_total_units ?? ""}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, general_total_units: e.target.value === "" ? null : Number(e.target.value) } as any }))}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-ink-2 mb-1">특별공급 세대수</label>
+                        <input type="number" min={0}
+                          value={(form.rules as any).special_total_units ?? ""}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, special_total_units: e.target.value === "" ? null : Number(e.target.value) } as any }))}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-ink-2 mb-1">최하층 우선배정</label>
+                        <input type="number" min={0}
+                          value={(form.rules as any).lowest_floor_priority_units ?? ""}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, lowest_floor_priority_units: e.target.value === "" ? null : Number(e.target.value) } as any }))}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 8.4 자격 상세 */}
+                  <div className="border border-border rounded-lg p-4 space-y-3">
+                    <h3 className="font-medium text-ink text-sm">신청 자격 상세</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-ink-2 mb-1">최소 나이 (만)</label>
+                        <input type="number" min={0} max={99}
+                          value={(form.rules as any).min_age ?? ""}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, min_age: e.target.value === "" ? null : Number(e.target.value) } as any }))}
+                          placeholder="예: 19"
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      </div>
+                      <div className="flex flex-col gap-1.5 pt-4">
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="checkbox" checked={!!(form.rules as any).minor_head_allowed}
+                            onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, minor_head_allowed: e.target.checked } as any }))} />
+                          세대주인 미성년자 허용
+                        </label>
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="checkbox" checked={!!(form.rules as any).foreigner_allowed}
+                            onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, foreigner_allowed: e.target.checked } as any }))} />
+                          외국인/재외동포 가능
+                        </label>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 pt-2">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer border border-border rounded-lg px-3 py-2">
+                        <input type="checkbox" checked={!!(form.rules as any).household_head_required}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, household_head_required: e.target.checked } as any }))} />
+                        <span>세대주 필수</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-sm cursor-pointer border border-border rounded-lg px-3 py-2">
+                        <input type="checkbox" checked={!!(form.rules as any).homeless_household_required}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, homeless_household_required: e.target.checked } as any }))} />
+                        <span>무주택세대 필수</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-sm cursor-pointer border border-border rounded-lg px-3 py-2">
+                        <input type="checkbox" checked={!!(form.rules as any).single_home_owner_rank1_allowed}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, single_home_owner_rank1_allowed: e.target.checked } as any }))} />
+                        <span>1주택자 1순위 가능</span>
+                      </label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-ink-2 mb-1">1순위 요건 요약</label>
+                        <textarea rows={2}
+                          value={(form.rules as any).rank1_criteria || ""}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, rank1_criteria: e.target.value } as any }))}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-ink-2 mb-1">2순위 요건 요약</label>
+                        <textarea rows={2}
+                          value={(form.rules as any).rank2_criteria || ""}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, rank2_criteria: e.target.value } as any }))}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 8.5 규제 상세 */}
+                  <div className="border border-border rounded-lg p-4 space-y-3">
+                    <h3 className="font-medium text-ink text-sm">규제·제한 상세</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-ink-2 mb-1">전매제한 기간</label>
+                        <input value={(form.rules as any).resale_restriction || ""}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, resale_restriction: e.target.value } as any }))}
+                          placeholder="예: 3년 또는 '없음'"
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-ink-2 mb-1">재당첨 제한</label>
+                        <input value={(form.rules as any).rewin_restriction || ""}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, rewin_restriction: e.target.value } as any }))}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-ink-2 mb-1">거주의무 기간</label>
+                        <input value={(form.rules as any).residence_obligation || ""}
+                          onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, residence_obligation: e.target.value } as any }))}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      </div>
+                      <div className="flex items-center gap-3 pt-4">
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="checkbox" checked={!!(form.rules as any).price_cap_applied}
+                            onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, price_cap_applied: e.target.checked } as any }))} />
+                          분양가 상한제
+                        </label>
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="checkbox" checked={!!(form.rules as any).passbook_reuse_blocked}
+                            onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, passbook_reuse_blocked: e.target.checked } as any }))} />
+                          통장 재사용 불가
+                        </label>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-ink-2 mb-1">중복청약 규칙</label>
+                      <textarea rows={2}
+                        value={(form.rules as any).duplicate_application_rule || ""}
+                        onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, duplicate_application_rule: e.target.value } as any }))}
+                        placeholder="예: 1인 1건, 세대 내 중복 시 전원 무효"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-ink-2 mb-1">장기 해외체류 제한</label>
+                      <textarea rows={2}
+                        value={(form.rules as any).long_term_overseas_restriction || ""}
+                        onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, long_term_overseas_restriction: e.target.value } as any }))}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none" />
+                    </div>
+                  </div>
+
+                  {/* 고급 분석 자동 추출 배열 미리보기 — 읽기전용 */}
+                  {(() => {
+                    const r = form.rules as any;
+                    const rows: Array<{ key: string; label: string; count: number }> = [
+                      { key: "regional_priority", label: "지역 우선공급", count: (r.regional_priority || []).length },
+                      { key: "subscription_deposits", label: "청약예치금", count: (r.subscription_deposits || []).length },
+                      { key: "point_lottery_ratios", label: "가점/추첨 비율", count: (r.point_lottery_ratios || []).length },
+                      { key: "required_documents_detailed", label: "서류 상세", count: (r.required_documents_detailed || []).length },
+                      { key: "supply_types_detail", label: "공급유형 상세", count: (r.supply_types_detail || []).length },
+                      { key: "exclusive_areas", label: "주택형 상세", count: (r.exclusive_areas || []).length },
+                    ];
+                    const has = rows.some((x) => x.count > 0);
+                    if (!has) return null;
+                    return (
+                      <div className="border border-indigo-200 bg-indigo-50/50 rounded-lg p-4 space-y-2">
+                        <h3 className="font-medium text-indigo-800 text-sm flex items-center gap-2">
+                          🤖 자동 추출된 상세 데이터 (읽기전용)
+                        </h3>
+                        <p className="text-xs text-indigo-700">
+                          아래는 PDF 업로드·고급 분석으로 자동 추출된 배열 데이터입니다. 수정이 필요하면 PDF를 다시 업로드하세요.
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {rows.filter((x) => x.count > 0).map((x) => (
+                            <span key={x.key} className="inline-flex items-center gap-1.5 text-xs bg-white border border-indigo-200 text-indigo-700 px-2.5 py-1 rounded-full">
+                              {x.label}
+                              <span className="inline-block bg-indigo-100 text-indigo-700 px-1.5 rounded font-semibold">{x.count}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
 
               {formError && (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
