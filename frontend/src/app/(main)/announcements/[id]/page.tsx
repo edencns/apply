@@ -583,7 +583,7 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
 
 /* ─── Tab: Special Supply ────────────────────────────── */
 
-function SpecialTab({ rules }: { rules: Record<string, any> }) {
+function SpecialTab({ rules, onJumpToDocs }: { rules: Record<string, any>; onJumpToDocs?: (category: string) => void }) {
   const supplyTypes: any[] = rules.supply_types_detail || [];
   const specialTypes: string[] = rules.special_supply_types || [];
   const specialOnly = supplyTypes.filter((st: any) => st.type !== "일반공급");
@@ -662,78 +662,80 @@ function SpecialTab({ rules }: { rules: Record<string, any> }) {
       {specialOnly.length > 0 ? (
         specialOnly.map((st: any, i: number) => {
           const Icon = TYPE_ICONS[st.type] || Heart;
+          // canonicalType을 서류 탭 카테고리로 매핑 (예: "신혼부부" "생애최초" 등)
+          const docCategory: string = st.canonicalType || st.type;
+          // 자격요건 필드 정리
+          const qualFields: Array<{ label: string; value: string; accent?: boolean }> = [];
+          if (st.incomeLimitPercent) qualFields.push({ label: "소득기준(외벌이)", value: `${st.incomeLimitPercent}%`, accent: true });
+          if (st.incomeLimitDualPercent) qualFields.push({ label: "소득기준(맞벌이)", value: `${st.incomeLimitDualPercent}%`, accent: true });
+          if (st.minSubscriptionMonths) qualFields.push({ label: "통장 가입기간", value: `${st.minSubscriptionMonths}개월 이상` });
+          if (st.maxMarriageYears) qualFields.push({ label: "혼인기간", value: `${st.maxMarriageYears}년 이내` });
+          if (st.minChildren) qualFields.push({ label: "자녀수", value: `${st.minChildren}명 이상` });
+          if (st.assetLimit) qualFields.push({ label: "자산한도", value: st.assetLimit });
+          if (st.carValueLimit) qualFields.push({ label: "자동차가액", value: st.carValueLimit });
+
           return (
-            <Section key={i} title={st.type}>
-              <div className="space-y-3">
-                {st.requireHomeless && (
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
-                    <span className="text-red-700 font-medium">무주택세대구성원 필수</span>
+            <Section key={i} title={st.type} right={st.units ? <span className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-medium">{st.units}세대</span> : undefined}>
+              <div className="space-y-4">
+                {/* ── 1) 자격요건 ── */}
+                <div>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <p className="text-xs font-bold text-emerald-700">자격요건</p>
                   </div>
-                )}
-                <div className="grid grid-cols-2 gap-3">
-                  {st.incomeLimitPercent && (
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">소득기준 (외벌이)</p>
-                      <p className="text-sm font-bold text-blue-700 mt-1">{st.incomeLimitPercent}%</p>
+                  {st.requireHomeless && (
+                    <div className="flex items-center gap-1.5 text-sm mb-2 bg-red-50 rounded-md px-2.5 py-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+                      <span className="text-red-700 font-medium">무주택세대구성원 필수</span>
                     </div>
                   )}
-                  {st.incomeLimitDualPercent && (
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">소득기준 (맞벌이)</p>
-                      <p className="text-sm font-bold text-blue-700 mt-1">{st.incomeLimitDualPercent}%</p>
+                  {qualFields.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      {qualFields.map((f) => (
+                        <div key={f.label} className="bg-gray-50 rounded-lg p-2.5">
+                          <p className="text-[11px] text-gray-500">{f.label}</p>
+                          <p className={`text-sm font-semibold mt-0.5 ${f.accent ? "text-blue-700" : ""}`}>{f.value}</p>
+                        </div>
+                      ))}
                     </div>
+                  ) : !st.requireHomeless && (
+                    <p className="text-xs text-gray-400">자격요건 데이터 없음</p>
                   )}
-                  {st.minSubscriptionMonths && (
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">통장 가입기간</p>
-                      <p className="text-sm font-medium mt-1">{st.minSubscriptionMonths}개월</p>
-                    </div>
-                  )}
-                  {st.maxMarriageYears && (
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">혼인기간</p>
-                      <p className="text-sm font-medium mt-1">{st.maxMarriageYears}년 이내</p>
-                    </div>
-                  )}
-                  {st.minChildren && (
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">자녀수</p>
-                      <p className="text-sm font-medium mt-1">{st.minChildren}명 이상</p>
-                    </div>
-                  )}
-                  {st.assetLimit && (
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">자산한도</p>
-                      <p className="text-sm font-medium mt-1">{st.assetLimit}</p>
-                    </div>
-                  )}
-                </div>
-                {st.conditions && st.conditions.length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-xs font-semibold text-gray-600 mb-1.5">판정 기준</p>
-                    <div className="space-y-1.5">
+                  {st.conditions && st.conditions.length > 0 && (
+                    <div className="mt-2 pl-2 border-l-2 border-emerald-200">
                       {st.conditions.map((c: string, ci: number) => (
-                        <div key={ci} className="flex items-start gap-2 text-sm">
-                          <span className="text-blue-500 mt-0.5">&#8226;</span>
+                        <div key={ci} className="flex items-start gap-2 text-sm py-0.5">
+                          <span className="text-emerald-500 mt-0.5">&#8226;</span>
                           <span>{c}</span>
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
+
+                {/* ── 2) 선정방식 ── */}
                 {st.selectionMethod && (
-                  <div className="mt-2 bg-indigo-50 rounded-lg p-3">
-                    <p className="text-xs font-semibold text-indigo-700 mb-1">선정 방식</p>
-                    <p className="text-sm text-indigo-900">{st.selectionMethod}</p>
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                      <p className="text-xs font-bold text-indigo-700">선정방식</p>
+                    </div>
+                    <div className="bg-indigo-50 rounded-lg p-3">
+                      <p className="text-sm text-indigo-900">{st.selectionMethod}</p>
+                    </div>
                   </div>
                 )}
+
+                {/* ── 3) 신청 불가 사유 ── */}
                 {Array.isArray(st.ineligibleReasons) && st.ineligibleReasons.length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-xs font-semibold text-red-700 mb-1.5">신청 불가 사유</p>
-                    <div className="space-y-1">
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                      <p className="text-xs font-bold text-red-700">신청 불가 사유</p>
+                    </div>
+                    <div className="bg-red-50 rounded-lg px-3 py-2 space-y-1">
                       {st.ineligibleReasons.map((r: string, ri: number) => (
-                        <div key={ri} className="flex items-start gap-2 text-sm text-red-800">
+                        <div key={ri} className="flex items-start gap-2 text-sm text-red-900">
                           <AlertTriangle className="w-3.5 h-3.5 text-red-500 mt-0.5 flex-shrink-0" />
                           <span>{r}</span>
                         </div>
@@ -741,9 +743,35 @@ function SpecialTab({ rules }: { rules: Record<string, any> }) {
                     </div>
                   </div>
                 )}
-                {st.evidenceQuote && (
-                  <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-500 border-t border-gray-100 pt-2">
-                    <span className="italic">"{st.evidenceQuote.slice(0, 120)}{st.evidenceQuote.length > 120 ? "…" : ""}"</span>
+
+                {/* ── 4) 필요 서류 링크 ── */}
+                <div>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    <p className="text-xs font-bold text-amber-700">필요 서류</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onJumpToDocs?.(docCategory)}
+                    className="w-full flex items-center justify-between bg-amber-50 hover:bg-amber-100 transition-colors rounded-lg px-3 py-2 text-sm"
+                  >
+                    <span className="text-amber-900 flex items-center gap-2">
+                      <FileText className="w-3.5 h-3.5" />
+                      {docCategory} 카테고리 서류 확인
+                    </span>
+                    <span className="text-xs text-amber-700 flex items-center gap-1">
+                      필요 서류 탭으로 이동
+                      <ArrowLeft className="w-3 h-3 rotate-180" />
+                    </span>
+                  </button>
+                </div>
+
+                {/* 근거 — 있으면 표시 */}
+                {(st.evidenceQuote || st.evidencePage) && (
+                  <div className="flex items-center gap-2 text-[11px] text-gray-500 border-t border-gray-100 pt-2">
+                    {st.evidenceQuote && (
+                      <span className="italic">"{st.evidenceQuote.slice(0, 120)}{st.evidenceQuote.length > 120 ? "…" : ""}"</span>
+                    )}
                     <EvidencePage page={st.evidencePage} />
                   </div>
                 )}
@@ -891,6 +919,16 @@ function DocumentsTab({ rules }: { rules: Record<string, any> }) {
     if (!detailedByCategory[k]) detailedByCategory[k] = [];
     detailedByCategory[k].push(d);
   }
+  // 공고 기준일 기반 유효기간 힌트 계산
+  const baseDateStr: string = rules.announcement_base_date || rules.announcement_date || "";
+  const baseDate = baseDateStr ? new Date(baseDateStr) : null;
+  const baseDateValid = baseDate && !Number.isNaN(baseDate.getTime());
+  const earliestIssueDate = (validityDays: number): string => {
+    if (!baseDateValid) return "";
+    const d = new Date(baseDate!.getTime());
+    d.setDate(d.getDate() - validityDays);
+    return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+  };
 
   // 문서 체크리스트 폴백: 파싱된 서류가 부족하면 기본 체크리스트로 보충
   const enrichedDocs: Record<string, string[]> = {};
@@ -949,66 +987,90 @@ function DocumentsTab({ rules }: { rules: Record<string, any> }) {
         </div>
       )}
 
+      {/* Phase C — 공고 기준일 기반 유효기간 힌트 안내 */}
+      {baseDateValid && detailed.some((d) => d.validityDays) && (
+        <div className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800">
+          <CalendarDays className="w-4 h-4 flex-shrink-0 mt-0.5 text-emerald-600" />
+          <div>
+            <p className="font-semibold">유효기간 자동 계산</p>
+            <p className="text-xs mt-0.5">공고 기준일 <strong>{fmtDate(baseDateStr)}</strong>에서 각 서류 유효기간을 역산해 "발급 가능 날짜"가 자동 표시됩니다.</p>
+          </div>
+        </div>
+      )}
+
       {/* Phase A — 서류 상세 가이드 뷰 */}
       {detailed.length > 0 && (
         Object.entries(detailedByCategory).map(([category, docs]) => (
-          <Section
-            key={`detailed-${category}`}
-            title={`${category} 서류 (상세)`}
-            defaultOpen={category === "공통"}
-            right={<span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-medium">{docs.length}건</span>}
-          >
-            <div className="space-y-2">
-              {docs.map((d, i) => (
-                <div key={i} className="border border-gray-200 rounded-lg p-3 hover:border-gray-300 transition-colors">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <FileText className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
-                        <p className="text-sm font-semibold">{d.name}</p>
-                        {d.required && (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${d.required === "필수" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
-                            {d.required}
-                          </span>
-                        )}
-                        {d.detailedVersion && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">상세본</span>}
-                        {d.originalRequired && <span className="text-[10px] bg-red-50 text-red-700 px-1.5 py-0.5 rounded font-medium">원본</span>}
+          <div key={`detailed-${category}`} id={`doc-cat-${category}`}>
+            <Section
+              title={`${category} 서류 (상세)`}
+              defaultOpen={category === "공통"}
+              right={<span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-medium">{docs.length}건</span>}
+            >
+              <div className="space-y-2">
+                {docs.map((d, i) => {
+                  const earliest = d.validityDays ? earliestIssueDate(d.validityDays) : "";
+                  return (
+                    <div key={i} className="border border-gray-200 rounded-lg p-3 hover:border-gray-300 transition-colors">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <FileText className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
+                            <p className="text-sm font-semibold">{d.name}</p>
+                            {d.required && (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${d.required === "필수" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
+                                {d.required}
+                              </span>
+                            )}
+                            {d.detailedVersion && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">상세본</span>}
+                            {d.originalRequired && <span className="text-[10px] bg-red-50 text-red-700 px-1.5 py-0.5 rounded font-medium">원본</span>}
+                          </div>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-600 mt-1">
+                            {d.issuer && <span>발급처: <span className="text-gray-800 font-medium">{d.issuer}</span></span>}
+                            {d.validityDays && (
+                              <span>
+                                유효기간: <span className="text-gray-800 font-medium">{d.validityDays}일 이내</span>
+                                {earliest && (
+                                  <span className="ml-1 text-emerald-700 font-medium">→ {earliest} 이후 발급분만 유효</span>
+                                )}
+                              </span>
+                            )}
+                            {d.submitTiming && <span>제출: <span className="text-gray-800 font-medium">{d.submitTiming}</span></span>}
+                          </div>
+                          {Array.isArray(d.alternativeDocs) && d.alternativeDocs.length > 0 && (
+                            <p className="text-[11px] text-gray-500 mt-1">
+                              대체 가능: {d.alternativeDocs.join(", ")}
+                            </p>
+                          )}
+                        </div>
+                        <EvidencePage page={d.evidencePage} />
                       </div>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-600 mt-1">
-                        {d.issuer && <span>발급처: <span className="text-gray-800 font-medium">{d.issuer}</span></span>}
-                        {d.validityDays && <span>유효기간: <span className="text-gray-800 font-medium">{d.validityDays}일 이내</span></span>}
-                        {d.submitTiming && <span>제출: <span className="text-gray-800 font-medium">{d.submitTiming}</span></span>}
-                      </div>
-                      {Array.isArray(d.alternativeDocs) && d.alternativeDocs.length > 0 && (
-                        <p className="text-[11px] text-gray-500 mt-1">
-                          대체 가능: {d.alternativeDocs.join(", ")}
-                        </p>
-                      )}
                     </div>
-                    <EvidencePage page={d.evidencePage} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Section>
+                  );
+                })}
+              </div>
+            </Section>
+          </div>
         ))
       )}
 
       {/* 기존 간단 리스트 뷰 (detailed가 없거나 보충용) */}
       {detailed.length === 0 && Object.entries(enrichedDocs).map(([category, docs]) => (
         docs.length > 0 && (
-          <Section key={category} title={`${category} 서류`} defaultOpen={category === "공통"}>
-            <ul className="space-y-2">
-              {docs.map((doc, i) => (
-                <li key={i} className="flex items-start gap-2.5 text-sm">
-                  <div className={`w-5 h-5 rounded-full bg-${DOC_COLORS[category] || "gray"}-100 flex items-center justify-center flex-shrink-0 mt-0.5`}>
-                    <FileText className={`w-3 h-3 text-${DOC_COLORS[category] || "gray"}-600`} />
-                  </div>
-                  <span>{doc}</span>
-                </li>
-              ))}
-            </ul>
-          </Section>
+          <div key={category} id={`doc-cat-${category}`}>
+            <Section title={`${category} 서류`} defaultOpen={category === "공통"}>
+              <ul className="space-y-2">
+                {docs.map((doc, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-sm">
+                    <div className={`w-5 h-5 rounded-full bg-${DOC_COLORS[category] || "gray"}-100 flex items-center justify-center flex-shrink-0 mt-0.5`}>
+                      <FileText className={`w-3 h-3 text-${DOC_COLORS[category] || "gray"}-600`} />
+                    </div>
+                    <span>{doc}</span>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          </div>
         )
       ))}
     </div>
@@ -1284,7 +1346,19 @@ export default function AnnouncementDetailPage() {
       <div className="min-h-[500px]">
         {tab === "overview" && <OverviewTab ann={ann} rules={rules} />}
         {tab === "eligibility" && <EligibilityTab rules={rules} />}
-        {tab === "special" && <SpecialTab rules={rules} />}
+        {tab === "special" && (
+          <SpecialTab
+            rules={rules}
+            onJumpToDocs={(category) => {
+              setTab("documents");
+              // 탭 전환 후 해당 카테고리 섹션으로 스크롤 (탭 렌더 끝난 뒤)
+              setTimeout(() => {
+                const el = document.getElementById(`doc-cat-${category}`);
+                if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+              }, 50);
+            }}
+          />
+        )}
         {tab === "income" && <IncomeTab rules={rules} />}
         {tab === "documents" && <DocumentsTab rules={rules} />}
       </div>
