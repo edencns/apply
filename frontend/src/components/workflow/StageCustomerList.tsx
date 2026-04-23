@@ -20,6 +20,7 @@ import { customersApi } from "@/lib/api";
 import { pullAll } from "@/lib/cloud-sync";
 import { useRealtimeSync } from "@/lib/realtime/useRealtimeSync";
 import type { StageVerdict } from "@/lib/verification-rules";
+import { formatHousingCode } from "@/lib/housing-code";
 import {
   ChevronRight, Loader2, Search,
 } from "lucide-react";
@@ -198,7 +199,7 @@ export default function StageCustomerList({ announcement, evaluate, columns, sta
         >
           <option value="all">주택형 전체</option>
           {unitOptions.map((u) => (
-            <option key={u} value={u}>{u}</option>
+            <option key={u} value={u}>{formatHousingCode(u)}</option>
           ))}
         </select>
 
