@@ -230,6 +230,24 @@ export interface LocalCustomer {
   verification_score?: number;
   verification_checked_at?: string;
   verification_reasons?: string[];  // 부적합 사유 (없으면 적합)
+  /** Phase #6 — 담당자 수동 승인 기록 */
+  manual_review?: {
+    /** 판정 확정 여부 — 담당자 서명 후 true */
+    signed_off: boolean;
+    /** 담당자 서명 시 체크한 항목들 */
+    checklist: {
+      announcement_original_confirmed: boolean;   // 공고 원문 재확인 완료
+      family_cert_matched: boolean;               // 가족관계·혼인관계 증명서 대조 완료
+      past_winning_checked: boolean;              // 청약홈 당첨사실 확인서 대조 완료
+      boundary_cases_reviewed: boolean;           // 애매 케이스 상급자 결재
+    };
+    /** 서명한 담당자명 */
+    reviewer_name: string;
+    /** 서명 시각 ISO */
+    signed_at: string;
+    /** 특이사항 메모 */
+    note?: string;
+  };
   // ── 공적 검증 데이터 (파일 일괄 분석에서 채움) ──
   household_members?: Array<{
     name: string;
