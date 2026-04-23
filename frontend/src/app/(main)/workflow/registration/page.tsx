@@ -779,7 +779,7 @@ function CustomersPageInner() {
         >
           <option value="all">주택형 전체</option>
           {unitOptions.map((u) => (
-            <option key={u} value={u}>{u}</option>
+            <option key={u} value={u}>{formatHousingCode(u)}</option>
           ))}
         </select>
         <select
@@ -911,10 +911,7 @@ function CustomersPageInner() {
                   <td className="px-4 py-3 text-ink-2">{c.phone ? formatPhone(c.phone) : "-"}</td>
                   <td className="px-4 py-3 text-ink-2">
                     {c.unit_type ? (
-                      <>
-                        <span className="font-medium">{c.unit_type}</span>
-                        {c.unit_area && <span className="text-ink-4 text-xs ml-1">{c.unit_area}</span>}
-                      </>
+                      <span className="font-medium">{formatHousingCode(c.unit_type)}</span>
                     ) : (
                       <span className="text-xs text-ink-4">-</span>
                     )}
