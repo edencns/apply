@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { pushAll, pullAll, checkCloudStatus } from "@/lib/cloud-sync";
 import { useRealtimeSync } from "@/lib/realtime/useRealtimeSync";
+import { allDeadlineAlerts, alertLabel, alertColorClass } from "@/lib/deadline-alerts";
 
 const WORKFLOW_STEPS_META = [
   { n: 1, key: "registration", label: "당첨자 등록", href: "/workflow/registration" },
@@ -264,6 +265,49 @@ export default function DashboardPage() {
           {syncMsg}
         </div>
       )}
+
+      {/* Phase #4 — 마감일 자동 알림 배너 */}
+      {(() => {
+        const customersByAnn = new Map<number | string, LocalCustomer[]>();
+        for (const a of announcements) {
+          customersByAnn.set(a.id, localCustomers.listByAnnouncement(a.id as any));
+        }
+        const alerts = allDeadlineAlerts(announcements, customersByAnn);
+        if (alerts.length === 0) return null;
+        const top = alerts.slice(0, 4);
+        return (
+          <div className="mb-4 space-y-1.5">
+            {top.map((a, i) => (
+              <Link
+                key={i}
+                href={`/announcements/${a.announcementId}`}
+                className={`block border rounded-lg px-3 py-2 text-xs transition-colors hover:bg-black/5 ${alertColorClass(a.level)}`}
+              >
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-sm">{alertLabel(a.daysLeft)}</span>
+                    <span className="font-semibold">{a.label}</span>
+                    <span className="text-[11px] opacity-80">
+                      · {a.dueDate.getFullYear()}.{String(a.dueDate.getMonth() + 1).padStart(2, "0")}.{String(a.dueDate.getDate()).padStart(2, "0")}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {a.pendingCount !== undefined && a.totalCount !== undefined && (
+                      <span className="text-[11px] font-medium">
+                        미처리 <strong>{a.pendingCount}</strong>/{a.totalCount}명
+                      </span>
+                    )}
+                    <span className="text-[11px] opacity-70 truncate max-w-[240px]">{a.announcementTitle}</span>
+                  </div>
+                </div>
+              </Link>
+            ))}
+            {alerts.length > top.length && (
+              <div className="text-[10.5px] text-ink-3 px-1">… 그 외 {alerts.length - top.length}건 더</div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Block B — Announcement picker */}
       <div className="mb-3.5">

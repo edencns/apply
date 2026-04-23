@@ -181,6 +181,20 @@ export default function DocumentsStepPage() {
             </span>
           </div>
 
+          {/* Phase #5 — 면책 디스클레이머 */}
+          <div className="mb-4 p-3 rounded-lg bg-red-50 border-2 border-red-300 text-xs text-red-900 flex items-start gap-2">
+            <span className="text-base leading-none flex-shrink-0">⚠️</span>
+            <div>
+              <div className="font-bold mb-1">이 판정은 참고용 자동 로직 결과입니다.</div>
+              <div>
+                최종 적합·부적합은 담당자가 <strong>공고 원문과 법령을 직접 확인 후 결정</strong>하세요.
+                시스템은 데이터 수집·규칙 기반 1차 판정·경계 케이스 플래그를 제공할 뿐이며,
+                법령 해석·서류 진위·개인 상황별 판단의 책임은 담당자에게 있습니다.
+                청약 관련 정책·규정은 수시로 개정되므로 최신 청약홈 공지(1644-7445)로 반드시 확인 필요.
+              </div>
+            </div>
+          </div>
+
           {/* 업로드 툴바 — 세대원/주택/통장 어느 쪽 파일이든 자동 판별해서 반영 */}
           <div className="flex items-center gap-1.5 flex-wrap mb-4">
             <button

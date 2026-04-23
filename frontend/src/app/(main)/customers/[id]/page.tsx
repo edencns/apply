@@ -592,6 +592,15 @@ function DocumentsStage({
       </div>
 
       {/* 예비 승계 섹션 — 당첨자가 부적합이거나 이미 포기/승계 완료된 경우 */}
+      {/* Phase #5 — 판정 결과 면책 디스클레이머 */}
+      <div className="px-3 py-2 rounded-md bg-red-50 border border-red-200 text-[11px] text-red-800 flex items-start gap-1.5">
+        <span>⚠️</span>
+        <span>
+          이 판정은 자동 로직 기준이며 <strong>최종 결정은 담당자</strong>가
+          공고 원문·법령·서류 원본을 직접 확인 후 내립니다. 정책 개정은 수시 발생.
+        </span>
+      </div>
+
       <StandbyPromotionBlock
         customer={customer}
         verdict={finalVerdict.verdict}
