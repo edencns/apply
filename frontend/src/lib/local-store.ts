@@ -198,6 +198,26 @@ export interface LocalCustomer {
   // ── 당첨자 / 예비 구분 ──
   is_standby?: boolean;      // true면 예비입주자 (빈자리 대기)
   standby_rank?: string;     // 예비 순위 (1,2,3...)
+  /** 청약홈 전산추첨결과 Excel에서 들어온 원본 당첨자 메타 */
+  winner_info?: {
+    sheet_source?: string;          // 출처 시트 (일반공급당첨자, 신혼부부당첨자 등)
+    building?: string;              // 동수
+    unit_no?: string;               // 호수
+    selection_method?: string;      // 가점제/추첨제/추첨/가점 등
+    application_date?: string;      // 접수일자 (YYYYMMDD)
+    savings_opened?: string;        // 청약통장개설일
+    low_floor_apply?: boolean;      // 저층 신청 여부
+    bank?: string;                  // 개설은행
+    account_type?: string;          // 예금종목 (종합저축 등)
+    account?: string;               // 계좌번호
+    rank?: string;                  // 순위 (1/2)
+    region_priority_kind?: string;  // (01)해당지역/(02)기타지역 등
+    ga_score?: number;              // 가점
+    penalty?: number;               // 감점
+    total_score?: number;           // 총점
+    housing_type_code?: string;     // 주택형 코드(0733949 등)
+    ga_point_type?: string;         // 당첨구분 (가점제/추첨제)
+  };
   // ── 예비 승계 체인 ──
   superseded?: boolean;          // true면 부적합/포기 후 다른 사람이 자리 승계 → 비활성
   superseded_by?: number;        // 이 자리를 승계한 고객 ID

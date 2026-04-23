@@ -14,8 +14,8 @@ import {
   LocalCustomer,
 } from "@/lib/local-store";
 import {
-  UserPlus, Search, ChevronRight, Calculator, FileText, FileSpreadsheet,
-  Loader2, BookOpen, X, Trash2, Upload,
+  UserPlus, Search, ChevronRight, Calculator, FileSpreadsheet,
+  Loader2, BookOpen, X, Trash2,
 } from "lucide-react";
 import AnnouncementPicker from "@/components/AnnouncementPicker";
 import { getSampleAsLocalAnnouncements } from "@/lib/sample-adapter";
@@ -75,11 +75,6 @@ function CustomersPageInner() {
   const excelInputRef = useRef<HTMLInputElement | null>(null);
   const [excelUploading, setExcelUploading] = useState(false);
   const [excelResult, setExcelResult] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
-
-  // PDF 업로드 (주민등록등본 등 → 고객 정보 자동 추출)
-  const pdfInputRef = useRef<HTMLInputElement | null>(null);
-  const [pdfUploading, setPdfUploading] = useState(false);
-  const [pdfFilled, setPdfFilled] = useState<string[]>([]);
 
   // 선택 삭제 모드
   const [selectMode, setSelectMode] = useState(false);
@@ -299,6 +294,22 @@ function CustomersPageInner() {
     }));
   };
 
+  /**
+   * 청약홈 전산추첨결과 Excel 파서.
+   *
+   * 파일 구조: 여러 시트로 구성되며, 시트 이름으로 공급유형·당첨/예비 구분.
+   *  - 안내 시트 2개 → 건너뜀
+   *  - 당첨자 시트: 다자녀당첨자, 신혼부부당첨자, 생애최초당첨자, 노부모부양당첨자,
+   *    기관추천당첨자, 이전기관당첨자, 일반공급당첨자
+   *  - 예비입주자 시트: 각 공급유형 + 예비입주자 (is_standby=true)
+   *  - 잔여추첨명단: 무작위 추첨 당첨 (is_standby=false, 비고 사유 표시)
+   *
+   * 각 시트 헤더: 주택형 | 성명 | 주민번호(13자리) | 우편번호 | 주소 | 전화번호 |
+   *  개설은행 | 예금종목 | 계좌번호 | 순위 | 당해여부(신청기준) | 당해여부(당첨기준) |
+   *  접수일자 | 저층신청여부 | 청약통장개설일 | (가점제청약신청여부) | 주택소유구분 |
+   *  (무주택기간) | (부양가족수) | (입주자저축가입기간) | … | 가점 | 감점 | 총점 |
+   *  (장기복무군인…) | 당첨구분 | 동수 | 호수
+   */
   const handleExcelUpload = async (file: File) => {
     if (!selectedAnn) { alert("먼저 공고를 선택해주세요"); return; }
     setExcelUploading(true);
@@ -307,64 +318,147 @@ function CustomersPageInner() {
       const XLSX = await import("xlsx");
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: "" });
 
-      const pick = (row: Record<string, any>, ...keys: string[]): any => {
-        for (const k of keys) if (row[k] !== undefined && row[k] !== "") return row[k];
-        return undefined;
+      /** 시트명 → 공급유형·대기여부 매핑 */
+      const SHEET_MAP: Record<string, { canonical: string; isStandby: boolean }> = {
+        "일반공급당첨자": { canonical: "일반공급", isStandby: false },
+        "다자녀당첨자": { canonical: "다자녀가구", isStandby: false },
+        "신혼부부당첨자": { canonical: "신혼부부", isStandby: false },
+        "생애최초당첨자": { canonical: "생애최초", isStandby: false },
+        "노부모부양당첨자": { canonical: "노부모부양", isStandby: false },
+        "기관추천당첨자": { canonical: "기관추천", isStandby: false },
+        "이전기관당첨자": { canonical: "이전기관", isStandby: false },
+        "일반공급예비입주자": { canonical: "일반공급", isStandby: true },
+        "다자녀예비입주자": { canonical: "다자녀가구", isStandby: true },
+        "신혼부부예비입주자": { canonical: "신혼부부", isStandby: true },
+        "생애최초예비입주자": { canonical: "생애최초", isStandby: true },
+        "노부모부양예비입주자": { canonical: "노부모부양", isStandby: true },
+        "기관추천예비입주자": { canonical: "기관추천", isStandby: true },
+        "이전기관예비입주자": { canonical: "이전기관", isStandby: true },
+        "잔여추첨명단": { canonical: "일반공급", isStandby: false },
       };
-      const toNum = (v: any): number => {
-        if (v === undefined || v === "" || v === null) return 0;
-        const n = Number(String(v).replace(/[^\d.-]/g, ""));
-        return Number.isFinite(n) ? n : 0;
-      };
+
       const toStr = (v: any): string => (v === undefined || v === null ? "" : String(v).trim());
+      const toNum = (v: any): number | undefined => {
+        if (v === undefined || v === "" || v === null) return undefined;
+        const n = Number(String(v).replace(/[^\d.-]/g, ""));
+        return Number.isFinite(n) ? n : undefined;
+      };
+      /** "강원도 강릉시 주문진읍 ..." → "강원도" */
+      const extractRegion = (addr: string): string => {
+        const m = addr.match(/^(서울|부산|대구|인천|광주|대전|울산|세종|경기도|강원도|충청북도|충청남도|전라북도|전라남도|경상북도|경상남도|제주)/);
+        return m ? m[1] : "";
+      };
+      /** "06[4년 이상 ~ 5년 미만]" → 4.5 (중간값) */
+      const parseRangeYears = (raw: string): number => {
+        if (!raw) return 0;
+        const m = raw.match(/(\d+)년\s*이상.*?(\d+)년\s*미만/);
+        if (m) return (Number(m[1]) + Number(m[2])) / 2;
+        const m2 = raw.match(/(\d+)년\s*이상/);
+        if (m2) return Number(m2[1]);
+        if (/1년\s*미만/.test(raw)) return 0.5;
+        return 0;
+      };
+      /** "20180108" → "2018-01-08" */
+      const formatYmd = (raw: string): string => {
+        const s = raw.replace(/\D/g, "").slice(0, 8);
+        if (s.length !== 8) return raw;
+        return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+      };
 
-      // 1) 엑셀 행 → IncomingCustomer 후보 목록
+      // ── 시트 순회 ──
       const candidates: IncomingCustomer[] = [];
+      const sheetBreakdown: Record<string, number> = {};
       let parseFailed = 0;
       const parseErrors: string[] = [];
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        const name = toStr(pick(row, "성명", "이름", "name"));
-        if (!name) { parseFailed++; parseErrors.push(`${i + 2}행: 성명 누락`); continue; }
-        const rrnFront = toStr(pick(row, "주민번호앞", "rrn_front")).replace(/\D/g, "").slice(0, 6);
-        const rrnBack = toStr(pick(row, "주민번호뒤", "rrn_back")).replace(/\D/g, "").slice(0, 7);
-        if (!rrnFront || !rrnBack) { parseFailed++; parseErrors.push(`${i + 2}행(${name}): 주민번호 누락`); continue; }
 
-        const specialRaw = toStr(pick(row, "특별공급", "special_types"));
-        const special_types = specialRaw
-          ? specialRaw.split(/[,·/]/).map((s) => s.trim()).filter(Boolean)
-          : [];
+      for (const sheetName of wb.SheetNames) {
+        const meta = SHEET_MAP[sheetName];
+        if (!meta) continue; // 안내 시트 등 건너뜀
+        const sheet = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: "" });
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          const name = toStr(row["성명"]);
+          if (!name) { parseFailed++; parseErrors.push(`[${sheetName}] ${i + 2}행 성명 누락`); continue; }
 
-        candidates.push({
-          name,
-          phone: toStr(pick(row, "연락처", "전화", "phone")),
-          rrn_front: rrnFront,
-          rrn_back: rrnBack,
-          address: toStr(pick(row, "주소", "address")),
-          no_home_years: toNum(pick(row, "무주택기간_년", "무주택년", "no_home_years")),
-          dependents_count: toNum(pick(row, "부양가족수", "dependents_count")),
-          subscription_months: toNum(pick(row, "통장개월", "subscription_months")),
-          current_region: toStr(pick(row, "지역", "current_region")),
-          income_monthly: (() => {
-            const n = toNum(pick(row, "월소득_원", "월소득", "income_monthly"));
-            return n > 0 ? n : null;
-          })(),
-          special_types,
-          supply_type: special_types[0] || "일반공급",
-        });
+          const rrnFull = toStr(row["주민번호"]).replace(/\D/g, "");
+          const rrnFront = rrnFull.slice(0, 6);
+          const rrnBack = rrnFull.slice(6, 13);
+          if (!rrnFront || rrnFront.length < 6) { parseFailed++; parseErrors.push(`[${sheetName}] ${i + 2}행(${name}) 주민번호 불량`); continue; }
+
+          const address = toStr(row["주소"]);
+          const phoneRaw = toStr(row["전화번호"]);
+          const phone = phoneRaw.replace(/\s+/g, "-");
+          const housingCode = toStr(row["주택형"]);
+          const noHomeRaw = toStr(row["무주택기간"]);
+          const subPeriodRaw = toStr(row["입주자저축가입기간"]);
+
+          const cand: IncomingCustomer & { _winnerInfo?: LocalCustomer["winner_info"] } = {
+            name,
+            phone,
+            rrn_front: rrnFront,
+            rrn_back: rrnBack || "0000000",
+            address,
+            current_region: extractRegion(address),
+            no_home_years: Math.round(parseRangeYears(noHomeRaw)),
+            dependents_count: toNum(toStr(row["부양가족수"]).match(/\d+/)?.[0]) ?? 0,
+            subscription_months: Math.round(parseRangeYears(subPeriodRaw) * 12),
+            income_monthly: null,
+            special_types: meta.canonical === "일반공급" ? [] : [meta.canonical],
+            supply_type: meta.canonical,
+            unit_type: housingCode,
+            is_standby: meta.isStandby,
+            _winnerInfo: {
+              sheet_source: sheetName,
+              building: toStr(row["동수"]),
+              unit_no: toStr(row["호수"]),
+              selection_method: toStr(row["당첨구분"]),
+              application_date: formatYmd(toStr(row["접수일자"])),
+              savings_opened: formatYmd(toStr(row["청약통장개설일"])),
+              low_floor_apply: toStr(row["저층신청여부"]).toUpperCase() === "Y",
+              bank: toStr(row["개설은행"]),
+              account_type: toStr(row["예금종목"]),
+              account: toStr(row["계좌번호"]),
+              rank: toStr(row["순위"]),
+              region_priority_kind: toStr(row["당해여부(신청기준)"]) || toStr(row["당해여부(당첨기준)"]),
+              ga_score: toNum(row["가점"]),
+              penalty: toNum(row["감점"]),
+              total_score: toNum(row["총점"]),
+              housing_type_code: housingCode,
+              ga_point_type: toStr(row["당첨구분"]),
+            } as any,
+          } as any;
+
+          candidates.push(cand);
+          sheetBreakdown[sheetName] = (sheetBreakdown[sheetName] || 0) + 1;
+        }
       }
 
-      // 2) 기존 고객과 대조 → 신규/중복/충돌 분류
+      if (candidates.length === 0) {
+        alert("청약홈 전산추첨결과 형식을 인식하지 못했습니다.\n시트 이름이 '일반공급당첨자', '신혼부부당첨자' 등 표준 포맷인지 확인해주세요.");
+        setExcelResult({ success: 0, failed: parseFailed, errors: parseErrors.slice(0, 10) });
+        return;
+      }
+
+      // 사용자 확인
+      const summary = Object.entries(sheetBreakdown)
+        .map(([s, n]) => `  · ${s}: ${n}명`)
+        .join("\n");
+      if (!confirm(`청약홈 전산추첨결과에서 ${candidates.length}명을 인식했습니다.\n\n${summary}\n\n이미 등록된 사람은 제외하고 신규만 추가합니다. 계속하시겠습니까?`)) {
+        setExcelResult({ success: 0, failed: parseFailed, errors: [] });
+        return;
+      }
+
+      // dedup
       const existing = localCustomers.listByAnnouncement(selectedAnn.id);
       const { toCreate, duplicates, conflicts: foundConflicts } = classifyIncoming(candidates, existing);
 
-      // 3) 신규 고객만 즉시 등록 (배치는 로컬 저장만 — 백엔드 지연 회피)
+      // 신규 등록
       let created = 0, createFailed = 0;
       const createErrors: string[] = [];
       for (const c of toCreate) {
+        const anyC = c as any;
         try {
           const payload = {
             site_id: selectedAnn.site_id,
@@ -372,7 +466,7 @@ function CustomersPageInner() {
             name: c.name,
             phone: c.phone || "",
             rrn_front: c.rrn_front || "",
-            rrn_back: c.rrn_back || "",
+            rrn_back: c.rrn_back || "0000000",
             address: c.address || "",
             no_home_years: c.no_home_years ?? 0,
             dependents_count: c.dependents_count ?? 0,
@@ -383,17 +477,18 @@ function CustomersPageInner() {
             supply_type: c.supply_type,
             unit_type: c.unit_type,
             unit_area: c.unit_area,
+            is_standby: anyC.is_standby === true,
+            standby_rank: anyC.standby_rank,
+            winner_info: anyC._winnerInfo,
           };
           localCustomers.create(payload);
           created++;
         } catch (err: any) {
           createFailed++;
-          const msg = err?.message || "등록 실패";
-          createErrors.push(`${c.name}: ${msg}`);
+          createErrors.push(`${c.name}: ${err?.message || "등록 실패"}`);
         }
       }
 
-      // 4) 결과 배너 + 충돌 검토 모달
       setExcelResult({
         success: created,
         failed: parseFailed + createFailed,
@@ -404,167 +499,13 @@ function CustomersPageInner() {
       if (foundConflicts.length > 0) {
         setConflicts(foundConflicts);
         setConflictDecisions({});
-      }
-      if (duplicates.length > 0 && foundConflicts.length === 0 && created === 0) {
-        alert(`모든 고객(${duplicates.length}명)이 이미 등록되어 있습니다.`);
+      } else if (duplicates.length > 0 && created === 0) {
+        alert(`모든 당첨자(${duplicates.length}명)가 이미 등록되어 있습니다.`);
       }
     } catch (err: any) {
       alert(err?.message || "엑셀 파일 파싱 실패");
     } finally {
       setExcelUploading(false);
-    }
-  };
-
-  /** PDF 업로드 → 고객 정보 자동 추출. 단일 문서 / 당첨자 명단(배치) 둘 다 처리. */
-  const handlePdfUpload = async (file: File) => {
-    if (!selectedAnn) { alert("먼저 공고를 선택해주세요"); return; }
-    setPdfUploading(true);
-    setPdfFilled([]);
-    setExcelResult(null);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/parse-customer-pdf", { method: "POST", body: fd });
-      if (!res.ok) throw new Error((await res.json()).error || "PDF 파싱 실패");
-      const d = await res.json();
-
-      // ── 배치 모드: 당첨자 명단 PDF ──
-      if (d.mode === "batch" && Array.isArray(d.customers) && d.customers.length > 0) {
-        const counts = d.counts || {};
-        const breakdown =
-          counts.spWin !== undefined
-            ? `\n특별공급 당첨 ${counts.spWin}명 + 예비 ${counts.spStd}명`
-              + `\n일반공급 당첨 ${counts.genWin}명 + 예비 ${counts.genStd}명`
-            : "";
-        const confirmMsg = `당첨자 명단 PDF에서 ${d.count}명을 인식했습니다.${breakdown}\n\n이미 등록된 사람은 제외하고 신규만 추가합니다. 계속하시겠습니까?`;
-        if (!confirm(confirmMsg)) return;
-
-        // 1) 파싱 결과 → IncomingCustomer
-        const candidates: IncomingCustomer[] = [];
-        let parseFailed = 0;
-        const parseErrors: string[] = [];
-        for (let i = 0; i < d.customers.length; i++) {
-          const c = d.customers[i];
-          if (!c.name || !c.rrnFront) {
-            parseFailed++;
-            parseErrors.push(`${i + 1}번: 필수 정보 부족`);
-            continue;
-          }
-          const specialTypes = Array.isArray(c.specialTypes) ? c.specialTypes : [];
-          const housingCode: string | undefined = c.housingType || c.unitType;
-          let unitArea = c.unitArea as string | undefined;
-          if (!unitArea && housingCode) {
-            const m = housingCode.match(/^0?(\d{2,3})(?:\.(\d{2,4}))?/);
-            if (m) {
-              const whole = parseInt(m[1], 10);
-              const frac = m[2] ? Number(`0.${m[2]}`) : 0;
-              const area = whole + frac;
-              unitArea = `${area.toFixed(2)}㎡`;
-            }
-          }
-          // supply_type 결정: 예비는 상위 공급 구분 유지
-          const supplyType =
-            c.supplyCategory === "일반공급"
-              ? "일반공급"
-              : (specialTypes[0] || "일반공급");
-          candidates.push({
-            name: c.name,
-            phone: c.phone || "",
-            rrn_front: c.rrnFront,
-            rrn_back: c.rrnBack || "0000000",
-            special_types: specialTypes,
-            supply_type: supplyType,
-            unit_type: housingCode || undefined,
-            unit_area: unitArea,
-            is_standby: c.isStandby === true,
-            standby_rank: c.standbyRank,
-          });
-        }
-
-        // 2) dedup 분류
-        const existing = localCustomers.listByAnnouncement(selectedAnn.id);
-        const { toCreate, duplicates, conflicts: foundConflicts } = classifyIncoming(candidates, existing);
-
-        // 3) 신규 등록 (로컬 저장 — PDF 배치는 고객 수가 많아 네트워크 왕복 회피)
-        let created = 0, createFailed = 0;
-        const createErrors: string[] = [];
-        for (const cand of toCreate) {
-          const anyCand = cand as any;
-          const payload = {
-            site_id: selectedAnn.site_id,
-            announcement_id: selectedAnn.id,
-            name: cand.name,
-            phone: cand.phone || "",
-            rrn_front: cand.rrn_front || "",
-            rrn_back: cand.rrn_back || "0000000",
-            address: "",
-            no_home_years: 0,
-            dependents_count: 0,
-            subscription_months: 0,
-            current_region: "",
-            income_monthly: null,
-            special_types: cand.special_types || [],
-            supply_type: cand.supply_type,
-            unit_type: cand.unit_type,
-            unit_area: cand.unit_area,
-            is_standby: anyCand.is_standby === true,
-            standby_rank: anyCand.standby_rank,
-          };
-          try {
-            localCustomers.create(payload);
-            created++;
-          } catch (err: any) {
-            createFailed++;
-            const msg = err?.message || "등록 실패";
-            createErrors.push(`${cand.name}: ${msg}`);
-          }
-        }
-
-        setExcelResult({
-          success: created,
-          failed: parseFailed + createFailed,
-          errors: [...parseErrors, ...createErrors].slice(0, 10),
-        });
-        if (created > 0) loadCustomers();
-
-        if (foundConflicts.length > 0) {
-          setConflicts(foundConflicts);
-          setConflictDecisions({});
-        } else if (duplicates.length > 0 && created === 0) {
-          alert(`모든 당첨자(${duplicates.length}명)가 이미 등록되어 있습니다.`);
-        }
-        return;
-      }
-
-      // ── 단일 모드: 주민등록등본 등 ──
-      const filled: string[] = [];
-      setForm((p) => {
-        const next = { ...p };
-        if (d.name) { next.name = d.name; filled.push("성명"); }
-        if (d.rrnFront) { next.rrn_front = d.rrnFront; filled.push("주민번호 앞자리"); }
-        if (d.rrnBack) { next.rrn_back = d.rrnBack; filled.push("주민번호 뒷자리"); }
-        if (d.phone) { next.phone = d.phone; filled.push("연락처"); }
-        if (d.address) { next.address = d.address; filled.push("주소"); }
-        if (typeof d.dependentsCount === "number") { next.dependents_count = d.dependentsCount; filled.push("부양가족 수"); }
-        if (typeof d.noHomeYears === "number") { next.no_home_years = d.noHomeYears; filled.push("무주택 기간"); }
-        if (typeof d.subscriptionMonths === "number") { next.subscription_months = d.subscriptionMonths; filled.push("통장 가입 개월"); }
-        if (d.currentRegion) { next.current_region = d.currentRegion; filled.push("거주 지역"); }
-        if (Array.isArray(d.specialTypes) && d.specialTypes.length > 0) {
-          next.special_types = d.specialTypes;
-          filled.push(`특별공급(${d.specialTypes.length}종)`);
-        }
-        return next;
-      });
-      setPdfFilled(filled);
-      setShowForm(true);
-      if (filled.length === 0) {
-        alert("PDF에서 인식된 정보가 없습니다. 수동으로 입력해주세요.");
-      }
-    } catch (err: any) {
-      alert(err?.message || "PDF 파싱 실패");
-    } finally {
-      setPdfUploading(false);
-      if (pdfInputRef.current) pdfInputRef.current.value = "";
     }
   };
 
@@ -608,7 +549,7 @@ function CustomersPageInner() {
               당첨자 등록
             </h1>
             <p className="text-sm text-ink-3 mt-1 max-w-2xl">
-              전산추첨결과·당첨자현황 PDF·예비입주자 명단 등 당첨자 원본 파일을 올려 이 공고에 등록합니다.
+              청약홈 <strong>전산추첨결과 엑셀</strong>을 업로드하면 당첨자·예비입주자가 공급유형별로 자동 등록됩니다.
             </p>
           </div>
           {/* 다음 단계 */}
@@ -638,42 +579,17 @@ function CustomersPageInner() {
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
-          {/* PDF 업로드 */}
-          <button
-            onClick={() => pdfInputRef.current?.click()}
-            disabled={pdfUploading || excelUploading || !selectedAnn}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            title="당첨자현황 PDF 업로드"
-          >
-            {pdfUploading ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
-            ) : (
-              <><FileText className="w-4 h-4" /> PDF 업로드</>
-            )}
-          </button>
-          <input
-            ref={pdfInputRef}
-            type="file"
-            accept=".pdf,application/pdf"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handlePdfUpload(f);
-              if (pdfInputRef.current) pdfInputRef.current.value = "";
-            }}
-          />
-
-          {/* 엑셀 업로드 */}
+          {/* 청약홈 전산추첨결과 엑셀 업로드 */}
           <button
             onClick={() => excelInputRef.current?.click()}
-            disabled={pdfUploading || excelUploading || !selectedAnn}
+            disabled={excelUploading || !selectedAnn}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            title="전산추첨결과 엑셀 업로드"
+            title="청약홈 전산추첨결과 엑셀 업로드 — 모든 당첨자/예비입주자 시트 자동 인식"
           >
             {excelUploading ? (
               <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
             ) : (
-              <><FileSpreadsheet className="w-4 h-4" /> 엑셀 업로드</>
+              <><FileSpreadsheet className="w-4 h-4" /> 전산추첨결과 업로드</>
             )}
           </button>
           <input
@@ -1178,19 +1094,6 @@ function CustomersPageInner() {
               </button>
             </div>
             <form onSubmit={handleCreate} className="p-6 space-y-4">
-              {pdfFilled.length > 0 && (
-                <div className="flex items-start gap-2 p-3 bg-accent-soft border border-blue-200 rounded-lg text-sm text-accent">
-                  <FileText className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <strong>PDF에서 자동 추출된 항목:</strong>{" "}
-                    {pdfFilled.join(" · ")}
-                    <div className="text-xs text-accent mt-0.5">내용을 확인한 뒤 필요 시 수정해주세요.</div>
-                  </div>
-                  <button type="button" onClick={() => setPdfFilled([])} className="text-blue-400 hover:text-accent">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-ink-2 mb-1">성명 *</label>
