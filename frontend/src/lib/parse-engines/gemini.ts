@@ -288,6 +288,7 @@ async function runGemini(
   userPrompt: string,
   tag: string,
   model?: string,
+  budget?: { perAttemptTimeoutMs?: number; overallDeadlineMs?: number },
 ): Promise<any> {
   const response = await withRetry(
     async (signal) => {
@@ -319,7 +320,7 @@ async function runGemini(
         }),
       ]);
     },
-    { tag },
+    { tag, ...budget },
   );
 
   const text = (response as any).text ?? "";
@@ -384,6 +385,7 @@ export async function extractExtendedWithGemini(
     const base64 = Buffer.from(pdfBuffer).toString("base64");
     // Extended는 품질 유지 위해 full Flash 사용 — 예치금표·서류상세 같은 복잡한 표 때문에
     const extModel = process.env.GEMINI_EXT_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    // Extended는 /extended 전용 60s 함수라 regex/텍스트추출 부담 없음 → 55s까지 여유
     const data = await runGemini(
       ai,
       base64,
@@ -392,6 +394,7 @@ export async function extractExtendedWithGemini(
       "위 PDF는 한국 청약 모집공고입니다. 주택관리번호·사업주체·지역우선공급·예치금·가점추첨비율·서류상세 등 확장 필드를 JSON으로 추출하세요.",
       "gemini-ext",
       extModel,
+      { perAttemptTimeoutMs: 55_000, overallDeadlineMs: 56_000 },
     );
     return { engine: "gemini", data, durationMs: Date.now() - started };
   } catch (err: any) {
