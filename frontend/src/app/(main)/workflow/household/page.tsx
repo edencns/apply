@@ -14,7 +14,7 @@ import { toIdentity, sameIdentity } from "@/lib/identity";
 import { ingestForStage, type WorkflowIngestResult } from "@/lib/workflow-ingest";
 import IndividualVerifyModal from "@/components/workflow/IndividualVerifyModal";
 import {
-  Users, AlertTriangle, FileText, FileSpreadsheet,
+  Users, AlertTriangle, FileSpreadsheet,
   Loader2, CheckCircle2, UserCheck,
 } from "lucide-react";
 
@@ -80,7 +80,6 @@ export default function HouseholdStepPage() {
     { ok: number; fail: number; missing: number } | null
   >(null);
   const [indivOpen, setIndivOpen] = useState(false);
-  const pdfRef = useRef<HTMLInputElement>(null);
   const xlsxRef = useRef<HTMLInputElement>(null);
 
   const evaluate = (c: LocalCustomer) => evaluateHousehold(c);
@@ -98,7 +97,6 @@ export default function HouseholdStepPage() {
       alert(err?.message || "파일 처리 실패");
     } finally {
       setUploading(false);
-      if (pdfRef.current) pdfRef.current.value = "";
       if (xlsxRef.current) xlsxRef.current.value = "";
     }
   };
@@ -169,37 +167,15 @@ export default function HouseholdStepPage() {
           {/* 툴바 */}
           <div className="flex items-center gap-1.5 flex-wrap mb-4">
             <button
-              onClick={() => pdfRef.current?.click()}
-              disabled={uploading}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              title="PDF 파일 업로드"
-            >
-              {uploading ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
-              ) : (
-                <><FileText className="w-4 h-4" /> PDF 업로드</>
-              )}
-            </button>
-            <input
-              ref={pdfRef}
-              type="file"
-              accept=".pdf"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }}
-            />
-            <button
               onClick={() => xlsxRef.current?.click()}
               disabled={uploading}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              title="엑셀 파일 업로드"
+              title="당첨자세대원내역 엑셀 업로드"
             >
               {uploading ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
               ) : (
-                <><FileSpreadsheet className="w-4 h-4" /> 엑셀 업로드</>
+                <><FileSpreadsheet className="w-4 h-4" /> 세대원내역 업로드</>
               )}
             </button>
             <input
