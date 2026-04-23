@@ -663,7 +663,10 @@ export default function AnnouncementsPage() {
       filled.unshift(`⏱️ ${Math.round((json.durationMs || 0) / 100) / 10}s 소요`);
       setExtendedFilled(filled);
     } catch (err: any) {
-      alert(err.message || "고급 분석 실패");
+      // alert 대신 배지로 표시 (스트레스 감소, 재시도 가능)
+      const msg = String(err?.message || err || "고급 분석 실패");
+      const short = msg.includes("timeout") ? "타임아웃 (PDF가 너무 큼 — 재시도하면 성공할 수 있음)" : msg.slice(0, 80);
+      setExtendedFilled([`⚠️ 실패: ${short}`]);
     } finally {
       setExtendedParsing(false);
     }
@@ -880,11 +883,29 @@ export default function AnnouncementsPage() {
                       </div>
                     )}
                     {extendedFilled.length > 0 && !extendedParsing && (
-                      <div className="mt-1.5 flex flex-wrap gap-1">
-                        <span className="inline-block text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-semibold">고급</span>
-                        {extendedFilled.map((f) => (
-                          <span key={f} className="inline-block text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded">{f}</span>
-                        ))}
+                      <div className="mt-1.5 flex flex-wrap gap-1 items-center">
+                        {(() => {
+                          const isFailure = extendedFilled[0]?.startsWith("⚠️");
+                          return (
+                            <>
+                              <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded font-semibold ${isFailure ? "bg-amber-100 text-amber-800" : "bg-indigo-100 text-indigo-700"}`}>
+                                고급
+                              </span>
+                              {extendedFilled.map((f) => (
+                                <span key={f} className={`inline-block text-[10px] px-1.5 py-0.5 rounded ${isFailure ? "bg-amber-50 text-amber-800" : "bg-indigo-50 text-indigo-700"}`}>{f}</span>
+                              ))}
+                              {isFailure && lastPdfFile && (
+                                <button
+                                  type="button"
+                                  onClick={handleExtendedAnalyze}
+                                  className="inline-flex items-center gap-1 text-[10px] text-amber-900 hover:text-amber-700 underline"
+                                >
+                                  재시도
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     )}
                     <input

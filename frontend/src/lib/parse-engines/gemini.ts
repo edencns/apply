@@ -383,9 +383,10 @@ export async function extractExtendedWithGemini(
   try {
     const ai = new GoogleGenAI({ apiKey });
     const base64 = Buffer.from(pdfBuffer).toString("base64");
-    // Extended는 품질 유지 위해 full Flash 사용 — 예치금표·서류상세 같은 복잡한 표 때문에
-    const extModel = process.env.GEMINI_EXT_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash";
-    // Extended는 /extended 전용 60s 함수라 regex/텍스트추출 부담 없음 → 55s까지 여유
+    // Extended도 Hobby 60s 안에 확실히 넣기 위해 Flash Lite 기본.
+    // 서류상세 40~50건+ 대형 공고에서 full Flash는 55s 초과.
+    // 품질 중요시 env GEMINI_EXT_MODEL=gemini-2.5-flash 설정 (Vercel Pro 권장).
+    const extModel = process.env.GEMINI_EXT_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
     const data = await runGemini(
       ai,
       base64,
