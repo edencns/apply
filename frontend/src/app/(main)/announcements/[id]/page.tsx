@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, createContext, useContext } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { localAnnouncements, isNetworkError } from "@/lib/local-store";
@@ -12,6 +12,7 @@ import {
   Baby, UserCheck,
 } from "lucide-react";
 import { getRequiredDocuments, COMMON_DOCUMENTS, SUPPLY_TYPE_DOCUMENTS } from "@/lib/document-checklist";
+import PdfEvidenceModal from "@/components/PdfEvidenceModal";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -66,13 +67,30 @@ function Section({ title, children, defaultOpen = true, right }: { title: string
   );
 }
 
-/** 근거 페이지 뱃지 — Phase A evidencePage 표시 */
+/** 공고 PDF URL context — EvidencePage가 모달 오픈할 때 사용 */
+const EvidenceContext = createContext<{ pdfUrl?: string; onOpen: (page: number) => void }>({ onOpen: () => {} });
+
+/** 근거 페이지 뱃지 — Phase A evidencePage 표시. PDF URL 있으면 클릭해서 원본 열기 */
 function EvidencePage({ page }: { page?: number | null }) {
+  const ctx = useContext(EvidenceContext);
   if (page === null || page === undefined) return null;
+  const clickable = !!ctx.pdfUrl;
+  if (!clickable) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">
+        📄 공고문 p.{page}
+      </span>
+    );
+  }
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); ctx.onOpen(page); }}
+      className="inline-flex items-center gap-1 text-[10px] bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors px-1.5 py-0.5 rounded font-medium cursor-pointer"
+      title="공고문 이 페이지 열기"
+    >
       📄 공고문 p.{page}
-    </span>
+    </button>
   );
 }
 
@@ -1352,6 +1370,7 @@ export default function AnnouncementDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
+  const [pdfModal, setPdfModal] = useState<{ open: boolean; page?: number }>({ open: false });
 
   useEffect(() => {
     // 샘플 공고
@@ -1441,8 +1460,10 @@ export default function AnnouncementDetailPage() {
   const regionFull: string = rules.region_full || (rules.region_priority || []).join(" ") || "";
   const regulation: string = rules.regulation || (rules.no_home_required ? "비규제" : "");
   const totalUnits = rules.total_units || (rules.exclusive_areas || []).reduce((s: number, a: any) => s + (a.totalUnits || 0), 0);
+  const pdfUrl: string | undefined = rules.original_file_url;
 
   return (
+    <EvidenceContext.Provider value={{ pdfUrl, onOpen: (page) => setPdfModal({ open: true, page }) }}>
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
       <a href="/announcements" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-3">
@@ -1468,16 +1489,18 @@ export default function AnnouncementDetailPage() {
         </div>
       </div>
 
-      {/* Phase B 상단 고정 메타 바 — 공고 기준일 + 식별 번호 */}
-      {(rules.announcement_base_date || rules.housing_management_no || rules.approval_no || rules.announcement_date) && (
+      {/* Phase B 상단 고정 메타 바 — 공고 기준일 + 식별 번호 + 원본 PDF 뷰어 */}
+      {(rules.announcement_base_date || rules.housing_management_no || rules.approval_no || rules.announcement_date || pdfUrl) && (
         <div className="mb-5 border border-blue-200 bg-blue-50 rounded-xl p-3">
           <div className="flex items-center gap-4 flex-wrap text-xs">
-            <div className="flex items-center gap-1.5">
-              <CalendarDays className="w-3.5 h-3.5 text-blue-600" />
-              <span className="text-blue-700 font-semibold">공고 기준일</span>
-              <span className="text-blue-900 font-bold">{fmtDate(rules.announcement_base_date || rules.announcement_date)}</span>
-              <span className="text-blue-500">— 자격 판정은 이 날짜 기준</span>
-            </div>
+            {(rules.announcement_base_date || rules.announcement_date) && (
+              <div className="flex items-center gap-1.5">
+                <CalendarDays className="w-3.5 h-3.5 text-blue-600" />
+                <span className="text-blue-700 font-semibold">공고 기준일</span>
+                <span className="text-blue-900 font-bold">{fmtDate(rules.announcement_base_date || rules.announcement_date)}</span>
+                <span className="text-blue-500">— 자격 판정은 이 날짜 기준</span>
+              </div>
+            )}
             {rules.housing_management_no && (
               <div className="flex items-center gap-1.5">
                 <span className="text-gray-500">주택관리번호</span>
@@ -1489,6 +1512,16 @@ export default function AnnouncementDetailPage() {
                 <span className="text-gray-500">승인번호</span>
                 <span className="font-mono font-semibold text-gray-800">{rules.approval_no}</span>
               </div>
+            )}
+            {pdfUrl && (
+              <button
+                type="button"
+                onClick={() => setPdfModal({ open: true })}
+                className="ml-auto inline-flex items-center gap-1 bg-white border border-blue-300 hover:bg-blue-100 transition-colors text-blue-700 font-semibold px-2.5 py-1 rounded-md text-[11px]"
+                title="공고 원본 PDF 열기"
+              >
+                📄 공고 원본
+              </button>
             )}
           </div>
         </div>
@@ -1532,6 +1565,18 @@ export default function AnnouncementDetailPage() {
         {tab === "income" && <IncomeTab rules={rules} />}
         {tab === "documents" && <DocumentsTab rules={rules} />}
       </div>
+
+      {/* 공고 PDF 근거 페이지 뷰어 모달 */}
+      {pdfUrl && (
+        <PdfEvidenceModal
+          open={pdfModal.open}
+          url={pdfUrl}
+          page={pdfModal.page}
+          title={ann.title}
+          onClose={() => setPdfModal({ open: false })}
+        />
+      )}
     </div>
+    </EvidenceContext.Provider>
   );
 }
