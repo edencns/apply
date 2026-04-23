@@ -81,28 +81,22 @@ function mergeArray<T>(
   return { value: o, conf: "med" };
 }
 
+/** Core Gemini 호출이 추출하는 scalar 필드만. Extended 전용 필드는 제외.
+ *  Extended 필드를 여기 포함하면 Core 단독 호출 시 전부 unknown으로 잡혀
+ *  신뢰도 "低" 카운트가 과도하게 부풀려진다. */
 const SCALAR_FIELDS: (keyof AnnouncementParseResult)[] = [
   "title", "announcementNo", "region", "totalUnits",
-  // Phase A — 공고 메타
-  "housingManagementNo", "approvalNo", "developer", "builder",
-  "locationAddress", "announcementBaseDate",
-  "generalTotalUnits", "specialTotalUnits", "lowestFloorPriorityUnits",
   // 일정
   "announcementDate", "applicationStart", "applicationEnd",
   "specialApplyDate", "general1stDate", "general2ndDate",
   "winnerAnnounceDate", "docSubmitStart", "docSubmitEnd",
   "contractStart", "contractEnd", "moveInDate",
-  // 자격 기본
+  // 자격 기본 (Core)
   "noHomeRequired", "minSubscriptionMonths", "regulation", "landType",
-  // Phase A — 신청 대상
-  "minAge", "minorHeadAllowed", "foreignerAllowed",
-  "rank1Criteria", "rank2Criteria",
-  "householdHeadRequired", "homelessHouseholdRequired", "singleHomeOwnerRank1Allowed",
   // 상세
   "assetLimit", "carValueLimit",
-  // 제한
+  // 제한 (Core)
   "resaleRestriction", "reWinRestriction", "residenceObligation", "priceCapApplied",
-  "duplicateApplicationRule", "passbookReuseBlocked", "longTermOverseasRestriction",
 ];
 
 export function mergeByConsensus(

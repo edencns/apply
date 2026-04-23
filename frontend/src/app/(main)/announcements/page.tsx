@@ -562,12 +562,14 @@ export default function AnnouncementsPage() {
       }
       if (json.groqFallback) filled.push("↩️ Groq 폴백 사용됨");
       if (json.claudeVerified) filled.push("🔒 Claude 최종 검증 완료");
-      // 신뢰도 요약
+      // 신뢰도 요약 — 추출 대상(Core 필드만) 기준. unknown은 "해당 없음"으로 별도 표시.
       if (json.confidence && typeof json.confidence === "object") {
         const conf = json.confidence as Record<string, string>;
         const counts: Record<string, number> = { high: 0, med: 0, low: 0, unknown: 0 };
         for (const v of Object.values(conf)) counts[v] = (counts[v] || 0) + 1;
-        filled.push(`📊 신뢰도: 高 ${counts.high} · 中 ${counts.med} · 低 ${counts.low + counts.unknown}`);
+        const extracted = counts.high + counts.med + counts.low;
+        const total = extracted + counts.unknown;
+        filled.push(`📊 추출 ${extracted}/${total} — 高 ${counts.high} · 中 ${counts.med} · 低 ${counts.low}${counts.unknown > 0 ? ` · 해당없음 ${counts.unknown}` : ""}`);
       }
       setPdfFilled(filled);
     } catch (err: any) {
