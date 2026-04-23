@@ -21,6 +21,7 @@ import AnnouncementPicker from "@/components/AnnouncementPicker";
 import { getSampleAsLocalAnnouncements } from "@/lib/sample-adapter";
 import { classifyIncoming, formatValue, IncomingCustomer, CustomerConflict } from "@/lib/customer-dedup";
 import { formatHousingCode, housingAreaString, formatPhone } from "@/lib/housing-code";
+import { detectCrossIssues, crossCheckSummary, type CrossCheckIssue } from "@/lib/customer-cross-check";
 
 interface Customer {
   id: number;
@@ -76,6 +77,7 @@ function CustomersPageInner() {
   const excelInputRef = useRef<HTMLInputElement | null>(null);
   const [excelUploading, setExcelUploading] = useState(false);
   const [excelResult, setExcelResult] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
+  const [crossIssues, setCrossIssues] = useState<CrossCheckIssue[] | null>(null);
 
   // 선택 삭제 모드
   const [selectMode, setSelectMode] = useState(false);
@@ -544,6 +546,17 @@ function CustomersPageInner() {
     }
   };
 
+  /** 교차검증 실행 — 같은 공고 당첨자·예비 전체 대상 */
+  const runCrossCheck = () => {
+    if (!selectedAnn) { alert("먼저 공고를 선택해주세요"); return; }
+    const all = localCustomers.listByAnnouncement(selectedAnn.id);
+    const issues = detectCrossIssues(all as any, selectedAnn as any);
+    setCrossIssues(issues);
+    if (issues.length === 0) {
+      alert("교차검증 완료 — 이상 징후 없음. 중복 주소·공유 계좌·세대원 교차 모두 정상.");
+    }
+  };
+
   const winnersCount = customers.filter((c) => !c.is_standby).length;
   const standbysCount = customers.filter((c) => c.is_standby).length;
 
@@ -641,6 +654,16 @@ function CustomersPageInner() {
 
           <div className="w-px h-6 bg-border mx-1" />
 
+          {/* Phase #3 교차검증 */}
+          <button
+            onClick={runCrossCheck}
+            disabled={!selectedAnn || customers.length === 0}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title="동일 주소·계좌 공유·세대원 교차·공고 요건 위반 자동 감지"
+          >
+            🔍 교차검증
+          </button>
+
           {/* 고객 등록 — 수동 폼 */}
           <button
             onClick={() => { setFormError(null); setShowForm(true); }}
@@ -709,6 +732,49 @@ function CustomersPageInner() {
           </div>
         </div>
       )}
+
+      {/* Phase #3 교차검증 결과 배너 */}
+      {crossIssues && crossIssues.length > 0 && (() => {
+        const sum = crossCheckSummary(crossIssues);
+        const borderCls = sum.error > 0 ? "border-red-200 bg-red-50"
+          : sum.warning > 0 ? "border-amber-200 bg-amber-50"
+          : "border-blue-200 bg-blue-50";
+        return (
+          <div className={`card mb-4 border ${borderCls}`}>
+            <div className="flex items-start justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold">🔍 교차검증 결과 · {sum.total}건</span>
+                {sum.error > 0 && <span className="text-xs text-red-700 font-semibold">🔴 오류 {sum.error}</span>}
+                {sum.warning > 0 && <span className="text-xs text-amber-700 font-semibold">🟡 경고 {sum.warning}</span>}
+                {sum.info > 0 && <span className="text-xs text-blue-700">🔵 정보 {sum.info}</span>}
+              </div>
+              <button onClick={() => setCrossIssues(null)} className="text-ink-4 hover:text-ink-2 text-sm">×</button>
+            </div>
+            <div className="space-y-1.5 max-h-72 overflow-y-auto">
+              {crossIssues.map((issue, i) => {
+                const dot = issue.severity === "error" ? "🔴" : issue.severity === "warning" ? "🟡" : "🔵";
+                const target = customers.find((c) => c.id === issue.customerId);
+                return (
+                  <div key={i} className="flex items-start gap-2 text-xs border-l-2 border-current pl-2 py-0.5">
+                    <span className="flex-shrink-0">{dot}</span>
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900">
+                        {target?.name || `#${issue.customerId}`} — {issue.message}
+                      </div>
+                      {issue.recommendation && (
+                        <div className="text-gray-600 mt-0.5">→ {issue.recommendation}</div>
+                      )}
+                    </div>
+                    {target && (
+                      <a href={`/customers/${target.id}`} className="text-accent hover:underline flex-shrink-0">상세</a>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 엑셀 업로드 결과 */}
       {excelResult && (
