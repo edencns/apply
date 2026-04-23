@@ -91,3 +91,34 @@ export function housingAreaNumber(raw: string | null | undefined): number {
   const p = parseHousingCode(raw);
   return p.area ?? Number.POSITIVE_INFINITY;
 }
+
+/**
+ * 한국 전화번호 정규화 — "010 12345678" / "01012345678" / "010-1234-5678" 등 → "010-1234-5678"
+ *
+ * 규칙:
+ *  - 02(서울): 9자리 "02-XXX-XXXX" · 10자리 "02-XXXX-XXXX"
+ *  - 휴대전화 010/011/016/017/018/019: 11자리 "010-XXXX-XXXX", 10자리 "010-XXX-XXXX"
+ *  - 기타 지역 0XX: 10자리 "0XX-XXX-XXXX", 11자리 "0XX-XXXX-XXXX"
+ *  - 인식 실패 시 원본 그대로
+ */
+export function formatPhone(raw: string | null | undefined): string {
+  const src = String(raw ?? "").trim();
+  if (!src) return "";
+  const digits = src.replace(/\D/g, "");
+  if (!digits) return src;
+
+  // 02 서울
+  if (digits.startsWith("02")) {
+    if (digits.length === 9) return `02-${digits.slice(2, 5)}-${digits.slice(5)}`;
+    if (digits.length === 10) return `02-${digits.slice(2, 6)}-${digits.slice(6)}`;
+    return src;
+  }
+  // 010/011/016/017/018/019 휴대전화 + 0XX 지역번호 공통
+  if (digits.length === 11) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  return src;
+}

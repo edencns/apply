@@ -20,7 +20,7 @@ import {
 import AnnouncementPicker from "@/components/AnnouncementPicker";
 import { getSampleAsLocalAnnouncements } from "@/lib/sample-adapter";
 import { classifyIncoming, formatValue, IncomingCustomer, CustomerConflict } from "@/lib/customer-dedup";
-import { formatHousingCode, housingAreaString } from "@/lib/housing-code";
+import { formatHousingCode, housingAreaString, formatPhone } from "@/lib/housing-code";
 
 interface Customer {
   id: number;
@@ -405,8 +405,7 @@ function CustomersPageInner() {
 
           // 주소 / 전화 (특별공급은 '연락주소', '연락전화번호')
           const address = pick(row, "주소", "연락주소");
-          const phoneRaw = pick(row, "전화번호", "연락전화번호");
-          const phone = phoneRaw.replace(/\s+/g, "-");
+          const phone = formatPhone(pick(row, "전화번호", "연락전화번호"));
           const housingCode = pick(row, "주택형");
           const noHomeRaw = pick(row, "무주택기간", "무주택기간 배점");
           const subPeriodRaw = pick(row, "입주자저축가입기간", "청약통장 가입기간 배점", "입주자저축 가입기간 배점");
@@ -909,7 +908,7 @@ function CustomersPageInner() {
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-ink-2">{c.phone || "-"}</td>
+                  <td className="px-4 py-3 text-ink-2">{c.phone ? formatPhone(c.phone) : "-"}</td>
                   <td className="px-4 py-3 text-ink-2">
                     {c.unit_type ? (
                       <>
