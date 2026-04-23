@@ -33,6 +33,7 @@ import StageSidebar from "@/components/verification/StageSidebar";
 import { parseStageParam, STAGE_NUMBER, StageKey } from "@/components/verification/stage-utils";
 import { HouseholdPanel, PropertyPanel, SavingsPanel } from "@/components/verification/panels";
 import ManualReviewBlock from "@/components/ManualReviewBlock";
+import PastWinningsBlock from "@/components/PastWinningsBlock";
 import {
   ArrowLeft, User, Phone, Calculator, Loader2, AlertCircle, Trash2, Edit2, Save, X,
   Home, Baby, CreditCard, Landmark, BookOpen, ChevronRight, FileText, CheckCircle2,
@@ -601,6 +602,9 @@ function DocumentsStage({
           공고 원문·법령·서류 원본을 직접 확인 후 내립니다. 정책 개정은 수시 발생.
         </span>
       </div>
+
+      {/* Phase #8 — 청약홈 과거 당첨 이력 */}
+      <PastWinningsBlock customer={customer} onUpdate={(c) => c && onUpdate(c)} />
 
       {/* Phase #6 — 담당자 승인 체크리스트 + 서명 */}
       <ManualReviewBlock customer={customer} onUpdate={(c) => c && onUpdate(c)} />

@@ -230,6 +230,28 @@ export interface LocalCustomer {
   verification_score?: number;
   verification_checked_at?: string;
   verification_reasons?: string[];  // 부적합 사유 (없으면 적합)
+  /** Phase #8 — 청약홈 당첨사실 확인서 기반 과거 당첨 이력 */
+  past_winnings?: Array<{
+    /** 당첨 공고명 */
+    announcementTitle: string;
+    /** 당첨일 (YYYY-MM-DD) */
+    winDate: string;
+    /** 공급유형 — 특공 평생 1회 제한 판정에 사용 */
+    supplyType?: string;
+    /** canonicalType 분류 */
+    canonicalType?: string;
+    /** 주택형 */
+    unitType?: string;
+    /** 재당첨 제한 기간 (년 단위, 숫자 또는 텍스트) */
+    restrictionYears?: number;
+    /** 재당첨 제한 해제일 */
+    restrictionEndDate?: string;
+    /** 참고 메모 */
+    note?: string;
+  }>;
+  /** 당첨사실 확인서 업로드·검토 시각 */
+  past_winnings_checked_at?: string;
+
   /** Phase #6 — 담당자 수동 승인 기록 */
   manual_review?: {
     /** 판정 확정 여부 — 담당자 서명 후 true */

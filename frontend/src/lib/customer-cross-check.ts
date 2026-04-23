@@ -226,7 +226,51 @@ export function detectCrossIssues(
     }
   }
 
-  // ─── 5. 시간 경계 — 부부 중복 당첨 시 선접수 판별 ───
+  // ─── 5. 특공 평생 1회 제한 + 재당첨 제한 감지 (past_winnings 기반) ───
+  const SPECIAL_CANONICAL = new Set([
+    "신혼부부", "생애최초", "다자녀가구", "노부모부양", "기관추천", "신생아", "이전기관",
+  ]);
+  for (const c of active) {
+    const pasts = c.past_winnings || [];
+    if (pasts.length === 0) continue;
+
+    // (a) 특공 평생 1회 — 현재 특공 신청인데 과거에도 특공 당첨 이력이 있으면
+    if (c.supply_type && SPECIAL_CANONICAL.has(c.supply_type)) {
+      const pastSpecials = pasts.filter((p) =>
+        p.canonicalType && SPECIAL_CANONICAL.has(p.canonicalType),
+      );
+      if (pastSpecials.length > 0) {
+        const past = pastSpecials[0];
+        issues.push({
+          severity: "error",
+          category: "supply-requirement",
+          customerId: c.id,
+          message: `${c.name} (${c.supply_type}) — 과거 특공 당첨 이력 존재: ${past.announcementTitle} (${past.winDate}, ${past.canonicalType})`,
+          recommendation: "특별공급은 1세대 평생 1회 제한. 당첨 취소 대상 가능성 높음.",
+        });
+      }
+    }
+
+    // (b) 재당첨 제한 기간 내 신청
+    if (baseDate) {
+      for (const p of pasts) {
+        if (!p.restrictionEndDate) continue;
+        const endDate = new Date(p.restrictionEndDate);
+        if (Number.isNaN(endDate.getTime())) continue;
+        if (endDate > baseDate) {
+          issues.push({
+            severity: "error",
+            category: "supply-requirement",
+            customerId: c.id,
+            message: `${c.name} — 재당첨 제한 기간(${p.restrictionEndDate}까지) 중 당첨. 과거 당첨: ${p.announcementTitle} (${p.winDate})`,
+            recommendation: "재당첨 제한 규정 위반 — 당첨 취소 검토 필요.",
+          });
+        }
+      }
+    }
+  }
+
+  // ─── 6. 시간 경계 — 부부 중복 당첨 시 선접수 판별 ───
   // (주소 기반 그룹에 대해 winner_info.application_date 비교)
   for (const [, group] of Array.from(byAddr.entries())) {
     if (group.length < 2) continue;

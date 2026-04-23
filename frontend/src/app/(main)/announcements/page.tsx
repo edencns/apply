@@ -824,8 +824,50 @@ export default function AnnouncementsPage() {
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-border-soft sticky top-0 bg-white rounded-t-2xl">
-              <h2 className="text-lg font-semibold">모집공고 등록</h2>
+            <div className="p-6 border-b border-border-soft sticky top-0 bg-white rounded-t-2xl z-10">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold">모집공고 등록</h2>
+                {/* Phase #7 — 이전 공고 템플릿 복사 */}
+                {announcements.length > 0 && (
+                  <select
+                    onChange={(e) => {
+                      const srcId = e.target.value;
+                      if (!srcId) return;
+                      const src = announcements.find((a) => String(a.id) === srcId);
+                      if (!src) return;
+                      if (!confirm(`"${src.title}"의 자격 기준·규제·서류 설정을 이 공고에 복사합니다.\n제목·일정·주민등록번호는 복사되지 않습니다. 계속할까요?`)) {
+                        e.target.value = "";
+                        return;
+                      }
+                      const srcRules = (src as any).eligibility_rules || {};
+                      // 개인 데이터성 필드 제외 + 일정 제외 (새 공고 고유)
+                      const EXCLUDE_KEYS = new Set([
+                        "announcement_date", "application_start", "application_end",
+                        "special_apply_date", "general_1st_date", "general_2nd_date",
+                        "winner_announce_date", "doc_submit_start", "doc_submit_end",
+                        "contract_start", "contract_end", "move_in_date",
+                        "announcement_base_date", "original_file_url", "original_file_name",
+                        "supply_types_detail", "exclusive_areas", "income_table",
+                      ]);
+                      const copied: Record<string, any> = {};
+                      for (const [k, v] of Object.entries(srcRules)) {
+                        if (!EXCLUDE_KEYS.has(k)) copied[k] = v;
+                      }
+                      setForm((p) => ({ ...p, rules: { ...p.rules, ...copied } }));
+                      alert(`"${src.title}"에서 ${Object.keys(copied).length}개 필드를 복사했습니다. 필요 시 수정하세요.`);
+                      e.target.value = "";
+                    }}
+                    defaultValue=""
+                    className="text-xs border border-border rounded-md px-2 py-1.5 bg-white text-ink-2"
+                    title="이전 공고의 자격·규제·서류 설정을 이 공고에 복사"
+                  >
+                    <option value="">📋 이전 공고 복사...</option>
+                    {announcements.slice(0, 20).map((a) => (
+                      <option key={a.id} value={String(a.id)}>{a.title.slice(0, 40)}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
             <form onSubmit={handleCreate} className="p-6 space-y-5">
               {/* PDF 자동 입력 */}
