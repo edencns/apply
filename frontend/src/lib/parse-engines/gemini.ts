@@ -244,10 +244,10 @@ async function withRetry<T>(
   opts: { maxAttempts?: number; perAttemptTimeoutMs?: number; overallDeadlineMs?: number; tag?: string } = {},
 ): Promise<T> {
   const maxAttempts = opts.maxAttempts ?? 1;
-  // Vercel Hobby 60s 한계 안에서 PDF 텍스트 추출 + regex + 응답 직렬화 + Groq 폴백
-  // 여유를 남겨두려면 Gemini는 최대 45s까지만.
+  // Core는 Flash Lite(~15-25s), Extended는 Flash(~25-40s). 둘 다 별도 60s 함수이므로
+  // per-attempt 45s면 여유. Vercel 60s 함수 한계 안에서 응답 직렬화까지 안전하게 수용.
   const perAttemptTimeoutMs = opts.perAttemptTimeoutMs ?? 45_000;
-  const overallDeadlineMs = opts.overallDeadlineMs ?? 48_000;
+  const overallDeadlineMs = opts.overallDeadlineMs ?? 50_000;
   const tag = opts.tag ?? "gemini";
   const deadline = Date.now() + overallDeadlineMs;
   let lastErr: any;
@@ -287,11 +287,12 @@ async function runGemini(
   systemPrompt: string,
   userPrompt: string,
   tag: string,
+  model?: string,
 ): Promise<any> {
   const response = await withRetry(
     async (signal) => {
       const callP = ai.models.generateContent({
-        model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+        model: model || process.env.GEMINI_MODEL || "gemini-2.5-flash",
         contents: [
           {
             role: "user",
@@ -346,6 +347,9 @@ export async function extractWithGemini(
   try {
     const ai = new GoogleGenAI({ apiKey });
     const base64 = Buffer.from(pdfBuffer).toString("base64");
+    // Core는 Flash Lite로 — 속도 우선(Hobby 60s 안에 확실히 수용)
+    // 환경변수 GEMINI_CORE_MODEL로 오버라이드 가능
+    const coreModel = process.env.GEMINI_CORE_MODEL || "gemini-2.5-flash-lite";
     const data = await runGemini(
       ai,
       base64,
@@ -353,6 +357,7 @@ export async function extractWithGemini(
       SYSTEM_PROMPT_CORE,
       "위 PDF는 한국 청약 모집공고입니다. 핵심 필드(제목/일정/공급유형/면적/규제)를 JSON으로 추출하세요.",
       "gemini-core",
+      coreModel,
     );
     return { engine: "gemini", data, durationMs: Date.now() - started };
   } catch (err: any) {
@@ -377,6 +382,8 @@ export async function extractExtendedWithGemini(
   try {
     const ai = new GoogleGenAI({ apiKey });
     const base64 = Buffer.from(pdfBuffer).toString("base64");
+    // Extended는 품질 유지 위해 full Flash 사용 — 예치금표·서류상세 같은 복잡한 표 때문에
+    const extModel = process.env.GEMINI_EXT_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash";
     const data = await runGemini(
       ai,
       base64,
@@ -384,6 +391,7 @@ export async function extractExtendedWithGemini(
       SYSTEM_PROMPT_EXTENDED,
       "위 PDF는 한국 청약 모집공고입니다. 주택관리번호·사업주체·지역우선공급·예치금·가점추첨비율·서류상세 등 확장 필드를 JSON으로 추출하세요.",
       "gemini-ext",
+      extModel,
     );
     return { engine: "gemini", data, durationMs: Date.now() - started };
   } catch (err: any) {
