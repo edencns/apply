@@ -794,16 +794,128 @@ function SpecialTab({ rules, onJumpToDocs }: { rules: Record<string, any>; onJum
 
 function IncomeTab({ rules }: { rules: Record<string, any> }) {
   const incomeTable: Record<string, any> = rules.income_table || {};
-  // 실제 숫자 데이터가 하나라도 있는 경우만 표시
   const hasIncome = Object.keys(incomeTable).length > 0 && Object.values(incomeTable).some(
     (row: any) => row && typeof row === "object" && Object.values(row).some((v: any) => v !== null && v !== undefined && v !== 0)
   );
   const nwIncome = rules._newlywedIncome;
   const flIncome = rules._firstLifeIncome;
 
+  // 표 열(percent) 목록 정규화
+  const householdSizes = Object.keys(incomeTable);
+  const firstRow = householdSizes[0] ? incomeTable[householdSizes[0]] : null;
+  const percentColumns: string[] = firstRow ? Object.keys(firstRow) : [];
+
+  // ── 상태: 사용자 선택 ──
+  const [selectedSize, setSelectedSize] = useState<string>(householdSizes[0] || "");
+  const [supplyMode, setSupplyMode] = useState<"우선" | "일반">("우선");
+  const [earnerMode, setEarnerMode] = useState<"외벌이" | "맞벌이">("외벌이");
+
+  // ── supplyTypes로 특공별 소득 요약 카드 생성 ──
+  const supplyTypes: any[] = rules.supply_types_detail || [];
+  const incomeCards = supplyTypes
+    .filter((st) => st.incomeLimitPercent || st.incomeLimitDualPercent || st.assetLimit)
+    .map((st) => ({
+      type: st.type,
+      canonicalType: st.canonicalType,
+      single: st.incomeLimitPercent,
+      dual: st.incomeLimitDualPercent,
+      asset: st.assetLimit,
+      car: st.carValueLimit,
+      homeless: st.requireHomeless,
+    }));
+
+  // ── 선택 조건에 맞는 % 컬럼 추천 ──
+  // 외벌이 우선 = 100%, 맞벌이 우선 = 120%, 외벌이 일반 = 140%, 맞벌이 일반 = 160% (신혼부부 기준, 대부분)
+  const suggestedPercent =
+    supplyMode === "우선" && earnerMode === "외벌이" ? "100%" :
+    supplyMode === "우선" && earnerMode === "맞벌이" ? "120%" :
+    supplyMode === "일반" && earnerMode === "외벌이" ? "140%" : "160%";
+
+  // 실제 표에 존재하는 가장 가까운 컬럼
+  const highlightCol = percentColumns.find((c) => c.includes(suggestedPercent.replace("%", ""))) || percentColumns[0] || "";
+
+  // 계산 결과: 선택된 가구원수 + 컬럼의 금액
+  const selectedValue: number | null = (() => {
+    if (!selectedSize || !highlightCol) return null;
+    const row = incomeTable[selectedSize];
+    if (!row) return null;
+    const v = row[highlightCol];
+    return typeof v === "number" ? v : null;
+  })();
+
   return (
     <div className="space-y-4">
-      {/* LLM 파싱된 소득기준표 */}
+      {/* Phase E — 조건 선택 패널 */}
+      {hasIncome && (
+        <div className="border border-blue-200 bg-blue-50/50 rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Banknote className="w-4 h-4 text-blue-600" />
+            <h3 className="text-sm font-semibold text-blue-900">소득기준 계산기</h3>
+          </div>
+          <p className="text-xs text-blue-700">
+            해당 세대의 조건을 선택하면 적용되는 소득 상한이 자동 계산됩니다.
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-blue-700 mb-1">가구원수</label>
+              <select
+                value={selectedSize}
+                onChange={(e) => setSelectedSize(e.target.value)}
+                className="w-full border border-blue-200 rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                {householdSizes.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-blue-700 mb-1">공급 구분</label>
+              <div className="flex rounded-md border border-blue-200 bg-white overflow-hidden text-sm">
+                {(["우선", "일반"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setSupplyMode(m)}
+                    className={`flex-1 py-1.5 transition-colors ${supplyMode === m ? "bg-blue-600 text-white font-semibold" : "text-blue-700 hover:bg-blue-50"}`}
+                  >
+                    {m}공급
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-blue-700 mb-1">소득 형태</label>
+              <div className="flex rounded-md border border-blue-200 bg-white overflow-hidden text-sm">
+                {(["외벌이", "맞벌이"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setEarnerMode(m)}
+                    className={`flex-1 py-1.5 transition-colors ${earnerMode === m ? "bg-blue-600 text-white font-semibold" : "text-blue-700 hover:bg-blue-50"}`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 계산 결과 */}
+          <div className="mt-2 bg-white border border-blue-200 rounded-lg p-3">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="text-xs text-gray-500">이 조건의 소득 상한</span>
+              <span className="text-xl font-bold text-blue-700">
+                {selectedValue !== null ? `${selectedValue.toLocaleString("ko-KR")}원` : "—"}
+              </span>
+              <span className="text-[11px] text-gray-500">
+                ({highlightCol} · {selectedSize} · {earnerMode} · {supplyMode}공급)
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LLM 파싱된 소득기준표 + 하이라이트 */}
       {hasIncome && (
         <Section title="소득기준표 (도시근로자 월평균소득)">
           <div className="overflow-x-auto">
@@ -811,28 +923,70 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="text-left py-2 text-xs font-medium text-gray-500">가구원수</th>
-                  {(() => {
-                    const firstKey = Object.keys(incomeTable)[0];
-                    const percents = firstKey ? Object.keys(incomeTable[firstKey]) : [];
-                    return percents.map((p) => (
-                      <th key={p} className="text-right py-2 text-xs font-medium text-gray-500">{p}</th>
-                    ));
-                  })()}
+                  {percentColumns.map((p) => (
+                    <th key={p} className={`text-right py-2 text-xs font-medium ${p === highlightCol ? "text-blue-700 bg-blue-50" : "text-gray-500"}`}>{p}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {Object.entries(incomeTable).map(([size, vals]: [string, any]) => (
-                  <tr key={size} className="border-b border-gray-50">
-                    <td className="py-2.5 font-medium">{size}</td>
-                    {Object.values(vals).map((v: any, i: number) => (
-                      <td key={i} className="py-2.5 text-right text-gray-700">
-                        {v === null || v === undefined ? "—" : typeof v === "number" ? `${v.toLocaleString("ko-KR")}원` : String(v)}
-                      </td>
-                    ))}
+                  <tr key={size} className={`border-b border-gray-50 ${size === selectedSize ? "bg-blue-50/30" : ""}`}>
+                    <td className={`py-2.5 font-medium ${size === selectedSize ? "text-blue-700" : ""}`}>{size}</td>
+                    {percentColumns.map((p, i) => {
+                      const v = vals?.[p];
+                      const isHit = size === selectedSize && p === highlightCol;
+                      return (
+                        <td key={i} className={`py-2.5 text-right ${isHit ? "bg-blue-600 text-white font-bold rounded-md" : p === highlightCol ? "bg-blue-50 text-blue-900" : "text-gray-700"}`}>
+                          {v === null || v === undefined ? "—" : typeof v === "number" ? `${v.toLocaleString("ko-KR")}원` : String(v)}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        </Section>
+      )}
+
+      {/* Phase E — 특공별 소득/자산 요약 카드 자동 생성 */}
+      {incomeCards.length > 0 && (
+        <Section title="특별공급 유형별 소득·자산 기준">
+          <div className="grid grid-cols-1 gap-2">
+            {incomeCards.map((c, i) => (
+              <div key={i} className="border border-gray-200 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="font-semibold text-sm">{c.type}</span>
+                  {c.homeless && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-medium">무주택 필수</span>}
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  {c.single != null && (
+                    <div className="bg-blue-50 rounded-md px-2.5 py-1.5">
+                      <span className="text-[10px] text-blue-700">외벌이 소득</span>
+                      <p className="font-bold text-blue-900">{c.single}% 이하</p>
+                    </div>
+                  )}
+                  {c.dual != null && (
+                    <div className="bg-blue-50 rounded-md px-2.5 py-1.5">
+                      <span className="text-[10px] text-blue-700">맞벌이 소득</span>
+                      <p className="font-bold text-blue-900">{c.dual}% 이하</p>
+                    </div>
+                  )}
+                  {c.asset && (
+                    <div className="bg-amber-50 rounded-md px-2.5 py-1.5 col-span-2">
+                      <span className="text-[10px] text-amber-700">자산한도</span>
+                      <p className="font-semibold text-amber-900">{c.asset}</p>
+                    </div>
+                  )}
+                  {c.car && (
+                    <div className="bg-amber-50 rounded-md px-2.5 py-1.5 col-span-2">
+                      <span className="text-[10px] text-amber-700">자동차가액</span>
+                      <p className="font-semibold text-amber-900">{c.car}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </Section>
       )}
@@ -844,14 +998,14 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
             <thead><tr className="border-b border-gray-200"><th className="text-left py-2 text-xs font-medium text-gray-500">구분</th><th className="text-right py-2 text-xs font-medium text-gray-500">소득 상한</th></tr></thead>
             <tbody>
               {[
-                { label: "우선공급 (외벌이 100%)", sub: "신생아우선 + 우선공급", value: nwIncome.single100, color: "text-blue-700" },
-                { label: "우선공급 (맞벌이 120%)", sub: "부부 모두 소득 시", value: nwIncome.dual120, color: "text-blue-700" },
-                { label: "일반공급 (외벌이 140%)", sub: "소득초과~140%", value: nwIncome.single140, color: "" },
-                { label: "일반공급 (맞벌이 160%)", sub: "부부 모두 소득 시", value: nwIncome.dual160, color: "" },
+                { label: "우선공급 (외벌이 100%)", sub: "신생아우선 + 우선공급", value: nwIncome.single100, match: supplyMode === "우선" && earnerMode === "외벌이" },
+                { label: "우선공급 (맞벌이 120%)", sub: "부부 모두 소득 시", value: nwIncome.dual120, match: supplyMode === "우선" && earnerMode === "맞벌이" },
+                { label: "일반공급 (외벌이 140%)", sub: "소득초과~140%", value: nwIncome.single140, match: supplyMode === "일반" && earnerMode === "외벌이" },
+                { label: "일반공급 (맞벌이 160%)", sub: "부부 모두 소득 시", value: nwIncome.dual160, match: supplyMode === "일반" && earnerMode === "맞벌이" },
               ].map((r) => (
-                <tr key={r.label} className="border-b border-gray-50">
-                  <td className="py-2.5"><p className="font-medium">{r.label}</p><p className="text-xs text-gray-400">{r.sub}</p></td>
-                  <td className={`py-2.5 text-right font-medium ${r.color}`}>{r.value}</td>
+                <tr key={r.label} className={`border-b border-gray-50 ${r.match ? "bg-blue-600/10" : ""}`}>
+                  <td className="py-2.5"><p className={`font-medium ${r.match ? "text-blue-700" : ""}`}>{r.label}</p><p className="text-xs text-gray-400">{r.sub}</p></td>
+                  <td className={`py-2.5 text-right font-medium ${r.match ? "text-blue-700 font-bold" : ""}`}>{r.value}</td>
                 </tr>
               ))}
             </tbody>
@@ -866,12 +1020,12 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
             <thead><tr className="border-b border-gray-200"><th className="text-left py-2 text-xs font-medium text-gray-500">구분</th><th className="text-right py-2 text-xs font-medium text-gray-500">소득 상한</th></tr></thead>
             <tbody>
               {[
-                { label: "우선공급 (130% 이하)", sub: "신생아우선 + 우선공급", value: flIncome.pct130 },
-                { label: "일반공급 (160% 이하)", sub: "신생아일반 + 일반공급", value: flIncome.pct160 },
+                { label: "우선공급 (130% 이하)", sub: "신생아우선 + 우선공급", value: flIncome.pct130, match: supplyMode === "우선" },
+                { label: "일반공급 (160% 이하)", sub: "신생아일반 + 일반공급", value: flIncome.pct160, match: supplyMode === "일반" },
               ].map((r) => (
-                <tr key={r.label} className="border-b border-gray-50">
-                  <td className="py-2.5"><p className="font-medium">{r.label}</p><p className="text-xs text-gray-400">{r.sub}</p></td>
-                  <td className="py-2.5 text-right font-medium text-emerald-700">{r.value}</td>
+                <tr key={r.label} className={`border-b border-gray-50 ${r.match ? "bg-emerald-600/10" : ""}`}>
+                  <td className="py-2.5"><p className={`font-medium ${r.match ? "text-emerald-700" : ""}`}>{r.label}</p><p className="text-xs text-gray-400">{r.sub}</p></td>
+                  <td className={`py-2.5 text-right font-medium ${r.match ? "text-emerald-700 font-bold" : "text-emerald-700"}`}>{r.value}</td>
                 </tr>
               ))}
             </tbody>
@@ -879,7 +1033,7 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
         </Section>
       )}
 
-      {!hasIncome && !nwIncome && !flIncome && (
+      {!hasIncome && !nwIncome && !flIncome && incomeCards.length === 0 && (
         <div className="text-center py-10 text-gray-400">
           <Banknote className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p>소득기준표가 아직 추출되지 않았습니다</p>
@@ -887,18 +1041,34 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
         </div>
       )}
 
+      {/* 자산기준 — 적용 공급유형 배지 포함 */}
       {(rules.asset_limit || rules.car_value_limit) && (
-        <Section title="자산기준">
-          <div className="bg-amber-50 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
+        <Section title="자산 기준 (전체 적용)">
+          <div className="bg-amber-50 rounded-lg p-4 space-y-2">
+            <div className="flex items-center gap-2">
               <Scale className="w-4 h-4 text-amber-600" />
               <p className="font-semibold text-amber-900">{rules.asset_limit || "—"}</p>
             </div>
             {rules.car_value_limit && (
               <div className="text-sm text-amber-800">
-                자동차가액: {rules.car_value_limit}
+                자동차가액: <span className="font-semibold">{rules.car_value_limit}</span>
               </div>
             )}
+            {/* 적용 공급유형 배지 — supplyTypes 중 assetLimit 있는 것들 */}
+            {(() => {
+              const applied = supplyTypes.filter((s) => s.assetLimit).map((s) => s.type);
+              if (applied.length === 0) return null;
+              return (
+                <div className="pt-2 border-t border-amber-200">
+                  <p className="text-[11px] text-amber-700 mb-1">적용 공급유형:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {applied.map((t) => (
+                      <span key={t} className="inline-block text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-medium">{t}</span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </Section>
       )}
