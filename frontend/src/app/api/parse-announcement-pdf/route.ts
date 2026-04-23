@@ -26,7 +26,7 @@ import { mergeByConsensus, applyClaudePatch } from '@/lib/parse-engines/merge';
 import type { ParseEngineResult } from '@/lib/announcement-schema';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60; // Vercel Hobby 최대. Gemini thinking 비활성화로 ~30s 내 완료 기대.
+export const maxDuration = 300; // Vercel Pro 기본. 복잡한 공고도 여유 있게 수용.
 
 /* ─────────────────────────────────────────────
    Types

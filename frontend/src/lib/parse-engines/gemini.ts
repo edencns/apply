@@ -235,19 +235,17 @@ function isRetryableError(err: any): boolean {
   return false;
 }
 
-/** Vercel Hobby 60s 제약.
- *  Core는 supplyTypes/exclusiveAreas 배열 때문에 생성량이 많아 ~50s까지 걸림.
- *  Extended는 더 짧음(~28s).
- *  한 호출 당 52s까지 허용, 한 번 시도 후 실패 시 즉시 폴백으로. */
+/** Vercel Pro 300s 환경.
+ *  - Core: Flash + thinking ~40~80s 예상. 예산 120s per-attempt.
+ *  - Extended: Flash + thinking ~60~120s 예상. 예산 180s per-attempt.
+ *  - 503 등 재시도 가능 오류는 2회까지 재시도. */
 async function withRetry<T>(
   fn: (signal: AbortSignal) => Promise<T>,
   opts: { maxAttempts?: number; perAttemptTimeoutMs?: number; overallDeadlineMs?: number; tag?: string } = {},
 ): Promise<T> {
-  const maxAttempts = opts.maxAttempts ?? 1;
-  // Core는 Flash Lite(~15-25s), Extended는 Flash(~25-40s). 둘 다 별도 60s 함수이므로
-  // per-attempt 45s면 여유. Vercel 60s 함수 한계 안에서 응답 직렬화까지 안전하게 수용.
-  const perAttemptTimeoutMs = opts.perAttemptTimeoutMs ?? 45_000;
-  const overallDeadlineMs = opts.overallDeadlineMs ?? 50_000;
+  const maxAttempts = opts.maxAttempts ?? 2;
+  const perAttemptTimeoutMs = opts.perAttemptTimeoutMs ?? 120_000;
+  const overallDeadlineMs = opts.overallDeadlineMs ?? 260_000;
   const tag = opts.tag ?? "gemini";
   const deadline = Date.now() + overallDeadlineMs;
   let lastErr: any;
@@ -263,7 +261,8 @@ async function withRetry<T>(
     } catch (err: any) {
       lastErr = err;
       if (attempt === maxAttempts - 1 || !isRetryableError(err)) throw err;
-      const waitMs = 500 + Math.floor(Math.random() * 300);
+      // Pro: 지수 백오프 1s → 2s (jitter 포함)
+      const waitMs = 1000 * Math.pow(2, attempt) + Math.floor(Math.random() * 500);
       const remainAfterWait = deadline - Date.now() - waitMs;
       if (remainAfterWait <= 2000) throw err;
       console.warn(
@@ -308,8 +307,8 @@ async function runGemini(
           temperature: 0,
           responseMimeType: "application/json",
           responseSchema: schema,
-          // 내부 reasoning 비활성화 — Hobby 60s 안에 들어가기 위해 필수
-          thinkingConfig: { thinkingBudget: 0 },
+          // Pro 환경: thinking 기본값 사용 (내부 reasoning 활성) → 복잡 표 품질 ↑
+          // 비활성화 원하면 thinkingConfig: { thinkingBudget: 0 }
         },
       });
       return await Promise.race([
@@ -348,9 +347,8 @@ export async function extractWithGemini(
   try {
     const ai = new GoogleGenAI({ apiKey });
     const base64 = Buffer.from(pdfBuffer).toString("base64");
-    // Core는 Flash Lite로 — 속도 우선(Hobby 60s 안에 확실히 수용)
-    // 환경변수 GEMINI_CORE_MODEL로 오버라이드 가능
-    const coreModel = process.env.GEMINI_CORE_MODEL || "gemini-2.5-flash-lite";
+    // Pro 환경: Core도 Flash로 복구 (품질 우선). Flash Lite는 표 파싱 품질 저하 심각.
+    const coreModel = process.env.GEMINI_CORE_MODEL || "gemini-2.5-flash";
     const data = await runGemini(
       ai,
       base64,
@@ -383,9 +381,7 @@ export async function extractExtendedWithGemini(
   try {
     const ai = new GoogleGenAI({ apiKey });
     const base64 = Buffer.from(pdfBuffer).toString("base64");
-    // Extended는 full Flash 기본 — Flash Lite는 복잡한 표(예치금·서류상세) 품질이
-    // 너무 떨어져 추출 필드가 1/5 수준. 가끔 55s 초과해도 재시도 버튼으로 대응.
-    // Vercel Pro 전환 시 maxDuration 300s로 완전 해결.
+    // Pro 환경: Flash + thinking 유지 (품질 최대). Pro 300s 여유로 180s 할당.
     const extModel = process.env.GEMINI_EXT_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash";
     const data = await runGemini(
       ai,
@@ -395,7 +391,7 @@ export async function extractExtendedWithGemini(
       "위 PDF는 한국 청약 모집공고입니다. 주택관리번호·사업주체·지역우선공급·예치금·가점추첨비율·서류상세 등 확장 필드를 JSON으로 추출하세요.",
       "gemini-ext",
       extModel,
-      { perAttemptTimeoutMs: 55_000, overallDeadlineMs: 56_000 },
+      { perAttemptTimeoutMs: 180_000, overallDeadlineMs: 280_000 },
     );
     return { engine: "gemini", data, durationMs: Date.now() - started };
   } catch (err: any) {
