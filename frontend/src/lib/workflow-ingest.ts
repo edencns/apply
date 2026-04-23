@@ -8,7 +8,7 @@
  * 반환: 적용 결과 요약 + 에러 목록
  */
 
-import { ingestFiles, type WinnerProfile } from "./winner-ingest";
+import { ingestFiles, type WinnerProfile, type PropertyOwnershipRecord } from "./winner-ingest";
 import { localCustomers, type LocalAnnouncement, type LocalCustomer } from "./local-store";
 import { toIdentity, sameIdentity } from "./identity";
 
@@ -115,25 +115,57 @@ export async function ingestForStage(
       }
     }
   } else if (stage === "property") {
-    // 공고 전원에게 'checked' 마킹
+    // 공고 전원에게 'checked' 마킹 — 파일에 없으면 무주택 확정
     const checkedAt = new Date().toISOString();
     for (const c of customers) {
       if (c.superseded) continue;
       try { localCustomers.update(c.id, { property_checked_at: checkedAt }); } catch {}
     }
-    // 각 프로필의 properties 저장
+
+    // 세대원 주민번호 → 당첨자 id 역인덱스 (이전 2단계에서 저장된 데이터 활용)
+    const memberToCustomer = new Map<string, number>();
+    for (const c of customers) {
+      if (c.superseded) continue;
+      for (const m of c.household_members || []) {
+        const rrn = String(m.rrn || "").replace(/\D/g, "");
+        if (rrn.length >= 6) memberToCustomer.set(rrn, c.id);
+      }
+    }
+
+    // property 레코드를 (a) 본인 주민번호 (b) 세대원 주민번호 양쪽으로 매칭 후 당첨자별 집계
+    const byCustomer = new Map<number, PropertyOwnershipRecord[]>();
     for (const p of consolidated.profiles) {
       if (!p.properties || p.properties.length === 0) continue;
       totalRecords += p.properties.length;
-      const target = findCustomerByRrn(customers, p.rrn || "", p.name);
+      // (a) 본인 매칭
+      let target = findCustomerByRrn(customers, p.rrn || "", p.name);
+      // (b) 세대원 매칭 — 이전 단계 저장된 household_members 활용
+      if (!target && p.rrn) {
+        const cid = memberToCustomer.get(p.rrn);
+        if (cid) target = customers.find((c) => c.id === cid) || undefined;
+      }
       if (!target) {
-        unmatched++;
-        errors.push(`${p.name || "(이름 없음)"}: 당첨자와 매칭 실패`);
+        unmatched += p.properties.length;
+        errors.push(`${p.name || "(이름 없음)"}: 본인·세대원 모두 매칭 실패 (${p.properties.length}건)`);
         continue;
       }
+      const arr = byCustomer.get(target.id) || [];
+      arr.push(...p.properties);
+      byCustomer.set(target.id, arr);
+    }
+
+    // 당첨자별로 properties 저장 (중복 제거 — 같은 주소 + 취득일)
+    for (const [id, props] of Array.from(byCustomer.entries())) {
       try {
-        localCustomers.update(target.id, {
-          properties: p.properties.map((x) => ({
+        const seen = new Set<string>();
+        const uniq = (props || []).filter((x) => {
+          const k = `${x.ownerRrn}|${x.address}|${x.acquiredDate || ""}`;
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+        localCustomers.update(id, {
+          properties: uniq.map((x) => ({
             ownerRrn: x.ownerRrn,
             ownerName: x.ownerName,
             address: x.address,
@@ -145,7 +177,8 @@ export async function ingestForStage(
         });
         attached++;
       } catch (e: any) {
-        errors.push(`${target.name}: 저장 실패 (${e?.message || ""})`);
+        const c = customers.find((x) => x.id === id);
+        errors.push(`${c?.name || id}: 저장 실패 (${e?.message || ""})`);
       }
     }
   } else if (stage === "savings") {
