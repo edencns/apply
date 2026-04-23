@@ -40,6 +40,9 @@ const GEMINI_SCHEMA_CORE: any = {
     regulation: { type: Type.STRING, nullable: true },
     landType: { type: Type.STRING, nullable: true },
 
+    // Core supplyTypes — 출력량 최소화 위해 UI에 안 쓰이는 필드 제거.
+    // 제거: priorityTier, maxAgeParent, requiredDocuments(상단 requiredDocuments와 중복),
+    //       evidenceQuote(Core는 규모가 커서 per-item 인용 생략)
     supplyTypes: {
       type: Type.ARRAY,
       items: {
@@ -47,7 +50,6 @@ const GEMINI_SCHEMA_CORE: any = {
         properties: {
           type: { type: Type.STRING },
           canonicalType: { type: Type.STRING, nullable: true },
-          priorityTier: { type: Type.STRING, nullable: true },
           units: { type: Type.INTEGER, nullable: true },
           requireHomeless: { type: Type.BOOLEAN, nullable: true },
           minSubscriptionMonths: { type: Type.INTEGER, nullable: true },
@@ -55,12 +57,9 @@ const GEMINI_SCHEMA_CORE: any = {
           incomeLimitDualPercent: { type: Type.NUMBER, nullable: true },
           maxMarriageYears: { type: Type.NUMBER, nullable: true },
           minChildren: { type: Type.INTEGER, nullable: true },
-          maxAgeParent: { type: Type.INTEGER, nullable: true },
           assetLimit: { type: Type.STRING, nullable: true },
           carValueLimit: { type: Type.STRING, nullable: true },
           conditions: { type: Type.ARRAY, items: { type: Type.STRING } },
-          requiredDocuments: { type: Type.ARRAY, items: { type: Type.STRING } },
-          evidenceQuote: { type: Type.STRING, nullable: true },
         },
       },
     },
@@ -76,7 +75,6 @@ const GEMINI_SCHEMA_CORE: any = {
           generalUnits: { type: Type.INTEGER, nullable: true },
           specialUnits: { type: Type.INTEGER, nullable: true },
           price: { type: Type.STRING, nullable: true },
-          evidenceQuote: { type: Type.STRING, nullable: true },
         },
       },
     },
@@ -99,8 +97,7 @@ const SYSTEM_PROMPT_CORE = `당신은 한국 청약 모집공고를 읽는 전�
 4. 통합 \`applicationStart\`가 여러 개면 특별공급 접수일 우선.
 5. \`regulation\`은 투기과열/청약과열/조정대상/비규제/알수없음 중 하나.
 6. 금액은 원 단위 문자열(쉼표 허용).
-7. 각 supplyTypes/exclusiveAreas에 evidenceQuote(근거 1~2줄) 필수.
-8. 공급 세대수 합계가 안 맞으면 가장 신뢰할 수 있는 표의 값.
+7. 공급 세대수 합계가 안 맞으면 가장 신뢰할 수 있는 표의 값.
 
 출력은 스키마에 맞는 JSON 하나만.`;
 
@@ -252,8 +249,8 @@ async function withRetry<T>(
   opts: { maxAttempts?: number; perAttemptTimeoutMs?: number; overallDeadlineMs?: number; tag?: string } = {},
 ): Promise<T> {
   const maxAttempts = opts.maxAttempts ?? 1;
-  const perAttemptTimeoutMs = opts.perAttemptTimeoutMs ?? 52_000;
-  const overallDeadlineMs = opts.overallDeadlineMs ?? 55_000;
+  const perAttemptTimeoutMs = opts.perAttemptTimeoutMs ?? 57_000;
+  const overallDeadlineMs = opts.overallDeadlineMs ?? 58_000;
   const tag = opts.tag ?? "gemini";
   const deadline = Date.now() + overallDeadlineMs;
   let lastErr: any;
