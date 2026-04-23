@@ -244,8 +244,10 @@ async function withRetry<T>(
   opts: { maxAttempts?: number; perAttemptTimeoutMs?: number; overallDeadlineMs?: number; tag?: string } = {},
 ): Promise<T> {
   const maxAttempts = opts.maxAttempts ?? 1;
-  const perAttemptTimeoutMs = opts.perAttemptTimeoutMs ?? 57_000;
-  const overallDeadlineMs = opts.overallDeadlineMs ?? 58_000;
+  // Vercel Hobby 60s 한계 안에서 PDF 텍스트 추출 + regex + 응답 직렬화 + Groq 폴백
+  // 여유를 남겨두려면 Gemini는 최대 45s까지만.
+  const perAttemptTimeoutMs = opts.perAttemptTimeoutMs ?? 45_000;
+  const overallDeadlineMs = opts.overallDeadlineMs ?? 48_000;
   const tag = opts.tag ?? "gemini";
   const deadline = Date.now() + overallDeadlineMs;
   let lastErr: any;
