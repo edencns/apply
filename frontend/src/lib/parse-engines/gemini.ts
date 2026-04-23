@@ -243,15 +243,17 @@ function isRetryableError(err: any): boolean {
   return false;
 }
 
-/** Vercel Hobby 60s 제약에 맞춘 예산. 한 호출당 40s.
- *  두 호출을 병렬로 돌리므로 벽시계는 max(A,B). */
+/** Vercel Hobby 60s 제약.
+ *  Core는 supplyTypes/exclusiveAreas 배열 때문에 생성량이 많아 ~50s까지 걸림.
+ *  Extended는 더 짧음(~28s).
+ *  한 호출 당 52s까지 허용, 한 번 시도 후 실패 시 즉시 폴백으로. */
 async function withRetry<T>(
   fn: (signal: AbortSignal) => Promise<T>,
   opts: { maxAttempts?: number; perAttemptTimeoutMs?: number; overallDeadlineMs?: number; tag?: string } = {},
 ): Promise<T> {
-  const maxAttempts = opts.maxAttempts ?? 2;
-  const perAttemptTimeoutMs = opts.perAttemptTimeoutMs ?? 40_000;
-  const overallDeadlineMs = opts.overallDeadlineMs ?? 50_000;
+  const maxAttempts = opts.maxAttempts ?? 1;
+  const perAttemptTimeoutMs = opts.perAttemptTimeoutMs ?? 52_000;
+  const overallDeadlineMs = opts.overallDeadlineMs ?? 55_000;
   const tag = opts.tag ?? "gemini";
   const deadline = Date.now() + overallDeadlineMs;
   let lastErr: any;
