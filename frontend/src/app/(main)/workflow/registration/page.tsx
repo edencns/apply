@@ -216,6 +216,21 @@ function CustomersPageInner() {
     return DEFAULT_SPECIAL_TYPES;
   })();
 
+  // ─── 공고별 주택형 목록 (동적) ────────────────────────
+  const unitTypeOptions: Array<{ value: string; label: string }> = (() => {
+    const raw = selectedAnn?.eligibility_rules?.exclusive_areas;
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((a: any) => a?.area)
+      .map((a: any) => {
+        const area = String(a.area);
+        const sqm = a.squareMeters != null ? `${a.squareMeters}㎡` : "";
+        const units = a.totalUnits != null ? `총 ${a.totalUnits}세대` : "";
+        const extra = [sqm, units].filter(Boolean).join(" · ");
+        return { value: area, label: extra ? `${area} (${extra})` : area };
+      });
+  })();
+
   // ─── 고객 등록 ────────────────────────────────────────
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -300,15 +315,6 @@ function CustomersPageInner() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const toggleSpecial = (t: string) => {
-    setForm((p) => ({
-      ...p,
-      special_types: p.special_types.includes(t)
-        ? p.special_types.filter((x) => x !== t)
-        : [...p.special_types, t],
-    }));
   };
 
   /**
@@ -1246,43 +1252,110 @@ function CustomersPageInner() {
                   placeholder="시·도 시·군·구 동·읍·면 번지 건물명 동·호"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              {/* 공급 관련 */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-ink-2 mb-1">공급유형</label>
+                  <label className="block text-xs font-medium text-ink-2 mb-1">공급유형 *</label>
                   <select
-                    value={form.special_types.length > 0 ? "__special__" : form.supply_type}
+                    value={form.supply_type === "일반공급" ? "일반공급" : "특별공급"}
                     onChange={(e) => {
                       const v = e.target.value;
-                      if (v === "__special__") return; // 특공은 아래 체크박스에서 관리
-                      setForm((p) => ({ ...p, supply_type: v, special_types: [] }));
+                      if (v === "일반공급") {
+                        setForm((p) => ({ ...p, supply_type: "일반공급", special_types: [] }));
+                      } else {
+                        // 특별공급 선택: 기본으로 첫 번째 특공 유형 세팅 (혹은 비움)
+                        const first = specialTypeOptions[0] || "";
+                        setForm((p) => ({
+                          ...p,
+                          supply_type: first || "특별공급",
+                          special_types: first ? [first] : [],
+                        }));
+                      }
                     }}
-                    disabled={form.special_types.length > 0}
-                    className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none"
+                    className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                   >
                     <option value="일반공급">일반공급</option>
-                    <option value="__special__" disabled hidden>
-                      {form.special_types[0] || "특별공급"}
-                    </option>
+                    <option value="특별공급">특별공급</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-ink-2 mb-1">주택형 (면적 m² 또는 약식)</label>
-                  <input
-                    value={form.unit_type}
-                    onChange={(e) => setForm((p) => ({ ...p, unit_type: e.target.value }))}
-                    placeholder="예: 84.8636 또는 68A"
-                    className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
-                  />
+                  <label className="block text-xs font-medium text-ink-2 mb-1">
+                    주택형 {unitTypeOptions.length === 0 && <span className="text-ink-4">(공고에 등록된 주택형 없음)</span>}
+                  </label>
+                  {unitTypeOptions.length > 0 ? (
+                    <select
+                      value={form.unit_type}
+                      onChange={(e) => setForm((p) => ({ ...p, unit_type: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                    >
+                      <option value="">선택</option>
+                      {unitTypeOptions.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      value={form.unit_type}
+                      onChange={(e) => setForm((p) => ({ ...p, unit_type: e.target.value }))}
+                      placeholder="예: 84.8636 또는 68A"
+                      className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  )}
                 </div>
+              </div>
+
+              {/* 특별공급 유형 — 공급유형이 "특별공급"일 때만 표시 */}
+              {form.supply_type !== "일반공급" && (
                 <div>
-                  <label className="block text-xs font-medium text-ink-2 mb-1">현재 거주 지역</label>
-                  <input
-                    value={form.current_region}
-                    onChange={(e) => setForm((p) => ({ ...p, current_region: e.target.value }))}
-                    placeholder="예: 부산, 서울 등"
-                    className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
-                  />
+                  <label className="block text-xs font-medium text-ink-2 mb-1">
+                    특별공급 세부유형 *
+                    <span className="text-[10px] text-ink-4 font-normal ml-2">
+                      이 공고에서 모집하는 유형 중 선택
+                    </span>
+                  </label>
+                  {specialTypeOptions.length === 0 ? (
+                    <div className="text-xs text-ink-4 py-1">
+                      이 공고는 특별공급 유형이 지정되어 있지 않습니다.
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {specialTypeOptions.map((t) => {
+                        const selected = form.special_types[0] === t;
+                        return (
+                          <button
+                            type="button"
+                            key={t}
+                            onClick={() =>
+                              setForm((p) => ({
+                                ...p,
+                                supply_type: t,
+                                special_types: [t],
+                              }))
+                            }
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                              selected
+                                ? "bg-purple-600 text-white border-purple-600"
+                                : "bg-white text-ink-2 border-gray-300 hover:border-purple-400"
+                            }`}
+                          >
+                            {t}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
+              )}
+
+              {/* 현재 거주 지역 */}
+              <div>
+                <label className="block text-xs font-medium text-ink-2 mb-1">현재 거주 지역</label>
+                <input
+                  value={form.current_region}
+                  onChange={(e) => setForm((p) => ({ ...p, current_region: e.target.value }))}
+                  placeholder="예: 부산, 서울 등 (지역우선공급 판정용)"
+                  className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
@@ -1300,43 +1373,6 @@ function CustomersPageInner() {
                   <input type="number" min={0} value={form.subscription_months} onChange={(e) => setForm((p) => ({ ...p, subscription_months: Number(e.target.value) }))}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
                 </div>
-              </div>
-
-              {/* 공고별 동적 특별공급 체크박스 */}
-              <div>
-                <label className="block text-sm font-medium text-ink-2 mb-2">
-                  특별공급 유형
-                  <span className="text-xs text-ink-4 font-normal ml-2">
-                    (이 공고에서 모집하는 유형)
-                  </span>
-                </label>
-                {specialTypeOptions.length === 0 ? (
-                  <div className="text-xs text-ink-4 py-1">이 공고는 특별공급 유형이 지정되어 있지 않습니다</div>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {specialTypeOptions.map((t) => {
-                      const checked = form.special_types.includes(t);
-                      return (
-                        <label
-                          key={t}
-                          className={`px-3 py-1.5 rounded-full text-xs font-medium border cursor-pointer transition-colors ${
-                            checked
-                              ? "bg-purple-600 text-white border-purple-600"
-                              : "bg-white text-ink-2 border-gray-300 hover:border-purple-400"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleSpecial(t)}
-                            className="sr-only"
-                          />
-                          {t}
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
 
               {formError && (
