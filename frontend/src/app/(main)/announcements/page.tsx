@@ -272,15 +272,32 @@ export default function AnnouncementsPage() {
    */
   useEffect(() => {
     const rules: any = form.rules || {};
-    if (rules.announcement_base_date) return; // 이미 있으면 건드리지 않음
 
+    // datetime-local 형식(YYYY-MM-DDTHH:mm)으로 강제 정규화
+    // ISO 초 포함("YYYY-MM-DDTHH:mm:ss")이나 날짜만("YYYY-MM-DD") 오면 input이 빈 칸으로 렌더링됨
+    const toLocalDt = (raw: any): string => {
+      if (!raw || typeof raw !== "string") return "";
+      const s = raw.trim().replace(" ", "T");
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T00:00`;
+      const m = s.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/);
+      return m ? m[1] : "";
+    };
+
+    const currentBase = toLocalDt(rules.announcement_base_date);
+    const savedBase = rules.announcement_base_date;
+
+    // 현재 값이 유효한 datetime-local 포맷이면 건드리지 않음
+    if (currentBase && currentBase === savedBase) return;
+
+    // 유효한 포맷이 아니면(초 포함, 날짜만, 빈 값 등) 후보에서 정상화된 값을 뽑음
     const candidate =
-      rules.announcement_date ||
-      rules.special_apply_date ||
-      form.application_start ||
-      null;
+      toLocalDt(rules.announcement_date) ||
+      toLocalDt(rules.special_apply_date) ||
+      toLocalDt(form.application_start) ||
+      currentBase || // 기존 값이라도 정규화된 것이면 사용
+      "";
 
-    if (candidate) {
+    if (candidate && candidate !== savedBase) {
       setForm((p) => ({
         ...p,
         rules: { ...p.rules, announcement_base_date: candidate } as any,
