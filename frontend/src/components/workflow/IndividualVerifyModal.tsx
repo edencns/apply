@@ -10,6 +10,7 @@
 import { useState, useMemo, useRef } from "react";
 import type { LocalCustomer } from "@/lib/local-store";
 import { X, Upload, Loader2, Search } from "lucide-react";
+import { formatPhone } from "@/lib/housing-code";
 
 interface Props {
   open: boolean;
@@ -125,7 +126,7 @@ export default function IndividualVerifyModal({
                       </div>
                       <div className="text-xs text-gray-500 font-mono">
                         {c.rrn_front || "—"}
-                        {c.phone && <span className="ml-2">{c.phone}</span>}
+                        {c.phone && <span className="ml-2">{formatPhone(c.phone)}</span>}
                       </div>
                     </button>
                   );

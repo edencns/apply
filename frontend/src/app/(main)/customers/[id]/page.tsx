@@ -233,7 +233,7 @@ function CustomerDetailInner() {
           </div>
           <div className="flex items-center gap-3 text-sm text-ink-3 flex-wrap">
             <span>{fmtRRN(customer.rrn_front, customer.rrn_back)}</span>
-            {customer.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {customer.phone}</span>}
+            {customer.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {formatPhone(customer.phone)}</span>}
             {customer.unit_type && <span className="flex items-center gap-1"><Home className="w-3.5 h-3.5" /> {customer.unit_type}{customer.unit_area ? ` · ${customer.unit_area}` : ""}</span>}
             <span className="text-xs">등록일 {fmtDate(customer.created_at)}</span>
           </div>
@@ -411,6 +411,7 @@ function RegistrationStage({
             editable={editMode}
             placeholder="010-0000-0000"
             format={formatPhoneInput}
+            displayFormat={formatPhone}
             inputMode="tel"
             maxLength={13}
             onChange={(v) => setForm((p) => ({ ...p, phone: v }))}
@@ -710,7 +711,7 @@ function DocumentsStage({
 
 function Field({
   label, value, editable, placeholder, onChange,
-  format, inputMode, maxLength,
+  format, displayFormat, inputMode, maxLength,
 }: {
   label: string;
   value: any;
@@ -719,9 +720,14 @@ function Field({
   onChange: (v: string) => void;
   /** 입력 중 값 변환 함수 (예: 전화번호 하이픈 자동 삽입) */
   format?: (raw: string) => string;
+  /** 비편집 모드 display 포맷 (예: 저장된 raw phone → 하이픈 포함) */
+  displayFormat?: (raw: string) => string;
   inputMode?: "numeric" | "tel" | "email" | "text";
   maxLength?: number;
 }) {
+  const displayed = value
+    ? (displayFormat ? displayFormat(String(value)) : String(value))
+    : "—";
   return (
     <div>
       <label className="text-xs text-ink-3 block mb-1">{label}</label>
@@ -736,7 +742,7 @@ function Field({
           className="w-full border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
         />
       ) : (
-        <p className="font-medium text-ink text-sm">{value || "—"}</p>
+        <p className="font-medium text-ink text-sm">{displayed}</p>
       )}
     </div>
   );

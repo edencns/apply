@@ -70,6 +70,8 @@ function CustomersPageInner() {
     no_home_years: 0, dependents_count: 0, subscription_months: 0,
     current_region: "", income_monthly: "",
     special_types: [] as string[],
+    supply_type: "일반공급",
+    unit_type: "",
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -230,13 +232,18 @@ function CustomersPageInner() {
 
     setSubmitting(true);
     try {
+      // 특공 선택 시 공급유형 자동 조정 (첫 번째 특공 타입 사용)
+      const effectiveSupplyType = form.special_types.length > 0
+        ? form.special_types[0]
+        : form.supply_type || "일반공급";
+
       const payload = {
         site_id: selectedAnn.site_id,
         announcement_id: selectedAnn.id,
         name: form.name.trim(),
         rrn_front: form.rrn_front,
         rrn_back: form.rrn_back,
-        phone: form.phone,
+        phone: formatPhone(form.phone),  // 저장 시 완성형 정규화
         address: form.address,
         no_home_years: form.no_home_years,
         dependents_count: form.dependents_count,
@@ -246,6 +253,9 @@ function CustomersPageInner() {
         current_region: form.current_region,
         income_monthly: form.income_monthly ? Number(form.income_monthly) : null,
         special_types: form.special_types,
+        supply_type: effectiveSupplyType,
+        unit_type: form.unit_type || undefined,
+        unit_area: form.unit_type ? housingAreaString(form.unit_type) : undefined,
       };
 
       try {
@@ -267,6 +277,9 @@ function CustomersPageInner() {
           current_region: payload.current_region,
           income_monthly: payload.income_monthly,
           special_types: payload.special_types,
+          supply_type: payload.supply_type,
+          unit_type: payload.unit_type,
+          unit_area: payload.unit_area,
         });
       }
 
@@ -275,6 +288,7 @@ function CustomersPageInner() {
         name: "", rrn_front: "", rrn_back: "", phone: "", address: "",
         no_home_years: 0, dependents_count: 0, subscription_months: 0,
         current_region: "", income_monthly: "", special_types: [],
+        supply_type: "일반공급", unit_type: "",
       });
       loadCustomers();
     } catch (err: any) {
@@ -1229,7 +1243,46 @@ function CustomersPageInner() {
               <div>
                 <label className="block text-sm font-medium text-ink-2 mb-1">주소</label>
                 <input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
+                  placeholder="시·도 시·군·구 동·읍·면 번지 건물명 동·호"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-ink-2 mb-1">공급유형</label>
+                  <select
+                    value={form.special_types.length > 0 ? "__special__" : form.supply_type}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "__special__") return; // 특공은 아래 체크박스에서 관리
+                      setForm((p) => ({ ...p, supply_type: v, special_types: [] }));
+                    }}
+                    disabled={form.special_types.length > 0}
+                    className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none"
+                  >
+                    <option value="일반공급">일반공급</option>
+                    <option value="__special__" disabled hidden>
+                      {form.special_types[0] || "특별공급"}
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-ink-2 mb-1">주택형 (면적 m² 또는 약식)</label>
+                  <input
+                    value={form.unit_type}
+                    onChange={(e) => setForm((p) => ({ ...p, unit_type: e.target.value }))}
+                    placeholder="예: 84.8636 또는 68A"
+                    className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-ink-2 mb-1">현재 거주 지역</label>
+                  <input
+                    value={form.current_region}
+                    onChange={(e) => setForm((p) => ({ ...p, current_region: e.target.value }))}
+                    placeholder="예: 부산, 서울 등"
+                    className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
