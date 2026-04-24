@@ -5,10 +5,17 @@
  * - 샘플 ID는 충돌 방지를 위해 음수(-9000번대)로 매핑
  * - contract_end는 샘플 문자열("YYYY.MM.DD~MM.DD")에서 파싱해 ISO 포맷으로 채움
  *   → isAnnouncementDone()이 완료 여부를 제대로 판별할 수 있게 함
+ *
+ * 운영 전환: 샘플 공고는 기본 비활성. 환경변수 NEXT_PUBLIC_SHOW_SAMPLE_ANNOUNCEMENTS=1
+ * 일 때만 노출 (개발·시연용).
  */
 
 import { announcements as sampleAnnouncements } from "@/app/(main)/announcements/compare/data";
 import type { LocalAnnouncement } from "./local-store";
+
+const SAMPLES_ENABLED =
+  typeof process !== "undefined" &&
+  process.env.NEXT_PUBLIC_SHOW_SAMPLE_ANNOUNCEMENTS === "1";
 
 /** "YYYY.MM.DD~MM.DD" 또는 "YYYY.MM.DD ~ YYYY.MM.DD" 범위에서 끝 날짜 ISO 추출 */
 function extractEndDateISO(range?: string): string | null {
@@ -44,8 +51,9 @@ function singleDateISO(s?: string): string | null {
   return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
 }
 
-/** 샘플 공고 → LocalAnnouncement 어댑터 */
+/** 샘플 공고 → LocalAnnouncement 어댑터 (운영: 비활성, 빈 배열 반환) */
 export function getSampleAsLocalAnnouncements(): LocalAnnouncement[] {
+  if (!SAMPLES_ENABLED) return [];
   return sampleAnnouncements.map((s, i) => {
     const contractStart = extractStartDateISO(s.schedule.contract);
     const contractEnd = extractEndDateISO(s.schedule.contract);

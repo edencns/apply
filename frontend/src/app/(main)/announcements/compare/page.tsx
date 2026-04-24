@@ -7,9 +7,15 @@ import {
   ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, XCircle,
   ArrowLeft, Banknote, Scale, Baby, Heart, UserCheck,
 } from "lucide-react";
-import { announcements as staticAnnouncements, AptAnnouncement } from "./data";
+import { announcements as rawStaticAnnouncements, AptAnnouncement } from "./data";
 import { api } from "@/lib/api";
 import { localAnnouncements, isNetworkError, LocalAnnouncement, onLocalStoreChange } from "@/lib/local-store";
+
+// 운영 전환: 샘플 공고 기본 비활성. NEXT_PUBLIC_SHOW_SAMPLE_ANNOUNCEMENTS=1일 때만 노출
+const SAMPLES_ENABLED =
+  typeof process !== "undefined" &&
+  process.env.NEXT_PUBLIC_SHOW_SAMPLE_ANNOUNCEMENTS === "1";
+const staticAnnouncements: AptAnnouncement[] = SAMPLES_ENABLED ? rawStaticAnnouncements : [];
 
 type Tab = "overview" | "eligibility" | "special" | "documents" | "income";
 
@@ -677,7 +683,7 @@ function ComparePageInner() {
   const registeredId = searchParams?.get("id");
 
   const [registeredApts, setRegisteredApts] = useState<AptAnnouncement[]>([]);
-  const [selectedId, setSelectedId] = useState<string>(staticAnnouncements[0].id);
+  const [selectedId, setSelectedId] = useState<string>(staticAnnouncements[0]?.id || "");
   const [tab, setTab] = useState<Tab>("overview");
 
   // 마운트 시 등록된 공고를 모두 로드하여 샘플과 합침
@@ -731,9 +737,9 @@ function ComparePageInner() {
     };
   }, [registeredId]);
 
-  // 등록된 공고 + 샘플 모두 하나의 플랫 리스트
+  // 등록된 공고 + 샘플(비활성 시 빈배열) 하나의 플랫 리스트
   const allApts = [...registeredApts, ...staticAnnouncements];
-  const selected = allApts.find((a) => a.id === selectedId) || allApts[0] || staticAnnouncements[0];
+  const selected = allApts.find((a) => a.id === selectedId) || allApts[0] || null;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -786,11 +792,19 @@ function ComparePageInner() {
 
           {/* Tab Content */}
           <div className="min-h-[600px]">
-            {tab === "overview" && <OverviewTab apt={selected} />}
-            {tab === "eligibility" && <EligibilityTab apt={selected} />}
-            {tab === "special" && <SpecialTab apt={selected} />}
-            {tab === "income" && <IncomeTab apt={selected} />}
-            {tab === "documents" && <DocumentsTab apt={selected} />}
+            {!selected ? (
+              <div className="text-center py-20 text-ink-3 text-sm">
+                비교할 공고가 없습니다. <a href="/announcements" className="text-accent underline ml-1">공고 관리</a>에서 먼저 등록해주세요.
+              </div>
+            ) : (
+              <>
+                {tab === "overview" && <OverviewTab apt={selected} />}
+                {tab === "eligibility" && <EligibilityTab apt={selected} />}
+                {tab === "special" && <SpecialTab apt={selected} />}
+                {tab === "income" && <IncomeTab apt={selected} />}
+                {tab === "documents" && <DocumentsTab apt={selected} />}
+              </>
+            )}
           </div>
         </div>
       </div>
