@@ -551,6 +551,7 @@ function DocumentsStage({
         url: json.url,
         filename: file.name,
         uploadedAt: new Date().toISOString(),
+        fileId: json.id,
       };
       const updated = localCustomers.update(customer.id, {
         document_files: nextFiles,
@@ -1082,6 +1083,7 @@ function DocumentsStage({
           onClose={() => setMapperOpen(false)}
           bundleUrl={bundle.url}
           bundleFilename={bundle.filename}
+          bundleFileId={(bundle as any).fileId}
           totalPages={(bundle as any).totalPages}
           documents={documentList}
           fileMap={docFiles}

@@ -282,6 +282,7 @@ export default function DocumentsStepPage() {
               url: json.url,
               filename: file.name,
               uploadedAt: new Date().toISOString(),
+              fileId: json.id,
             },
           };
           // 체크리스트 "서류 묶음(통합)"도 자동 체크
