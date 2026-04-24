@@ -231,7 +231,26 @@ export default function DocumentsStepPage() {
 
         if (!target) {
           unmatched++;
-          errors.push(`${file.name}: ${dong}-${ho}${nameHint ? ` ${nameHint}` : ""} 당첨자 없음`);
+          const nameCandidates = nameHint
+            ? customers
+                .filter((c) => c.name?.includes(nameHint.trim()) || nameHint.trim().includes(c.name || ""))
+                .slice(0, 3)
+                .map((c) => `${c.name}(id:${c.id})`)
+                .join(", ")
+            : "";
+          const dongHoCandidates = customers
+            .filter((c) => {
+              const cd = String((c as any).unit_dong || "").trim();
+              const ch = String((c as any).unit_ho || "").trim();
+              return cd === dong || ch === ho;
+            })
+            .slice(0, 3)
+            .map((c) => `${c.name}(${(c as any).unit_dong || "?"}-${(c as any).unit_ho || "?"})`)
+            .join(", ");
+          errors.push(
+            `${file.name}: ${dong}-${ho}${nameHint ? ` "${nameHint}"` : ""} 매칭 실패. ` +
+            `이름 유사: [${nameCandidates || "없음"}] · 동호 유사: [${dongHoCandidates || "없음"}]`,
+          );
           continue;
         }
 
@@ -355,83 +374,28 @@ export default function DocumentsStepPage() {
             </div>
           </div>
 
-          {/* 업로드 툴바 — 세대원/주택/통장 어느 쪽 파일이든 자동 판별해서 반영 */}
-          <div className="flex items-center gap-1.5 flex-wrap mb-4">
-            <button
-              onClick={() => pdfRef.current?.click()}
-              disabled={uploading}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {uploading ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
-              ) : (
-                <><FileText className="w-4 h-4" /> PDF 업로드</>
-              )}
-            </button>
-            <input
-              ref={pdfRef}
-              type="file"
-              accept=".pdf"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }}
-            />
-            <button
-              onClick={() => xlsxRef.current?.click()}
-              disabled={uploading}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {uploading ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
-              ) : (
-                <><FileSpreadsheet className="w-4 h-4" /> 엑셀 업로드</>
-              )}
-            </button>
-            <input
-              ref={xlsxRef}
-              type="file"
-              accept=".xlsx,.xls,.xlsm,.csv"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }}
-            />
-            <button
-              onClick={handleFinalVerify}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-700 hover:bg-indigo-800 shadow-sm whitespace-nowrap transition-colors"
-              title="1~4단계 검증 결과 + 서류 체크리스트를 종합해 최종 적합·부적합 판정"
-            >
-              <Gavel className="w-4 h-4" /> 최종 검증
-            </button>
-            <span className="text-[11px] text-ink-3 ml-2">
-              * 세대원/주택/통장 어느 쪽이든 자동 인식하여 반영
-            </span>
-          </div>
-
-          {/* ─── 서류 스캔본 배치 처리 ─────────────────────────── */}
-          <div className="mb-4 p-3 rounded-lg border border-indigo-200 bg-indigo-50/30">
-            <div className="flex items-center gap-2 mb-2">
-              <FolderUp className="w-4 h-4 text-indigo-700" />
-              <h3 className="text-sm font-semibold text-indigo-900">서류 스캔본 배치 + 일괄 판정</h3>
+          {/* ─── 메인 작업: 서류 스캔본 배치 + 판정 ─── */}
+          <div className="mb-4 p-4 rounded-lg border-2 border-indigo-200 bg-indigo-50/40">
+            <div className="flex items-center gap-2 mb-3">
+              <FolderUp className="w-5 h-5 text-indigo-700" />
+              <h3 className="text-base font-bold text-indigo-900">서류 판정 주 작업</h3>
             </div>
-            <p className="text-[11px] text-indigo-800/90 mb-2.5">
-              당첨자별 서류 묶음 PDF를 한 번에 올리면 파일명 <code>동-호수 이름.pdf</code>(예: <code>101-1401 김성진.pdf</code>)로 자동 매칭하여
-              각 당첨자의 "서류 묶음(통합)" 슬롯에 첨부합니다. 이후 [일괄 적합]으로 서류 체크가 완료된 사람들을 한 번에 적합 처리할 수 있습니다.
+            <p className="text-xs text-indigo-800/90 mb-3">
+              <strong>① 스캔본 배치 업로드</strong>로 당첨자별 서류 PDF(파일명 <code>동-호수 이름.pdf</code>)를 한 번에 첨부 →
+              <strong> ② 개별 검토</strong> (당첨자 클릭 → 체크포인트 확인) →
+              <strong> ③ 일괄 적합 판정</strong>으로 검토 완료자 한 번에 "적합" 처리.
             </p>
             <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 onClick={() => batchRef.current?.click()}
                 disabled={batchBusy}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm disabled:opacity-40"
-                title="PDF 여러 개 선택 (파일명 '동-호수 이름' 형식)"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm disabled:opacity-40"
+                title="파일명 '동-호수 이름.pdf' 형식의 PDF 여러 개 선택 → 당첨자 자동 매칭"
               >
                 {batchBusy ? (
-                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> 업로드 중…</>
+                  <><Loader2 className="w-4 h-4 animate-spin" /> 업로드 중…</>
                 ) : (
-                  <><FolderUp className="w-3.5 h-3.5" /> 스캔본 배치 업로드</>
+                  <><FolderUp className="w-4 h-4" /> ① 스캔본 배치 업로드</>
                 )}
               </button>
               <input
@@ -445,34 +409,41 @@ export default function DocumentsStepPage() {
               <button
                 onClick={handleBulkApprove}
                 disabled={bulkBusy}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm disabled:opacity-40"
-                title="서류 묶음 첨부 완료자(또는 체크리스트 100% 체크자)를 일괄 적합 처리"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm disabled:opacity-40"
+                title="스캔본 첨부자 또는 체크리스트 완료자를 한 번에 적합 처리"
               >
                 {bulkBusy ? (
-                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> 처리 중…</>
+                  <><Loader2 className="w-4 h-4 animate-spin" /> 처리 중…</>
                 ) : (
-                  <><ShieldCheck className="w-3.5 h-3.5" /> 일괄 적합 판정</>
+                  <><ShieldCheck className="w-4 h-4" /> ③ 일괄 적합 판정</>
                 )}
+              </button>
+              <button
+                onClick={handleFinalVerify}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-700 hover:bg-indigo-800 shadow-sm"
+                title="1~4단계 + 체크리스트를 규칙 기반으로 자동 재판정 (시스템 규칙 검증)"
+              >
+                <Gavel className="w-4 h-4" /> 전체 자동 재판정
               </button>
             </div>
 
             {batchResult && (
-              <div className="mt-2 text-[11px] text-indigo-900 flex flex-wrap gap-2">
-                <span className="px-1.5 py-0.5 rounded bg-white border border-indigo-200">
+              <div className="mt-3 text-xs text-indigo-900 flex flex-wrap gap-1.5">
+                <span className="px-2 py-0.5 rounded bg-white border border-indigo-200">
                   전체 {batchResult.total}개
                 </span>
-                <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900">
+                <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900">
                   매칭 & 첨부 {batchResult.attached}건
                 </span>
                 {batchResult.unmatched > 0 && (
-                  <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-800">
+                  <span className="px-2 py-0.5 rounded bg-red-100 text-red-800">
                     매칭 실패 {batchResult.unmatched}건
                   </span>
                 )}
                 {batchResult.errors.length > 0 && (
                   <details className="w-full mt-1">
-                    <summary className="cursor-pointer text-red-700 text-[11px]">실패 목록 ▶</summary>
-                    <ul className="mt-1 pl-4 space-y-0.5 text-[10px] text-red-700 list-disc">
+                    <summary className="cursor-pointer text-red-700 text-xs">실패 목록 ▶</summary>
+                    <ul className="mt-1 pl-4 space-y-0.5 text-[11px] text-red-700 list-disc">
                       {batchResult.errors.slice(0, 10).map((e, i) => <li key={i}>{e}</li>)}
                       {batchResult.errors.length > 10 && <li>… 외 {batchResult.errors.length - 10}건</li>}
                     </ul>
@@ -481,14 +452,53 @@ export default function DocumentsStepPage() {
               </div>
             )}
             {bulkResult && (
-              <div className="mt-2 text-[11px] text-emerald-900">
-                <span className="px-1.5 py-0.5 rounded bg-emerald-100 font-medium">
+              <div className="mt-3 text-xs text-emerald-900">
+                <span className="px-2 py-0.5 rounded bg-emerald-100 font-medium">
                   ✅ {bulkResult.eligible}명 적합 처리 완료
                 </span>
-                <span className="ml-2 text-ink-3">(audit_log에 전부 기록됨)</span>
+                <span className="ml-2 text-ink-3">(감사 로그 기록됨)</span>
               </div>
             )}
           </div>
+
+          {/* ─── 보조: 세대원/주택/통장 파일 추가 업로드 (접힘) ─── */}
+          <details className="mb-4 rounded-lg border border-border bg-surface2/40">
+            <summary className="cursor-pointer px-3 py-2 text-xs text-ink-2 font-medium hover:bg-surface2 rounded-lg">
+              ⚙️ 보조 파일 업로드 (2·3·4단계 데이터 보완)
+            </summary>
+            <div className="px-3 pb-3 pt-1">
+              <p className="text-[11px] text-ink-3 mb-2">
+                2·3·4단계에서 이미 처리했어야 하는 파일인데 누락된 경우만 여기서 올리세요.
+                업로드하면 파일 종류를 자동 인식해 해당 단계에 반영됩니다.
+              </p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  onClick={() => pdfRef.current?.click()}
+                  disabled={uploading}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium text-rose-700 bg-white border border-rose-200 hover:bg-rose-50 disabled:opacity-40"
+                >
+                  {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />}
+                  PDF 업로드
+                </button>
+                <input
+                  ref={pdfRef} type="file" accept=".pdf" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+                />
+                <button
+                  onClick={() => xlsxRef.current?.click()}
+                  disabled={uploading}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium text-green-700 bg-white border border-green-200 hover:bg-green-50 disabled:opacity-40"
+                >
+                  {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileSpreadsheet className="w-3 h-3" />}
+                  엑셀 업로드
+                </button>
+                <input
+                  ref={xlsxRef} type="file" accept=".xlsx,.xls,.xlsm,.csv" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+                />
+              </div>
+            </div>
+          </details>
 
 
           {verifyResult && (
