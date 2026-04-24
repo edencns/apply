@@ -9,6 +9,7 @@ import { localCustomers, type LocalAnnouncement, type LocalCustomer } from "@/li
 import { ingestAutoStage, stageLabel, type WorkflowIngestResult } from "@/lib/workflow-ingest";
 import {
   CheckCircle2, XCircle, Clock, FileText, FileSpreadsheet, Loader2, Gavel,
+  FolderUp, ShieldCheck,
 } from "lucide-react";
 
 const step = WORKFLOW_STEPS[4]; // documents
@@ -20,6 +21,10 @@ function computeDocList(
   const supplyType = c.supply_type || c.special_types?.[0] || "일반공급";
   const parsedDocs: Record<string, string[]> = a.eligibility_rules?.required_documents || {};
   const items: Array<{ name: string; category: string; conditional: boolean }> = [];
+
+  // "서류 묶음(통합)" — 배치 업로드 시 자동으로 첨부되는 슬롯. 공통 최상단.
+  items.push({ name: "서류 묶음(통합)", category: "공통", conditional: false });
+
   const common = (parsedDocs["공통"] && parsedDocs["공통"].length >= 3) ? parsedDocs["공통"] : COMMON_DOCUMENTS;
   for (const doc of common) {
     items.push({ name: doc, category: "공통", conditional: /해당\s*시|해당자/.test(doc) });
@@ -117,6 +122,16 @@ export default function DocumentsStepPage() {
   >(null);
   const pdfRef = useRef<HTMLInputElement>(null);
   const xlsxRef = useRef<HTMLInputElement>(null);
+  const batchRef = useRef<HTMLInputElement>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [batchResult, setBatchResult] = useState<{
+    attached: number;
+    unmatched: number;
+    total: number;
+    errors: string[];
+  } | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ eligible: number } | null>(null);
 
   const evaluate = (c: LocalCustomer, a: LocalAnnouncement) => {
     const docList = computeDocList(c, a);
@@ -166,6 +181,125 @@ export default function DocumentsStepPage() {
       setUploading(false);
       if (pdfRef.current) pdfRef.current.value = "";
       if (xlsxRef.current) xlsxRef.current.value = "";
+    }
+  };
+
+  /** 서류 스캔본 배치 업로드 — 파일명 "동-호수 이름.pdf" 매칭 후 각 당첨자의 "서류 묶음" 슬롯에 저장 */
+  const handleBatchDocs = async (files: FileList | null) => {
+    if (!selected) { alert("먼저 공고를 선택해주세요"); return; }
+    if (!files || files.length === 0) return;
+    setBatchBusy(true);
+    setBatchResult(null);
+    try {
+      const customers = localCustomers.listByAnnouncement(selected.id);
+      let attached = 0, unmatched = 0;
+      const errors: string[] = [];
+      const total = files.length;
+
+      for (const file of Array.from(files)) {
+        if (!file.name.toLowerCase().endsWith(".pdf")) continue;
+        const base = file.name.replace(/\.pdf$/i, "").trim();
+        // "101-1401 김성진" 또는 "101-1401_김성진" 또는 "101-1401"
+        const m = base.match(/^(\d{2,4})[-_\s]+(\d{1,5})(?:[\s_-]+(.*))?$/);
+        if (!m) {
+          unmatched++;
+          errors.push(`${file.name}: 파일명 형식 불일치 (예: "101-1401 김성진.pdf")`);
+          continue;
+        }
+        const [, dong, ho, nameHint] = m;
+
+        const target = customers.find((c) => {
+          const cd = String((c as any).unit_dong || "").trim();
+          const ch = String((c as any).unit_ho || "").trim();
+          return cd === dong && ch === ho;
+        });
+        if (!target) {
+          unmatched++;
+          errors.push(`${file.name}: ${dong}-${ho} 당첨자 없음`);
+          continue;
+        }
+        if (nameHint && target.name && !nameHint.trim().includes(target.name) && !target.name.includes(nameHint.trim())) {
+          console.warn(`[batch-docs] ${file.name}: 이름 불일치(${nameHint} vs ${target.name})`);
+        }
+
+        try {
+          const fd = new FormData();
+          fd.append("file", file);
+          fd.append("kind", "other");
+          fd.append("announcement_id", String(selected.id));
+          const res = await fetch("/api/files/upload", { method: "POST", body: fd });
+          if (!res.ok) throw new Error(`업로드 실패 ${res.status}`);
+          const json = await res.json();
+
+          const existing = target.document_files || {};
+          const nextFiles = {
+            ...existing,
+            "서류 묶음(통합)": {
+              url: json.url,
+              filename: file.name,
+              uploadedAt: new Date().toISOString(),
+            },
+          };
+          // 체크리스트 "서류 묶음(통합)"도 자동 체크
+          const submittedNow = target.documents_submitted || {};
+          localCustomers.update(target.id, {
+            document_files: nextFiles,
+            documents_submitted: { ...submittedNow, "서류 묶음(통합)": true },
+          } as any);
+          attached++;
+        } catch (err: any) {
+          errors.push(`${file.name}: ${err?.message || "오류"}`);
+          unmatched++;
+        }
+      }
+
+      setBatchResult({ attached, unmatched, total, errors });
+      setReloadKey((k) => k + 1);
+    } finally {
+      setBatchBusy(false);
+      if (batchRef.current) batchRef.current.value = "";
+    }
+  };
+
+  /** 일괄 적합 판정 — 서류 묶음이 첨부된(또는 "모두 제출 완료") 당첨자를 한 번에 "적합"으로 */
+  const handleBulkApprove = () => {
+    if (!selected) return;
+    const customers = localCustomers
+      .listByAnnouncement(selected.id)
+      .filter((c) => !c.superseded);
+
+    // 대상: 서류 묶음 첨부되었거나, 체크리스트 100% 체크된 사람
+    const candidates = customers.filter((c) => {
+      const hasBundle = !!c.document_files?.["서류 묶음(통합)"];
+      if (hasBundle) return true;
+      const docList = computeDocList(c, selected);
+      const sub = c.documents_submitted || {};
+      const required = docList.filter((d) => !d.conditional);
+      if (required.length === 0) return false;
+      return required.every((d) => sub[d.name]);
+    });
+
+    if (candidates.length === 0) {
+      alert("일괄 적합 대상이 없습니다. (서류 묶음 배치 업로드 또는 체크리스트 완료 상태가 필요)");
+      return;
+    }
+    if (!confirm(`${candidates.length}명을 일괄 "적합" 처리하시겠습니까?\n\n(2·3단계 자동 판정은 유지되며, 여기서는 "서류 판정"만 적합으로 마킹됩니다.)`)) return;
+
+    setBulkBusy(true);
+    try {
+      let eligible = 0;
+      for (const c of candidates) {
+        localCustomers.update(c.id, {
+          verification_verdict: "eligible",
+          verification_reasons: [],
+          verification_checked_at: new Date().toISOString(),
+        });
+        eligible++;
+      }
+      setBulkResult({ eligible });
+      setReloadKey((k) => k + 1);
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -250,6 +384,85 @@ export default function DocumentsStepPage() {
             <span className="text-[11px] text-ink-3 ml-2">
               * 세대원/주택/통장 어느 쪽이든 자동 인식하여 반영
             </span>
+          </div>
+
+          {/* ─── 서류 스캔본 배치 처리 ─────────────────────────── */}
+          <div className="mb-4 p-3 rounded-lg border border-indigo-200 bg-indigo-50/30">
+            <div className="flex items-center gap-2 mb-2">
+              <FolderUp className="w-4 h-4 text-indigo-700" />
+              <h3 className="text-sm font-semibold text-indigo-900">서류 스캔본 배치 + 일괄 판정</h3>
+            </div>
+            <p className="text-[11px] text-indigo-800/90 mb-2.5">
+              당첨자별 서류 묶음 PDF를 한 번에 올리면 파일명 <code>동-호수 이름.pdf</code>(예: <code>101-1401 김성진.pdf</code>)로 자동 매칭하여
+              각 당첨자의 "서류 묶음(통합)" 슬롯에 첨부합니다. 이후 [일괄 적합]으로 서류 체크가 완료된 사람들을 한 번에 적합 처리할 수 있습니다.
+            </p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                onClick={() => batchRef.current?.click()}
+                disabled={batchBusy}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm disabled:opacity-40"
+                title="PDF 여러 개 선택 (파일명 '동-호수 이름' 형식)"
+              >
+                {batchBusy ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> 업로드 중…</>
+                ) : (
+                  <><FolderUp className="w-3.5 h-3.5" /> 스캔본 배치 업로드</>
+                )}
+              </button>
+              <input
+                ref={batchRef}
+                type="file"
+                accept=".pdf"
+                multiple
+                className="hidden"
+                onChange={(e) => { handleBatchDocs(e.target.files); }}
+              />
+              <button
+                onClick={handleBulkApprove}
+                disabled={bulkBusy}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm disabled:opacity-40"
+                title="서류 묶음 첨부 완료자(또는 체크리스트 100% 체크자)를 일괄 적합 처리"
+              >
+                {bulkBusy ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> 처리 중…</>
+                ) : (
+                  <><ShieldCheck className="w-3.5 h-3.5" /> 일괄 적합 판정</>
+                )}
+              </button>
+            </div>
+
+            {batchResult && (
+              <div className="mt-2 text-[11px] text-indigo-900 flex flex-wrap gap-2">
+                <span className="px-1.5 py-0.5 rounded bg-white border border-indigo-200">
+                  전체 {batchResult.total}개
+                </span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900">
+                  매칭 & 첨부 {batchResult.attached}건
+                </span>
+                {batchResult.unmatched > 0 && (
+                  <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-800">
+                    매칭 실패 {batchResult.unmatched}건
+                  </span>
+                )}
+                {batchResult.errors.length > 0 && (
+                  <details className="w-full mt-1">
+                    <summary className="cursor-pointer text-red-700 text-[11px]">실패 목록 ▶</summary>
+                    <ul className="mt-1 pl-4 space-y-0.5 text-[10px] text-red-700 list-disc">
+                      {batchResult.errors.slice(0, 10).map((e, i) => <li key={i}>{e}</li>)}
+                      {batchResult.errors.length > 10 && <li>… 외 {batchResult.errors.length - 10}건</li>}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            )}
+            {bulkResult && (
+              <div className="mt-2 text-[11px] text-emerald-900">
+                <span className="px-1.5 py-0.5 rounded bg-emerald-100 font-medium">
+                  ✅ {bulkResult.eligible}명 적합 처리 완료
+                </span>
+                <span className="ml-2 text-ink-3">(audit_log에 전부 기록됨)</span>
+              </div>
+            )}
           </div>
 
 

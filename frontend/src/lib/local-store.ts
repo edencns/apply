@@ -377,6 +377,8 @@ export interface LocalCustomer {
     filename: string;
     uploadedAt: string;
     uploadedBy?: number;
+    /** 이 서류가 묶음 PDF 내에서 시작되는 페이지 번호 (기본 1) */
+    page?: number;
     checkpointResults?: Record<string, {
       status: "pass" | "fail" | "pending";
       note?: string;

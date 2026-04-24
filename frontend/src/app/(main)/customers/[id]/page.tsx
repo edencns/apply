@@ -544,6 +544,36 @@ function DocumentsStage({
     if (updated) onUpdate(updated);
   };
 
+  /** 체크포인트 상태 변경 (pass/fail/pending) + 메모 저장 */
+  const handleCheckpointChange = (
+    docName: string,
+    cpKey: string,
+    next: { status?: "pass" | "fail" | "pending"; note?: string },
+  ) => {
+    const nextFiles = { ...(customer.document_files || {}) };
+    const entry = nextFiles[docName] || {
+      url: "",
+      filename: "",
+      uploadedAt: new Date().toISOString(),
+    };
+    const prevResults = entry.checkpointResults || {};
+    const prev = prevResults[cpKey] || { status: "pending" as const };
+    nextFiles[docName] = {
+      ...entry,
+      checkpointResults: {
+        ...prevResults,
+        [cpKey]: {
+          status: next.status ?? prev.status,
+          note: next.note !== undefined ? next.note : prev.note,
+        },
+      },
+    };
+    const updated = localCustomers.update(customer.id, {
+      document_files: nextFiles,
+    } as any);
+    if (updated) onUpdate(updated);
+  };
+
   // 카테고리 그룹핑
   const grouped: Record<string, typeof documentList> = {};
   for (const it of documentList) {
@@ -737,53 +767,137 @@ function DocumentsStage({
                           </span>
                         )}
                         {file && (
-                          <a
-                            href={file.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-0.5 text-[11px] text-accent hover:underline"
-                            title={file.filename}
-                          >
-                            📄 원본 열기
-                          </a>
+                          <>
+                            <a
+                              href={file.page && file.page > 1 ? `${file.url}#page=${file.page}` : file.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-0.5 text-[11px] text-accent hover:underline"
+                              title={`${file.filename}${file.page && file.page > 1 ? ` (${file.page}p부터)` : ""}`}
+                            >
+                              📄 원본 열기{file.page && file.page > 1 ? ` (${file.page}p)` : ""}
+                            </a>
+                            <label className="inline-flex items-center gap-0.5 text-[10px] text-ink-3">
+                              시작페이지
+                              <input
+                                type="number"
+                                min={1}
+                                value={file.page ?? 1}
+                                onChange={(e) => {
+                                  const p = Math.max(1, Number(e.target.value) || 1);
+                                  const next = { ...(customer.document_files || {}) };
+                                  next[d.name] = { ...file, page: p };
+                                  const u = localCustomers.update(customer.id, { document_files: next } as any);
+                                  if (u) onUpdate(u);
+                                }}
+                                className="w-12 border border-gray-200 rounded px-1 py-0 text-[10px]"
+                                title="서류 묶음 PDF 내에서 이 서류가 시작되는 페이지 번호"
+                              />
+                            </label>
+                          </>
                         )}
                       </div>
 
                       {/* 체크포인트 */}
                       {checkpoints.length > 0 && (
-                        <div className="mt-1.5 p-2 rounded bg-white/60 border border-blue-100 text-[11px] space-y-0.5">
-                          <div className="text-[10px] font-semibold text-blue-900 mb-0.5">
-                            💡 담당자 확인 포인트
-                          </div>
-                          {checkpoints.map((cp) => (
-                            <div key={cp.key} className="flex items-start gap-1.5">
-                              <span className={`flex-shrink-0 mt-0.5 ${
-                                cp.severity === "must"
-                                  ? "text-red-600"
-                                  : cp.severity === "verify"
-                                    ? "text-amber-600"
-                                    : "text-ink-3"
-                              }`}>
-                                {cp.severity === "must" ? "●" : cp.severity === "verify" ? "◉" : "◯"}
-                              </span>
-                              <span className="flex-1 text-ink-2">
-                                {cp.label}
-                                {cp.expected && (
-                                  <span className="ml-1 font-semibold text-ink">
-                                    {cp.expected}
-                                  </span>
-                                )}
-                                <span className="ml-1.5 text-[9px] text-ink-4">
-                                  [{cp.source}]
-                                </span>
-                                {cp.hint && (
-                                  <div className="text-[10px] text-ink-4 mt-0.5">
-                                    ↳ {cp.hint}
-                                  </div>
-                                )}
-                              </span>
+                        <div className="mt-1.5 p-2 rounded bg-white/60 border border-blue-100 text-[11px] space-y-1">
+                          <div className="flex items-center justify-between">
+                            <div className="text-[10px] font-semibold text-blue-900">
+                              💡 담당자 확인 포인트
                             </div>
-                          ))}
+                            <div className="text-[9.5px] text-ink-4">
+                              {(() => {
+                                const results = file?.checkpointResults || {};
+                                const done = checkpoints.filter((c) => results[c.key]?.status === "pass").length;
+                                return `${done}/${checkpoints.length} 확인`;
+                              })()}
+                            </div>
+                          </div>
+                          {checkpoints.map((cp) => {
+                            const result = file?.checkpointResults?.[cp.key];
+                            const status = result?.status || "pending";
+                            return (
+                              <div key={cp.key} className={`flex items-start gap-1.5 p-1 rounded ${
+                                status === "pass" ? "bg-green-50" : status === "fail" ? "bg-red-50" : ""
+                              }`}>
+                                <span className={`flex-shrink-0 mt-0.5 ${
+                                  cp.severity === "must"
+                                    ? "text-red-600"
+                                    : cp.severity === "verify"
+                                      ? "text-amber-600"
+                                      : "text-ink-3"
+                                }`}>
+                                  {cp.severity === "must" ? "●" : cp.severity === "verify" ? "◉" : "◯"}
+                                </span>
+                                <div className="flex-1 text-ink-2">
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    <span>{cp.label}</span>
+                                    {cp.expected && (
+                                      <span className="font-semibold text-ink">
+                                        {cp.expected}
+                                      </span>
+                                    )}
+                                    <span className="text-[9px] text-ink-4">
+                                      [{cp.source}]
+                                    </span>
+                                  </div>
+                                  {cp.hint && (
+                                    <div className="text-[10px] text-ink-4 mt-0.5">
+                                      ↳ {cp.hint}
+                                    </div>
+                                  )}
+                                  {/* 메모 입력 */}
+                                  {(status !== "pending" || result?.note) && (
+                                    <input
+                                      value={result?.note || ""}
+                                      onChange={(e) => handleCheckpointChange(d.name, cp.key, { note: e.target.value })}
+                                      placeholder="메모 (선택)"
+                                      className="mt-1 w-full border border-gray-200 rounded px-1.5 py-0.5 text-[10px] bg-white"
+                                    />
+                                  )}
+                                </div>
+                                {/* 상태 토글 */}
+                                <div className="flex items-center gap-0.5 flex-shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCheckpointChange(d.name, cp.key, { status: "pass" })}
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition ${
+                                      status === "pass"
+                                        ? "bg-green-600 text-white"
+                                        : "bg-gray-100 text-ink-3 hover:bg-green-100"
+                                    }`}
+                                    title="확인 완료 (일치)"
+                                  >
+                                    ✓
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCheckpointChange(d.name, cp.key, { status: "fail" })}
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition ${
+                                      status === "fail"
+                                        ? "bg-red-600 text-white"
+                                        : "bg-gray-100 text-ink-3 hover:bg-red-100"
+                                    }`}
+                                    title="불일치 (문제 있음)"
+                                  >
+                                    ✕
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCheckpointChange(d.name, cp.key, { status: "pending" })}
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition ${
+                                      status === "pending"
+                                        ? "bg-ink-4 text-white"
+                                        : "bg-gray-100 text-ink-3 hover:bg-gray-200"
+                                    }`}
+                                    title="미확인"
+                                  >
+                                    ?
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
