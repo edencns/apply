@@ -592,11 +592,96 @@ export default function AnnouncementsPage() {
         filled.push(`📊 추출 ${extracted}/${total} — 高 ${counts.high} · 中 ${counts.med} · 低 ${counts.low}${counts.unknown > 0 ? ` · 해당없음 ${counts.unknown}` : ""}`);
       }
       setPdfFilled(filled);
+
+      // ─── 자동 고급 분석 트리거 ───────────────────────────
+      // 기본 파싱 결과만으로 부족한 경우 (주택관리번호·지역우선공급·서류상세·예치금 등)
+      // 사용자가 별도로 버튼 누를 필요 없이 백그라운드에서 추가 추출.
+      // 판정: Core 결과가 성공했고 확장 필드가 비어있으면 자동 실행.
+      const needsExtended = (() => {
+        const r = d as any;
+        // 기본 파싱이 지역우선공급·서류상세·예치금·주택관리번호 정보를 커버하지 못하는 구조
+        // → 무조건 확장 분석 필요 (Core 스키마에는 이 필드가 없음)
+        return true;
+      })();
+      if (needsExtended) {
+        // 의도적으로 await 안 함 — UI 블로킹 없이 백그라운드 실행
+        runExtendedSilent(file).catch((e) => {
+          console.warn("[auto-extended] 실패:", e?.message);
+        });
+      }
     } catch (err: any) {
       alert(err.message || "PDF 파싱 실패");
     } finally {
       setPdfParsing(false);
       if (pdfInputRef.current) pdfInputRef.current.value = "";
+    }
+  };
+
+  /**
+   * 고급 분석 실행 (조용한 모드).
+   * 기본 파싱 직후 백그라운드에서 자동 호출되며 UI를 막지 않음.
+   * 사용자에게는 최종 완료 시점에 "✨ 고급 분석 자동 완료" 배지만 추가.
+   */
+  const runExtendedSilent = async (file: File) => {
+    setExtendedParsing(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/parse-announcement-pdf/extended", { method: "POST", body: fd });
+      const raw = await res.text();
+      let json: any = null;
+      try { json = JSON.parse(raw); } catch {}
+      if (!res.ok || !json?.success) {
+        // 자동 실행은 실패해도 조용히 종료 — 사용자가 필요 시 수동 버튼 사용
+        const msg = json?.error || `${res.status}`;
+        setExtendedFilled([`ℹ️ 고급 분석 자동 실행 실패(${msg}) — "고급 분석" 버튼으로 재시도 가능`]);
+        return;
+      }
+      const d = (json.data || {}) as Record<string, any>;
+      const filled: string[] = [];
+      setForm((p) => {
+        const next = { ...p, rules: { ...p.rules } as any };
+        const put = (key: string, label: string, val: any) => {
+          if (val === null || val === undefined || val === "") return;
+          if (Array.isArray(val) && val.length === 0) return;
+          next.rules[key] = val;
+          filled.push(label);
+        };
+        put("housing_management_no", "주택관리번호", d.housingManagementNo);
+        put("approval_no", "승인번호", d.approvalNo);
+        put("developer", "사업주체", d.developer);
+        put("builder", "시공사", d.builder);
+        put("location_address", "공급위치", d.locationAddress);
+        put("announcement_base_date", "공고기준일", d.announcementBaseDate);
+        put("general_total_units", "일반공급 세대수", d.generalTotalUnits);
+        put("special_total_units", "특별공급 세대수", d.specialTotalUnits);
+        put("lowest_floor_priority_units", "최하층 우선배정", d.lowestFloorPriorityUnits);
+        put("min_age", "최소나이", d.minAge);
+        put("minor_head_allowed", "미성년세대주", d.minorHeadAllowed);
+        put("eligible_regions", "신청가능지역", d.eligibleRegions);
+        put("foreigner_allowed", "외국인 가능", d.foreignerAllowed);
+        put("regional_priority", `지역우선공급(${(d.regionalPriority || []).length}행)`, d.regionalPriority);
+        put("subscription_deposits", `청약예치금(${(d.subscriptionDeposits || []).length}행)`, d.subscriptionDeposits);
+        put("rank1_criteria", "1순위 요건", d.rank1Criteria);
+        put("rank2_criteria", "2순위 요건", d.rank2Criteria);
+        put("household_head_required", "세대주 요건", d.householdHeadRequired);
+        put("homeless_household_required", "무주택세대구성원", d.homelessHouseholdRequired);
+        put("single_home_owner_rank1_allowed", "1주택자 1순위", d.singleHomeOwnerRank1Allowed);
+        put("point_lottery_ratios", `가점/추첨(${(d.pointLotteryRatios || []).length}행)`, d.pointLotteryRatios);
+        put("required_documents_detailed", `서류상세(${(d.requiredDocumentsDetailed || []).length}건)`, d.requiredDocumentsDetailed);
+        put("duplicate_application_rule", "중복청약 규칙", d.duplicateApplicationRule);
+        put("passbook_reuse_blocked", "통장 재사용 불가", d.passbookReuseBlocked);
+        put("long_term_overseas_restriction", "해외체류 제한", d.longTermOverseasRestriction);
+        return next;
+      });
+      if (filled.length > 0) {
+        const dur = Math.round((json.durationMs || 0) / 100) / 10;
+        setExtendedFilled([`✨ 고급 분석 자동 완료 (${dur}s) — ${filled.length}개 필드 추가`, ...filled]);
+      } else {
+        setExtendedFilled(["ℹ️ 고급 분석 완료 — 추가로 추출된 항목 없음"]);
+      }
+    } finally {
+      setExtendedParsing(false);
     }
   };
 
@@ -910,7 +995,9 @@ export default function AnnouncementsPage() {
                           title="주택관리번호·사업주체·지역우선공급·예치금표·가점추첨비율 등 Phase A 확장 필드 추가 추출"
                         >
                           {extendedParsing ? (
-                            <><Loader2 className="w-3 h-3 animate-spin" /> 고급 분석 중…</>
+                            <><Loader2 className="w-3 h-3 animate-spin" /> 고급 분석 자동 실행 중…</>
+                          ) : extendedFilled.length > 0 && !extendedFilled[0].startsWith("⚠️") && !extendedFilled[0].startsWith("ℹ️") ? (
+                            <>🔬 고급 분석 재실행</>
                           ) : (
                             <>🔬 고급 분석</>
                           )}
