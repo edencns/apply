@@ -672,6 +672,13 @@ export default function AnnouncementsPage() {
         put("duplicate_application_rule", "중복청약 규칙", d.duplicateApplicationRule);
         put("passbook_reuse_blocked", "통장 재사용 불가", d.passbookReuseBlocked);
         put("long_term_overseas_restriction", "해외체류 제한", d.longTermOverseasRestriction);
+
+        // 폴백: 공고 기준일이 추출되지 않았고 공고 발표일은 있으면
+        // 대부분 "공고 기준일 = 공고 발표일(모집공고일)"이므로 자동 채움
+        if (!next.rules.announcement_base_date && next.rules.announcement_date) {
+          next.rules.announcement_base_date = next.rules.announcement_date;
+          filled.push("공고기준일(발표일로 자동 폴백)");
+        }
         return next;
       });
       if (filled.length > 0) {
@@ -742,6 +749,12 @@ export default function AnnouncementsPage() {
         put("duplicate_application_rule", "중복청약 규칙", d.duplicateApplicationRule);
         put("passbook_reuse_blocked", "통장 재사용 불가", d.passbookReuseBlocked);
         put("long_term_overseas_restriction", "해외체류 제한", d.longTermOverseasRestriction);
+
+        // 폴백: 공고 기준일 = 공고 발표일 (대부분의 공고가 동일)
+        if (!next.rules.announcement_base_date && next.rules.announcement_date) {
+          next.rules.announcement_base_date = next.rules.announcement_date;
+          filled.push("공고기준일(발표일로 자동 폴백)");
+        }
         return next;
       });
       if (filled.length === 0) filled.push("확장 필드 추출 결과 없음");
@@ -1258,11 +1271,46 @@ export default function AnnouncementsPage() {
                           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
                       </div>
                       <div className="col-span-2">
-                        <label className="block text-xs font-medium text-ink-2 mb-1">공고 기준일 (자격 판정)</label>
+                        <label className="block text-xs font-medium text-ink-2 mb-1">
+                          공고 기준일 (자격 판정)
+                          <span className="text-red-600 ml-1">*</span>
+                          <span className="text-[10px] text-ink-4 font-normal ml-2">
+                            무주택 기간·세대원 수·통장 가입 기간 등 모든 자격 판정 기준이 됨
+                          </span>
+                        </label>
                         <input type="datetime-local"
                           value={(form.rules as any).announcement_base_date || ""}
                           onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, announcement_base_date: e.target.value } as any }))}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                          className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none ${
+                            !(form.rules as any).announcement_base_date
+                              ? "border-red-300 bg-red-50/40"
+                              : "border-gray-300"
+                          }`}
+                        />
+                        {!(form.rules as any).announcement_base_date && (
+                          <div className="mt-1 flex items-center gap-2">
+                            <span className="text-[11px] text-red-600">
+                              ⚠ 비어있음. 공고 발표일과 동일한 경우가 많습니다.
+                            </span>
+                            {(form.rules as any).announcement_date && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setForm((p) => ({
+                                    ...p,
+                                    rules: {
+                                      ...p.rules,
+                                      announcement_base_date: (p.rules as any).announcement_date,
+                                    } as any,
+                                  }))
+                                }
+                                className="text-[11px] text-accent underline hover:opacity-80"
+                              >
+                                공고 발표일({(form.rules as any).announcement_date})로 자동 채움
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
