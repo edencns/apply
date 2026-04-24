@@ -47,7 +47,10 @@ export default function SettingsPage() {
         body: JSON.stringify(form),
       });
       const j = await r.json();
-      if (!r.ok) throw new Error(j?.error || "생성 실패");
+      if (!r.ok) {
+        const detail = Array.isArray(j?.detail) ? `: ${j.detail.join(", ")}` : "";
+        throw new Error((j?.error || "생성 실패") + detail);
+      }
       setMsg(`계정 생성 완료: ${form.email}`);
       setForm({ email: "", name: "", password: "" });
       load();
@@ -73,7 +76,7 @@ export default function SettingsPage() {
 
   async function handleResetPassword() {
     if (!pwModal) return;
-    if (newPw.length < 6) { setErr("비밀번호는 최소 6자"); return; }
+    if (newPw.length < 10) { setErr("비밀번호는 최소 10자 + 영문 대소문자·숫자·특수문자 중 3종 이상"); return; }
     setErr(null);
     try {
       const r = await fetch(`/api/admin/users/${pwModal.id}`, {
@@ -81,7 +84,11 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: newPw }),
       });
-      if (!r.ok) throw new Error((await r.json()).error || "재설정 실패");
+      if (!r.ok) {
+        const j = await r.json();
+        const detail = Array.isArray(j?.detail) ? `: ${j.detail.join(", ")}` : "";
+        throw new Error((j?.error || "재설정 실패") + detail);
+      }
       setMsg(`${pwModal.email} 비밀번호 재설정 완료`);
       setPwModal(null); setNewPw("");
     } catch (e: any) {
@@ -142,13 +149,13 @@ export default function SettingsPage() {
             />
           </div>
           <div>
-            <label className="block text-[11px] text-ink-3 mb-1">초기 비밀번호 * (6자+)</label>
+            <label className="block text-[11px] text-ink-3 mb-1">초기 비밀번호 * (10자+ / 영문 대·소·숫자·특문 중 3종)</label>
             <input
               type="text"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               placeholder="담당자에게 전달"
-              minLength={6}
+              minLength={10}
               required
               className="w-full px-2.5 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent font-mono"
             />
@@ -232,8 +239,8 @@ export default function SettingsPage() {
               type="text"
               value={newPw}
               onChange={(e) => setNewPw(e.target.value)}
-              placeholder="6자 이상"
-              minLength={6}
+              placeholder="10자 이상, 영문 대·소문자·숫자·특수문자 중 3종"
+              minLength={10}
               className="w-full px-3 py-2 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent font-mono"
               autoFocus
             />
