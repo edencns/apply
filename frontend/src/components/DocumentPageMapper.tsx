@@ -56,6 +56,13 @@ export default function DocumentPageMapper({
   const [detectedTotal, setDetectedTotal] = useState<number | undefined>(undefined);
   const [detecting, setDetecting] = useState(false);
 
+  // fileId 자동 추출 — URL이 "/api/files/123/download" 형태이면 id=123
+  const effectiveFileId = (() => {
+    if (bundleFileId) return bundleFileId;
+    const m = bundleUrl.match(/\/api\/files\/(\d+)\/download/);
+    return m ? Number(m[1]) : undefined;
+  })();
+
   const totalP = totalPagesProp || detectedTotal || 50;
 
   useEffect(() => {
@@ -64,18 +71,18 @@ export default function DocumentPageMapper({
     setIframeKey((k) => k + 1);
   }, [isOpen, initialPage]);
 
-  // 총 페이지 수 자동 감지 (bundleFileId 있을 때)
+  // 총 페이지 수 자동 감지 — URL 기반 fileId로도 동작
   useEffect(() => {
-    if (!isOpen || !bundleFileId || totalPagesProp || detectedTotal) return;
+    if (!isOpen || !effectiveFileId || totalPagesProp || detectedTotal) return;
     setDetecting(true);
-    fetch(`/api/files/${bundleFileId}/page-count`)
+    fetch(`/api/files/${effectiveFileId}/page-count`)
       .then((r) => r.json())
       .then((j) => {
         if (j?.totalPages) setDetectedTotal(j.totalPages);
       })
       .catch(() => { /* 무시 — 기본값 사용 */ })
       .finally(() => setDetecting(false));
-  }, [isOpen, bundleFileId, totalPagesProp, detectedTotal]);
+  }, [isOpen, effectiveFileId, totalPagesProp, detectedTotal]);
 
   if (!isOpen) return null;
 
@@ -190,13 +197,17 @@ export default function DocumentPageMapper({
             <div className="px-3 py-1.5 bg-blue-50 border-b border-blue-100 text-[11px] text-blue-900 flex items-center gap-1.5">
               <span>💡</span>
               <span>
-                PDF 뷰어 안에서 <strong>스크롤</strong>하거나 상단 뷰어 컨트롤로 원하는 페이지를 보세요.
-                번호를 확인했으면 위 <strong className="text-indigo-700">📍 지정할 페이지</strong> 입력창에 타이핑하고 우측 [지정]을 누르세요.
+                <strong className="text-red-700">⚠ 중요:</strong> PDF 뷰어 내부에서 스크롤·확대해도
+                <strong> 외부 상단 "지정할 페이지" 숫자는 자동 바뀌지 않습니다.</strong> 반드시
+                위의 <strong className="text-indigo-700">← → 버튼이나 숫자 입력</strong>으로 페이지를 이동한 다음
+                우측 서류 [지정]을 누르세요.
               </span>
             </div>
             <iframe
               key={iframeKey}
-              src={`${bundleUrl}#page=${currentPage}`}
+              // toolbar=0, navpanes=0 으로 Chrome PDF 뷰어 내부 컨트롤 숨김 →
+              // 사용자가 외부 페이지 컨트롤을 주로 쓰도록 유도
+              src={`${bundleUrl}#page=${currentPage}&toolbar=0&navpanes=0&view=FitH`}
               className="flex-1 w-full bg-gray-200"
               title="서류 묶음 PDF"
             />
