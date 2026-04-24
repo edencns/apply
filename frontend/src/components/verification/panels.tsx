@@ -280,7 +280,7 @@ export function PropertyPanel({
             </div>
           ) : (
             <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
-              💡 <strong>주택소유 단계에서 "분리세대 회신 PDF" 업로드 필요</strong> — 청약홈에 분리세대 전산검색을 요청해 받은 회신서를 업로드하면 Gemini가 자동으로 주택소유 내역을 추출합니다.
+              💡 <strong>주택소유 단계에서 "분리세대 회신" 업로드 필요</strong> — 청약홈에 분리세대 전산검색을 요청해 받은 회신 파일(엑셀 또는 PDF)을 업로드하면 자동으로 주택소유 내역이 추출·합산됩니다.
             </div>
           )}
         </div>

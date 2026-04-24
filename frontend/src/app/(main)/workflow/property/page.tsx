@@ -166,24 +166,20 @@ export default function PropertyStepPage() {
     }
   };
 
-  /** 분리세대 주택소유 PDF 업로드 — Gemini로 파싱 */
-  const handleSeparatedPdfUpload = async (file: File) => {
+  /** 분리세대 회신 업로드 — 엑셀(기존 파서 재사용) 또는 PDF(Gemini 파싱) */
+  const handleSeparatedResponseUpload = async (file: File) => {
     if (!selected) { alert("먼저 공고를 선택해주세요"); return; }
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      alert("분리세대 회신은 PDF 파일만 지원합니다.");
+    const ext = file.name.toLowerCase().split(".").pop() || "";
+    const isExcel = ["xlsx", "xls", "xlsm", "csv"].includes(ext);
+    const isPdf = ext === "pdf";
+    if (!isExcel && !isPdf) {
+      alert("분리세대 회신은 엑셀(xlsx/xls) 또는 PDF만 지원합니다.");
       return;
     }
     setUploadingSep(true);
     setSepResult(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/parse-separated-property", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok || !json?.success) {
-        throw new Error(json?.error || `파싱 실패 (${res.status})`);
-      }
-      const extracted: Array<{
+      let extracted: Array<{
         ownerRrn: string;
         ownerName: string;
         relation?: string;
@@ -192,7 +188,34 @@ export default function PropertyStepPage() {
         acquiredDate?: string;
         transferredDate?: string;
         usage?: string;
-      }> = json.properties || [];
+      }> = [];
+
+      if (isExcel) {
+        // 엑셀 경로 — 청약홈 주택소유 엑셀과 동일 포맷으로 가정
+        const XLSX = await ensureXlsx();
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const parsed = parsePropertyOwnership(wb as any, file.name);
+        extracted = parsed.properties.map((p) => ({
+          ownerRrn: p.ownerRrn,
+          ownerName: p.ownerName,
+          address: p.address,
+          areaM2: p.areaM2,
+          acquiredDate: p.acquiredDate,
+          transferredDate: p.transferredDate,
+          usage: p.usage,
+        }));
+      } else {
+        // PDF 경로 — Gemini 파싱
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/parse-separated-property", { method: "POST", body: fd });
+        const json = await res.json();
+        if (!res.ok || !json?.success) {
+          throw new Error(json?.error || `PDF 파싱 실패 (${res.status})`);
+        }
+        extracted = json.properties || [];
+      }
 
       // 주민번호 앞 6자리로 각 고객에게 매칭
       const rrnFront = (s: string) => String(s || "").replace(/\D/g, "").slice(0, 6);
@@ -220,6 +243,25 @@ export default function PropertyStepPage() {
         byCustomer[cid].push(p);
       }
 
+      // 분리세대원 관계 힌트 주입 (배우자/자녀/부모 등)
+      // — 엑셀은 관계 정보가 없으므로 분리세대 명단에서 찾아 매칭
+      for (const c of customers) {
+        const props = byCustomer[c.id];
+        if (!props || !props.length) continue;
+        const memberMap = new Map<string, string>();
+        for (const m of c.separated_household_members || []) {
+          const f = rrnFront(m.rrn);
+          if (f && m.relation) memberMap.set(f, m.relation);
+        }
+        for (const p of props) {
+          if (!p.relation) {
+            const f = rrnFront(p.ownerRrn);
+            const rel = memberMap.get(f);
+            if (rel) p.relation = rel;
+          }
+        }
+      }
+
       let attached = 0;
       for (const c of customers) {
         // 분리세대원이 등록된 고객만 처리
@@ -235,7 +277,7 @@ export default function PropertyStepPage() {
       setSepResult({ attached, unmatched, total: extracted.length });
       setReloadKey((k) => k + 1);
     } catch (err: any) {
-      alert(err?.message || "분리세대 PDF 처리 실패");
+      alert(err?.message || "분리세대 회신 처리 실패");
     } finally {
       setUploadingSep(false);
       if (separatedPdfRef.current) separatedPdfRef.current.value = "";
@@ -312,22 +354,22 @@ export default function PropertyStepPage() {
               onClick={() => separatedPdfRef.current?.click()}
               disabled={uploadingSep}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40"
-              title="청약홈 분리세대 주택소유 회신 PDF 업로드 (Gemini 자동 파싱)"
+              title="청약홈 분리세대 주택소유 회신 업로드 — 엑셀(xlsx/xls) 또는 PDF"
             >
               {uploadingSep ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> PDF 분석 중…</>
+                <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
               ) : (
-                <><FileText className="w-4 h-4" /> 분리세대 회신 PDF</>
+                <><FileText className="w-4 h-4" /> 분리세대 회신</>
               )}
             </button>
             <input
               ref={separatedPdfRef}
               type="file"
-              accept=".pdf"
+              accept=".xlsx,.xls,.xlsm,.csv,.pdf"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) handleSeparatedPdfUpload(f);
+                if (f) handleSeparatedResponseUpload(f);
               }}
             />
           </div>
@@ -341,21 +383,21 @@ export default function PropertyStepPage() {
             onApply={handleIndividualUpload}
           />
 
-          {/* 분리세대 주택소유 PDF 업로드 결과 */}
+          {/* 분리세대 주택소유 회신 업로드 결과 */}
           {sepResult && (
             <div className="card mb-4 p-3 text-sm bg-amber-50/70 border-amber-200">
               <div className="flex items-center gap-2 flex-wrap">
                 <UserMinus className="w-4 h-4 text-amber-800" />
-                <span className="font-semibold text-amber-900">분리세대 주택소유 PDF 연결 완료</span>
+                <span className="font-semibold text-amber-900">분리세대 주택소유 회신 연결 완료</span>
                 <span className="text-amber-800">
                   {sepResult.attached}명에게 분리세대 주택 부착 · 총 {sepResult.total}건 추출
                 </span>
                 {sepResult.unmatched > 0 && (
-                  <span className="text-red-700">매칭 실패 {sepResult.unmatched}건 (세대원내역 미등록)</span>
+                  <span className="text-red-700">매칭 실패 {sepResult.unmatched}건 (분리세대 명단 미등록)</span>
                 )}
               </div>
               <div className="mt-1 text-[11px] text-amber-800/80">
-                💡 배우자 분리세대 주택은 본인 세대 주택 수에 자동 합산되어 판정에 반영됩니다.
+                💡 엑셀 또는 PDF 모두 지원. 배우자 분리세대 주택은 본인 세대에 자동 합산되어 판정에 반영됩니다.
               </div>
             </div>
           )}
