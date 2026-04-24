@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensureSchema, getDb, parseRowData, stringifyData } from "@/lib/db/turso";
 import { getSession } from "@/lib/auth";
 import { broadcast } from "@/lib/realtime/ably-server";
+import { logAudit } from "@/lib/audit";
+import { guardRequest } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -25,6 +27,8 @@ export async function POST(req: NextRequest) {
     await ensureSchema();
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
+    const guard = guardRequest(req, "announcement-mutation", { max: 60, windowMs: 60_000 }, String(session.sub));
+    if (!guard.ok) return guard.response;
     const userId = Number(session.sub); // 감사용으로만 기록
     const body = await req.json();
     if (!body?.title) return NextResponse.json({ error: "title 필수" }, { status: 400 });
@@ -46,6 +50,12 @@ export async function POST(req: NextRequest) {
       ],
     });
     const isNew = !body.id;
+    await logAudit({
+      session, entity: "announcement", entity_id: Number(id),
+      action: isNew ? "create" : "update",
+      after: { title: ann.title, status: ann.status },
+      req,
+    });
     await broadcast(isNew ? "announcement:created" : "announcement:updated", {
       id, by: userId,
     });

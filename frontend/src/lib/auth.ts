@@ -15,7 +15,8 @@ import type { NextRequest } from "next/server";
 const scryptAsync = promisify(scrypt);
 const SESSION_COOKIE = "apply_session";
 const DAY = 60 * 60 * 24;
-const SESSION_TTL = DAY * 30; // 30일
+// 30일 → 7일로 축소 (개인정보 민감도 고려). 매 요청마다 갱신되진 않으므로 사용자가 자주 로그인 필요.
+const SESSION_TTL = DAY * 7;
 
 function secretKey(): Uint8Array {
   const s = process.env.JWT_SECRET;
@@ -45,14 +46,21 @@ export async function verifyPassword(pw: string, stored: string): Promise<boolea
   }
 }
 
+export type UserRole = "staff" | "admin";
+
 export interface SessionPayload {
   sub: string;       // user id
   email: string;
   name: string;
+  role: UserRole;
 }
 
 export async function signSession(payload: SessionPayload): Promise<string> {
-  return await new SignJWT({ email: payload.email, name: payload.name })
+  return await new SignJWT({
+    email: payload.email,
+    name: payload.name,
+    role: payload.role,
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(String(payload.sub))
     .setIssuedAt()
@@ -64,14 +72,42 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
   try {
     const { payload } = await jwtVerify(token, secretKey());
     if (!payload.sub) return null;
+    const rawRole = String(payload.role || "staff");
+    const role: UserRole = rawRole === "admin" ? "admin" : "staff";
     return {
       sub: String(payload.sub),
       email: String(payload.email || ""),
       name: String(payload.name || ""),
+      role,
     };
   } catch {
     return null;
   }
+}
+
+/** 관리자 권한 필요 — 아니면 403 응답 객체 반환 */
+export function requireAdmin(session: SessionPayload | null):
+  | { ok: true; session: SessionPayload }
+  | { ok: false; response: Response } {
+  if (!session) {
+    return {
+      ok: false,
+      response: new Response(JSON.stringify({ error: "로그인 필요" }), {
+        status: 401,
+        headers: { "content-type": "application/json" },
+      }),
+    };
+  }
+  if (session.role !== "admin") {
+    return {
+      ok: false,
+      response: new Response(JSON.stringify({ error: "관리자 권한 필요" }), {
+        status: 403,
+        headers: { "content-type": "application/json" },
+      }),
+    };
+  }
+  return { ok: true, session };
 }
 
 /** 서버 컴포넌트/API 라우트에서 현재 세션 */

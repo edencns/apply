@@ -13,9 +13,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 import { extractKoreanPdfText } from '@/lib/pdf-helper';
 import { parseWinnerPdfText } from '@/lib/winner-ingest';
+import { getSession } from '@/lib/auth';
+import { guardRequest, getClientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+
+const MAX_PDF_SIZE = 20 * 1024 * 1024; // 20MB
 
 interface ParsedCustomer {
   name?: string;
@@ -211,10 +215,36 @@ function parseWinnerRows(text: string): ParsedCustomer[] {
 
 export async function POST(req: NextRequest) {
   try {
+    // 인증 필수 — LLM 오남용 방지
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: '로그인 필요' }, { status: 401 });
+    }
+
+    // CSRF + rate limit (세션당 분당 10회, LLM 호출이라 타이트하게)
+    const guard = guardRequest(
+      req, 'parse-customer-pdf',
+      { max: 10, windowMs: 60_000 },
+      String(session.sub),
+    );
+    if (!guard.ok) return guard.response;
+
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     if (!file) {
       return NextResponse.json({ error: 'file 필드가 필요합니다' }, { status: 400 });
+    }
+    if (file.size > MAX_PDF_SIZE) {
+      return NextResponse.json(
+        { error: `PDF가 너무 큽니다 (최대 ${MAX_PDF_SIZE / 1024 / 1024}MB)` },
+        { status: 413 },
+      );
+    }
+    if (file.type && file.type !== 'application/pdf') {
+      return NextResponse.json(
+        { error: 'PDF 파일만 허용됩니다' },
+        { status: 415 },
+      );
     }
 
     const buf = Buffer.from(await file.arrayBuffer());

@@ -27,9 +27,12 @@ export const SCHEMA_DDL = [
     email TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
     password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'staff',
     created_at TEXT DEFAULT (datetime('now'))
   )`,
   `CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
+  // 기존 DB에 role 컬럼이 없을 경우 추가 (SQLite: ALTER 후 에러 무시)
+  // libSQL은 IF NOT EXISTS 지원 안 함 → ensureSchema에서 try/catch 처리
   // 공고·고객 등은 user_id로 격리
   `CREATE TABLE IF NOT EXISTS sites (
     id INTEGER PRIMARY KEY,
@@ -99,12 +102,55 @@ export const SCHEMA_DDL = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_files_user ON files(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_files_ann ON files(announcement_id)`,
+  // 감사 로그 — 모든 변경(판정/삭제/공고 수정 등) 영구 기록
+  `CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL DEFAULT (datetime('now')),
+    user_id INTEGER NOT NULL,
+    user_email TEXT,
+    entity TEXT NOT NULL,
+    entity_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    before_json TEXT,
+    after_json TEXT,
+    ip TEXT,
+    user_agent TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts)`,
+  `CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity, entity_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id)`,
+];
+
+/** 기존 DB에 컬럼이 없으면 ALTER로 추가 — 멱등, 이미 있으면 조용히 실패 */
+const SCHEMA_PATCHES: Array<{ sql: string; desc: string }> = [
+  { sql: `ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'staff'`, desc: "users.role" },
 ];
 
 export async function ensureSchema(): Promise<void> {
   const db = getDb();
   for (const sql of SCHEMA_DDL) {
     await db.execute(sql);
+  }
+  // 기존 DB 마이그레이션 패치 — 이미 있으면 "duplicate column" 에러 발생, 무시
+  for (const p of SCHEMA_PATCHES) {
+    try {
+      await db.execute(p.sql);
+    } catch (e: any) {
+      const msg = String(e?.message || "").toLowerCase();
+      if (msg.includes("duplicate") || msg.includes("already exists")) continue;
+      // 예상 외 에러는 로그만 남기고 계속 (스키마 패치 실패가 전체를 막지 않도록)
+      console.warn(`[schema patch: ${p.desc}]`, e?.message);
+    }
+  }
+  // 최초 관리자 부트스트랩: BOOTSTRAP_ADMIN_EMAIL 환경변수가 있으면 해당 사용자 role='admin'로 승격
+  const bootstrapEmail = process.env.BOOTSTRAP_ADMIN_EMAIL;
+  if (bootstrapEmail) {
+    try {
+      await db.execute({
+        sql: "UPDATE users SET role='admin' WHERE email=? AND role!='admin'",
+        args: [bootstrapEmail],
+      });
+    } catch {}
   }
 }
 

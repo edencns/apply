@@ -11,6 +11,7 @@ export async function GET() {
       id: Number(session.sub),
       email: session.email,
       name: session.name,
+      role: session.role,
     },
   });
 }

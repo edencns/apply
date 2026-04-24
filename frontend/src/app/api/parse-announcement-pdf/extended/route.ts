@@ -10,16 +10,30 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { extractExtendedWithGemini } from "@/lib/parse-engines/gemini";
+import { getSession } from "@/lib/auth";
+import { guardRequest } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // Vercel Pro 기본.
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ success: false, error: "로그인 필요" }, { status: 401 });
+    const guard = guardRequest(
+      req, "parse-announcement-extended",
+      { max: 5, windowMs: 60_000 },
+      String(session.sub),
+    );
+    if (!guard.ok) return guard.response;
+
     const form = await req.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
       return NextResponse.json({ success: false, error: "PDF 파일이 필요합니다" }, { status: 400 });
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      return NextResponse.json({ success: false, error: "PDF가 너무 큽니다 (최대 20MB)" }, { status: 413 });
     }
     const arrayBuf = await file.arrayBuffer();
     const buf = Buffer.from(arrayBuf);
