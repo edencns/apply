@@ -1428,6 +1428,8 @@ export function profileToCustomerPayload(
     supply_type: supplyType,
     unit_type: profile.unitType,
     unit_area: deriveUnitArea(profile.unitType),
+    unit_dong: profile.dong,
+    unit_ho: profile.ho,
     // 당첨자 / 예비 구분
     is_standby: profile.isStandby === true,
     standby_rank: profile.standbyRank,

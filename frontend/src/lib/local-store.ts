@@ -226,6 +226,8 @@ export interface LocalCustomer {
   supply_type?: string;      // "일반공급" 또는 특별공급 유형명
   unit_type?: string;        // 주택형 코드 (예: "84A", "059.9660")
   unit_area?: string;        // 전용면적 (예: "59.99㎡")
+  unit_dong?: string;        // 동 (예: "101")
+  unit_ho?: string;          // 호수 (예: "1401")
   // ── 당첨자 / 예비 구분 ──
   is_standby?: boolean;      // true면 예비입주자 (빈자리 대기)
   standby_rank?: string;     // 예비 순위 (1,2,3...)
@@ -455,6 +457,8 @@ export const localCustomers = {
       supply_type: input.supply_type,
       unit_type: input.unit_type,
       unit_area: input.unit_area,
+      unit_dong: input.unit_dong,
+      unit_ho: input.unit_ho,
       is_standby: input.is_standby,
       standby_rank: input.standby_rank,
       superseded: input.superseded,

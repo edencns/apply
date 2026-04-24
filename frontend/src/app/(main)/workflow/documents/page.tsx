@@ -208,16 +208,41 @@ export default function DocumentsStepPage() {
         }
         const [, dong, ho, nameHint] = m;
 
-        const target = customers.find((c) => {
+        // 1차: 동·호 기준 매칭
+        let target = customers.find((c) => {
           const cd = String((c as any).unit_dong || "").trim();
           const ch = String((c as any).unit_ho || "").trim();
-          return cd === dong && ch === ho;
+          return cd && ch && cd === dong && ch === ho;
         });
+
+        // 2차 fallback: 이름만으로 매칭 (동·호 필드가 없는 기존 데이터용)
+        if (!target && nameHint) {
+          const cleanName = nameHint.trim();
+          const byName = customers.filter((c) => c.name === cleanName);
+          if (byName.length === 1) {
+            target = byName[0];
+          } else if (byName.length > 1) {
+            // 동명이인 — 공급유형이나 주민번호 등 추가 힌트로 좁히기 (현재는 unmatched)
+            unmatched++;
+            errors.push(`${file.name}: 동명이인 ${byName.length}명 — dong/ho 필드 필요`);
+            continue;
+          }
+        }
+
         if (!target) {
           unmatched++;
-          errors.push(`${file.name}: ${dong}-${ho} 당첨자 없음`);
+          errors.push(`${file.name}: ${dong}-${ho}${nameHint ? ` ${nameHint}` : ""} 당첨자 없음`);
           continue;
         }
+
+        // 매칭 성공 시 dong/ho가 비었으면 자동 보강
+        if (!(target as any).unit_dong || !(target as any).unit_ho) {
+          localCustomers.update(target.id, {
+            unit_dong: dong,
+            unit_ho: ho,
+          } as any);
+        }
+
         if (nameHint && target.name && !nameHint.trim().includes(target.name) && !target.name.includes(nameHint.trim())) {
           console.warn(`[batch-docs] ${file.name}: 이름 불일치(${nameHint} vs ${target.name})`);
         }
