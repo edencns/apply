@@ -54,6 +54,37 @@ function read<T>(key: string): T[] {
 function write<T>(key: string, value: T[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(key, JSON.stringify(value));
+  // 같은 탭 안의 다른 페이지·컴포넌트에 변경 알림
+  // (브라우저 기본 StorageEvent는 "다른 탭에만" 발생하므로 자체 이벤트 추가)
+  try {
+    window.dispatchEvent(new CustomEvent("apply:local-store-changed", { detail: { key } }));
+  } catch {
+    /* 구형 브라우저 fallback */
+  }
+}
+
+/**
+ * 로컬 스토어 변경 구독 — 훅 내부에서 사용.
+ * handler는 어떤 키(sites/announcements/customers 등)가 바뀌었는지 받음.
+ */
+export function onLocalStoreChange(
+  handler: (key: string) => void,
+): () => void {
+  if (typeof window === "undefined") return () => {};
+  const wrapper = (e: Event) => {
+    const ce = e as CustomEvent<{ key: string }>;
+    handler(ce.detail?.key || "");
+  };
+  window.addEventListener("apply:local-store-changed", wrapper);
+  // 다른 탭 변경도 수신
+  const storageWrapper = (e: StorageEvent) => {
+    if (e.key) handler(e.key);
+  };
+  window.addEventListener("storage", storageWrapper);
+  return () => {
+    window.removeEventListener("apply:local-store-changed", wrapper);
+    window.removeEventListener("storage", storageWrapper);
+  };
 }
 
 function nextId(items: { id: number }[]): number {

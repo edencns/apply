@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { announcements as staticAnnouncements, AptAnnouncement } from "./data";
 import { api } from "@/lib/api";
-import { localAnnouncements, isNetworkError, LocalAnnouncement } from "@/lib/local-store";
+import { localAnnouncements, isNetworkError, LocalAnnouncement, onLocalStoreChange } from "@/lib/local-store";
 
 type Tab = "overview" | "eligibility" | "special" | "documents" | "income";
 
@@ -681,9 +681,11 @@ function ComparePageInner() {
   const [tab, setTab] = useState<Tab>("overview");
 
   // 마운트 시 등록된 공고를 모두 로드하여 샘플과 합침
+  // + 로컬 스토어 변경(다른 페이지에서 삭제/추가/수정) 시 자동 재로드
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+
+    const loadList = async () => {
       const adapted: AptAnnouncement[] = [];
 
       // 1) query param에 id가 있으면 우선 로드
@@ -714,8 +716,19 @@ function ComparePageInner() {
           setSelectedId(adapted[0].id);
         }
       }
-    })();
-    return () => { cancelled = true; };
+    };
+
+    loadList();
+
+    // 다른 페이지(공고 관리 등)에서 공고 변경 시 자동 재로드
+    const unsub = onLocalStoreChange((key) => {
+      if (key === "apply:announcements") loadList();
+    });
+
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [registeredId]);
 
   // 등록된 공고 + 샘플 모두 하나의 플랫 리스트

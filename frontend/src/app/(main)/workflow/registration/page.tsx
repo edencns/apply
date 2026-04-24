@@ -10,6 +10,7 @@ import {
   localCustomers,
   activeAnnouncement,
   isNetworkError,
+  onLocalStoreChange,
   LocalAnnouncement,
   LocalCustomer,
 } from "@/lib/local-store";
@@ -118,9 +119,12 @@ function CustomersPageInner() {
   }, []);
 
   // 초기: 공고 목록 + 쿼리파라미터/activeAnnouncement에서 선택 복원
+  // + 다른 페이지(공고 관리 등)에서 공고 변경 시 자동 재로드
   useEffect(() => {
-    (async () => {
+    let cancelled = false;
+    const initialLoad = async () => {
       const list = await loadAnnouncements();
+      if (cancelled) return;
       const active = activeAnnouncement.get();
       let target: LocalAnnouncement | null = null;
       if (queryAnnId) {
@@ -133,7 +137,26 @@ function CustomersPageInner() {
         target = list[0];
       }
       if (target) setSelectedAnn(target);
-    })();
+    };
+    initialLoad();
+
+    // 다른 페이지에서 공고 변경 시 (삭제·추가·수정) 자동 재로드
+    const unsub = onLocalStoreChange(async (key) => {
+      if (key !== "apply:announcements") return;
+      const list = await loadAnnouncements();
+      if (cancelled) return;
+      // 현재 선택된 공고가 삭제됐다면 초기화
+      setSelectedAnn((prev) => {
+        if (!prev) return prev;
+        const stillExists = list.find((a: LocalAnnouncement) => a.id === prev.id);
+        return stillExists || (list.length > 0 ? list[0] : null);
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [loadAnnouncements, queryAnnId]);
 
   // 선택된 공고가 바뀌면 activeAnnouncement 갱신
