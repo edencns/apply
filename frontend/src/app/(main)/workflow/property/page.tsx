@@ -15,7 +15,7 @@ import { formatHousingCode } from "@/lib/housing-code";
 import IndividualVerifyModal from "@/components/workflow/IndividualVerifyModal";
 import {
   Home, AlertTriangle, FileSpreadsheet,
-  Loader2, CheckCircle2, UserCheck,
+  Loader2, CheckCircle2, UserCheck, UserMinus, FileText,
 } from "lucide-react";
 
 const step = WORKFLOW_STEPS[2]; // property
@@ -89,6 +89,13 @@ export default function PropertyStepPage() {
   >(null);
   const [indivOpen, setIndivOpen] = useState(false);
   const xlsxRef = useRef<HTMLInputElement>(null);
+  const separatedPdfRef = useRef<HTMLInputElement>(null);
+  const [uploadingSep, setUploadingSep] = useState(false);
+  const [sepResult, setSepResult] = useState<{
+    attached: number;
+    unmatched: number;
+    total: number;
+  } | null>(null);
 
   const evaluate = (c: LocalCustomer, a: LocalAnnouncement) => evaluateProperty(c, a);
   const regulation = (selected?.eligibility_rules?.regulation as string) || undefined;
@@ -159,6 +166,82 @@ export default function PropertyStepPage() {
     }
   };
 
+  /** 분리세대 주택소유 PDF 업로드 — Gemini로 파싱 */
+  const handleSeparatedPdfUpload = async (file: File) => {
+    if (!selected) { alert("먼저 공고를 선택해주세요"); return; }
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      alert("분리세대 회신은 PDF 파일만 지원합니다.");
+      return;
+    }
+    setUploadingSep(true);
+    setSepResult(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/parse-separated-property", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || `파싱 실패 (${res.status})`);
+      }
+      const extracted: Array<{
+        ownerRrn: string;
+        ownerName: string;
+        relation?: string;
+        address: string;
+        areaM2?: number;
+        acquiredDate?: string;
+        transferredDate?: string;
+        usage?: string;
+      }> = json.properties || [];
+
+      // 주민번호 앞 6자리로 각 고객에게 매칭
+      const rrnFront = (s: string) => String(s || "").replace(/\D/g, "").slice(0, 6);
+      const customers = localCustomers.listByAnnouncement(selected.id);
+
+      // 분리세대원 rrn → 당첨자 id 역인덱스
+      const sepRrnToCustomer = new Map<string, number>();
+      for (const c of customers) {
+        for (const m of c.separated_household_members || []) {
+          const f = rrnFront(m.rrn);
+          if (f) sepRrnToCustomer.set(f, c.id);
+        }
+      }
+
+      const byCustomer: Record<number, typeof extracted> = {};
+      let unmatched = 0;
+      for (const p of extracted) {
+        const f = rrnFront(p.ownerRrn);
+        const cid = sepRrnToCustomer.get(f);
+        if (cid == null) {
+          unmatched++;
+          continue;
+        }
+        if (!byCustomer[cid]) byCustomer[cid] = [];
+        byCustomer[cid].push(p);
+      }
+
+      let attached = 0;
+      for (const c of customers) {
+        // 분리세대원이 등록된 고객만 처리
+        if (!(c.separated_household_members || []).length) continue;
+        const ownProps = byCustomer[c.id] || [];
+        localCustomers.update(c.id, {
+          separated_properties: ownProps,
+          separated_property_checked_at: new Date().toISOString(),
+        });
+        attached++;
+      }
+
+      setSepResult({ attached, unmatched, total: extracted.length });
+      setReloadKey((k) => k + 1);
+    } catch (err: any) {
+      alert(err?.message || "분리세대 PDF 처리 실패");
+    } finally {
+      setUploadingSep(false);
+      if (separatedPdfRef.current) separatedPdfRef.current.value = "";
+    }
+  };
+
   const handleVerify = () => {
     if (!selected) return;
     const customers = localCustomers
@@ -225,6 +308,28 @@ export default function PropertyStepPage() {
             >
               <UserCheck className="w-4 h-4" /> 추가 검증
             </button>
+            <button
+              onClick={() => separatedPdfRef.current?.click()}
+              disabled={uploadingSep}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40"
+              title="청약홈 분리세대 주택소유 회신 PDF 업로드 (Gemini 자동 파싱)"
+            >
+              {uploadingSep ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> PDF 분석 중…</>
+              ) : (
+                <><FileText className="w-4 h-4" /> 분리세대 회신 PDF</>
+              )}
+            </button>
+            <input
+              ref={separatedPdfRef}
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleSeparatedPdfUpload(f);
+              }}
+            />
           </div>
 
           <IndividualVerifyModal
@@ -235,6 +340,25 @@ export default function PropertyStepPage() {
             fileHint="한 명의 주택소유 전산검색 결과 파일만 올려 해당 고객에게 붙입니다."
             onApply={handleIndividualUpload}
           />
+
+          {/* 분리세대 주택소유 PDF 업로드 결과 */}
+          {sepResult && (
+            <div className="card mb-4 p-3 text-sm bg-amber-50/70 border-amber-200">
+              <div className="flex items-center gap-2 flex-wrap">
+                <UserMinus className="w-4 h-4 text-amber-800" />
+                <span className="font-semibold text-amber-900">분리세대 주택소유 PDF 연결 완료</span>
+                <span className="text-amber-800">
+                  {sepResult.attached}명에게 분리세대 주택 부착 · 총 {sepResult.total}건 추출
+                </span>
+                {sepResult.unmatched > 0 && (
+                  <span className="text-red-700">매칭 실패 {sepResult.unmatched}건 (세대원내역 미등록)</span>
+                )}
+              </div>
+              <div className="mt-1 text-[11px] text-amber-800/80">
+                💡 배우자 분리세대 주택은 본인 세대 주택 수에 자동 합산되어 판정에 반영됩니다.
+              </div>
+            </div>
+          )}
 
           {/* 업로드 결과 */}
           {uploadResult && (

@@ -210,10 +210,87 @@ export function PropertyPanel({
         </div>
       )}
 
+      {/* ── 분리세대 주택소유 섹션 ── */}
+      {((customer.separated_household_members || []).length > 0 || (customer.separated_properties || []).length > 0) && (
+        <div className="mt-4 pt-4 border-t border-border-soft">
+          <div className="flex items-center gap-2 mb-2">
+            <Home className="w-3.5 h-3.5 text-amber-600" />
+            <h3 className="text-sm font-semibold text-ink-2">분리세대원 주택소유</h3>
+            {customer.separated_property_checked_at ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                ✓ 청약홈 회신 확인됨
+              </span>
+            ) : (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                ⚠ PDF 미업로드
+              </span>
+            )}
+          </div>
+
+          {/* 분리세대원 목록 */}
+          {(customer.separated_household_members || []).length > 0 && (
+            <div className="mb-2 text-xs text-ink-2">
+              <span className="text-ink-3">등록된 분리세대원: </span>
+              {(customer.separated_household_members || []).map((m, i) => (
+                <span key={i} className="inline-block mr-2 mb-1 px-2 py-0.5 rounded bg-surface2">
+                  {m.name} <span className="text-ink-3">({m.relation})</span>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* 분리세대 주택 목록 */}
+          {(customer.separated_properties || []).length > 0 ? (
+            <div className="space-y-1.5">
+              {(customer.separated_properties || []).map((p, i) => {
+                const isSpouse = /배우자/.test(p.relation || "");
+                return (
+                  <div
+                    key={i}
+                    className={`text-xs p-2 rounded border ${
+                      isSpouse ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-200"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="font-medium text-ink-2">{p.ownerName}</span>
+                      {p.relation && (
+                        <span className={`text-[10px] px-1 py-0 rounded ${
+                          isSpouse ? "bg-red-200 text-red-900" : "bg-gray-200 text-ink-3"
+                        }`}>
+                          {p.relation}
+                        </span>
+                      )}
+                      {isSpouse && (
+                        <span className="text-[10px] text-red-700 font-semibold">
+                          → 본인 판정에 합산
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-ink-3">
+                      {p.address} · {p.usage || "—"} · {p.areaM2 ? `${p.areaM2}㎡` : ""}
+                      {p.transferredDate && <span className="ml-1">(양도 {p.transferredDate})</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : customer.separated_property_checked_at ? (
+            <div className="text-xs text-ink-3 italic py-1">
+              회신 결과 분리세대원의 주택 보유 없음 ✓
+            </div>
+          ) : (
+            <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
+              💡 <strong>주택소유 단계에서 "분리세대 회신 PDF" 업로드 필요</strong> — 청약홈에 분리세대 전산검색을 요청해 받은 회신서를 업로드하면 Gemini가 자동으로 주택소유 내역을 추출합니다.
+            </div>
+          )}
+        </div>
+      )}
+
       <VerdictBox verdict={verdict} />
 
       <p className="text-[11px] text-ink-3 mt-3">
         * 판정 기준: 현재 보유 + 주거용만 카운트. 공고가 <strong>투기과열/청약과열</strong>이면 1건도 불가, 그 외 지역은 2주택부터 부적격.
+        <strong className="ml-1">배우자 분리세대</strong>의 주택은 본인 세대에 합산, 그 외 분리세대(자녀·부모 등)는 경고만 표시.
       </p>
     </div>
   );

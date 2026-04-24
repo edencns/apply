@@ -81,48 +81,108 @@ export function evaluateProperty(
 ): StageVerdict {
   const properties = customer.properties || [];
   // 주택소유 전산검색 파일이 업로드된 적 있으면, 레코드 없는 사람은 "무주택"으로 확정
-  if (properties.length === 0) {
-    if (customer.property_checked_at) {
-      return {
-        ok: true,
-        reasons: [],
-        warnings: [],
-        missing: false,
-        context: { count: 0, regulation: "무주택 확정", verified: true },
-      };
-    }
+  if (properties.length === 0 && !customer.property_checked_at) {
     return missing();
   }
 
-  // 현재 보유 + 주거용만 카운트
+  // 현재 보유 + 주거용만 카운트 (본인+세대원)
   const current = properties.filter(
     (p) => !p.transferredDate && isResidentialUse(p.usage),
   );
-  const count = current.length;
+
+  // ── 분리세대 주택 합산 ──
+  // 배우자 분리세대 = 법적 같은 세대 → 본인 판정에 합산
+  // 그 외(자녀·부모 등) 분리세대 = 원칙적으로 본인 판정에 영향 없음, 단 경고 표시
+  const separatedMembers = customer.separated_household_members || [];
+  const separatedProperties = customer.separated_properties || [];
+  const spouseRrns = new Set(
+    separatedMembers
+      .filter((m) => /배우자|부인|남편|처|妻|夫/.test(m.relation || ""))
+      .map((m) => (m.rrn || "").replace(/[^\d]/g, "").slice(0, 6))
+      .filter(Boolean),
+  );
+
+  // 분리세대 PDF에 기록된 주택 중 배우자 것만 본인 합산
+  const spouseProps = separatedProperties.filter((p) => {
+    const rrnFront = (p.ownerRrn || "").replace(/[^\d]/g, "").slice(0, 6);
+    if (!rrnFront) return false;
+    if (spouseRrns.has(rrnFront)) return true;
+    if (/배우자/.test(p.relation || "")) return true;
+    return false;
+  }).filter((p) => !p.transferredDate && isResidentialUse(p.usage));
+
+  const nonSpouseSeparatedProps = separatedProperties.filter(
+    (p) => !spouseProps.includes(p) && !p.transferredDate && isResidentialUse(p.usage),
+  );
+
+  const combinedCount = current.length + spouseProps.length;
   const regulation = (announcement?.eligibility_rules?.regulation as string) || "";
 
   const warnings: string[] = [];
+  const reasons: string[] = [];
 
   if (regulation === "투기과열" || regulation === "청약과열") {
     // 강화 규제: 1건이라도 보유 시 부적합
-    if (count > 0) {
-      return fail([`${regulation}지구 — 세대 주택 보유 ${count}건 (유주택자 배제)`], {
-        context: { count, regulation },
-      });
+    if (combinedCount > 0) {
+      const sources: string[] = [];
+      if (current.length > 0) sources.push(`본인 세대 ${current.length}건`);
+      if (spouseProps.length > 0) sources.push(`배우자 분리세대 ${spouseProps.length}건`);
+      reasons.push(`${regulation}지구 — 주택 보유 ${combinedCount}건 (${sources.join(" + ")})`);
     }
   } else {
     // 비규제 / 미지정: 2주택 이상 부적격, 1주택은 경고
-    if (count >= 2) {
-      return fail([`세대 주택 보유 ${count}건 (2주택 이상 부적격)`], {
-        context: { count, regulation: regulation || "비규제" },
-      });
-    }
-    if (count === 1) {
+    if (combinedCount >= 2) {
+      const sources: string[] = [];
+      if (current.length > 0) sources.push(`본인 세대 ${current.length}건`);
+      if (spouseProps.length > 0) sources.push(`배우자 분리세대 ${spouseProps.length}건`);
+      reasons.push(`주택 보유 ${combinedCount}건 (${sources.join(" + ")}) — 2주택 이상 부적격`);
+    } else if (combinedCount === 1) {
       warnings.push("1주택 보유 — 일반공급 가점제에서 감점");
     }
   }
 
-  return { ok: true, reasons: [], warnings, missing: false, context: { count, regulation: regulation || "비규제" } };
+  // 비배우자 분리세대원(자녀·부모 등) 주택은 판정 영향 없지만 경고
+  if (nonSpouseSeparatedProps.length > 0) {
+    const owners = Array.from(
+      new Set(nonSpouseSeparatedProps.map((p) => p.ownerName).filter(Boolean)),
+    );
+    warnings.push(
+      `분리세대원(${owners.join(", ")}) 주택 ${nonSpouseSeparatedProps.length}건 발견 — ` +
+      `원칙상 본인 판정 무관이나 60세 미만 직계존속 등 특수 조건은 수동 확인 권장`,
+    );
+  }
+
+  // 분리세대 체크 누락 경고 (분리세대원은 등록됐지만 주택소유 PDF 미업로드)
+  if (separatedMembers.length > 0 && !customer.separated_property_checked_at) {
+    warnings.push(
+      `분리세대원 ${separatedMembers.length}명 등록됨 — 청약홈 회신 PDF 업로드 필요 (배우자 포함 시 판정에 영향)`,
+    );
+  }
+
+  if (reasons.length > 0) {
+    return fail(reasons, {
+      context: {
+        count: current.length,
+        spouseCount: spouseProps.length,
+        combinedCount,
+        regulation,
+      },
+      warnings,
+    });
+  }
+
+  return {
+    ok: true,
+    reasons: [],
+    warnings,
+    missing: false,
+    context: {
+      count: current.length,
+      spouseCount: spouseProps.length,
+      combinedCount,
+      regulation: regulation || "비규제",
+    },
+  };
 }
 
 /* ─── Stage 4: 청약통장 순위 (선택사항 — 경고만, 부적합 판정 X) ─────────

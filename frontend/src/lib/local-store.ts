@@ -318,6 +318,28 @@ export interface LocalCustomer {
   }>;
   /** 주택소유 전산검색 파일 업로드 시각 — 파일에 레코드 없으면 무주택으로 간주 */
   property_checked_at?: string;
+  /** 분리세대원 (청약홈 자동 조회 대상이 아닌 별도 세대 가족) */
+  separated_household_members?: Array<{
+    name: string;
+    rrn: string;               // 주민번호 (앞6-뒷7 형태)
+    relation: string;          // 배우자·자녀·부모 등
+    note?: string;             // 메모 (예: "등본확인 필요")
+  }>;
+  /** 분리세대 명단 업로드 시각 — 없으면 "분리세대 없음"으로 간주 */
+  separated_checked_at?: string;
+  /** 분리세대원 주택소유 결과 (청약홈 분리세대 회신 PDF 파싱) */
+  separated_properties?: Array<{
+    ownerRrn: string;
+    ownerName: string;
+    relation?: string;
+    address: string;
+    areaM2?: number;
+    acquiredDate?: string;
+    transferredDate?: string;
+    usage?: string;
+  }>;
+  /** 분리세대 주택소유 PDF 업로드 시각 */
+  separated_property_checked_at?: string;
   savings_priority?: {
     verified: boolean;
     bankCode?: string;
