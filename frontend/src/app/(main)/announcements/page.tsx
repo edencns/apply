@@ -1318,27 +1318,57 @@ export default function AnnouncementsPage() {
                           const spApply = (form.rules as any).special_apply_date;
                           const appStart = form.application_start;
 
+                          // ── 이미 채워진 상태 ──
                           if (base) {
-                            // 자동 폴백으로 채워진 상태인지 표시
                             const source =
-                              base === annDate ? "공고 발표일과 동일하게 자동 채움" :
-                              base === spApply ? "특별공급 접수일로 자동 채움" :
-                              base === appStart ? "청약 접수 시작일로 자동 채움" :
+                              base === annDate ? "공고 발표일과 동일" :
+                              base === spApply ? "특별공급 접수일" :
+                              base === appStart ? "청약 접수 시작일" :
                               null;
-                            if (source) {
-                              return (
-                                <div className="mt-1 text-[11px] text-ink-3">
-                                  ℹ️ {source} (필요하면 위에서 직접 수정하세요)
-                                </div>
-                              );
-                            }
-                            return null;
+                            return (
+                              <div className="mt-1 text-[11px] text-ink-3">
+                                {source ? `ℹ️ ${source}로 자동 채워짐 (필요 시 위에서 직접 수정)` : "ℹ️ 수동 입력됨"}
+                              </div>
+                            );
                           }
-                          // 비어있는 상태 — 어떤 후보도 없는 심각한 상황
+
+                          // ── 비어있는 상태 ── 후보 버튼 제공
+                          const candidates: Array<{ label: string; value: string; source: string }> = [];
+                          if (annDate) candidates.push({ label: "공고 발표일", value: annDate, source: "가장 정확한 기준일" });
+                          if (spApply) candidates.push({ label: "특별공급 접수일", value: spApply, source: "차선" });
+                          if (appStart) candidates.push({ label: "청약 접수 시작일", value: appStart, source: "최후 수단" });
+
                           return (
-                            <div className="mt-1 text-[11px] text-red-600">
-                              ⚠ 비어있음. 공고 발표일·접수 시작일 중 하나라도 있어야 자동 채움이 가능합니다.
-                              위에서 직접 날짜를 입력하세요.
+                            <div className="mt-1.5 p-2 rounded-md bg-red-50/60 border border-red-200 space-y-1.5">
+                              <div className="text-[11px] text-red-700 font-medium">
+                                ⚠ 공고 기준일이 비어있습니다. 모든 자격 판정이 불가능해지니 반드시 채우세요.
+                              </div>
+                              {candidates.length > 0 ? (
+                                <div className="flex flex-wrap gap-1.5 items-center">
+                                  <span className="text-[10px] text-ink-3">추천 값:</span>
+                                  {candidates.map((c) => (
+                                    <button
+                                      key={c.value}
+                                      type="button"
+                                      onClick={() =>
+                                        setForm((p) => ({
+                                          ...p,
+                                          rules: { ...p.rules, announcement_base_date: c.value } as any,
+                                        }))
+                                      }
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-white border border-red-300 text-red-700 hover:bg-red-100"
+                                      title={c.source}
+                                    >
+                                      {c.label}: <span className="font-mono">{c.value.replace("T", " ")}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-[10.5px] text-red-700">
+                                  자동 채움에 사용할 후보 날짜도 없습니다.
+                                  위의 <strong>공고 발표일</strong> 또는 <strong>청약 접수 시작일</strong>을 먼저 입력해주세요.
+                                </div>
+                              )}
                             </div>
                           );
                         })()}
