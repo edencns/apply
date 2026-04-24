@@ -20,7 +20,7 @@ import {
 import AnnouncementPicker from "@/components/AnnouncementPicker";
 import { getSampleAsLocalAnnouncements } from "@/lib/sample-adapter";
 import { classifyIncoming, formatValue, IncomingCustomer, CustomerConflict } from "@/lib/customer-dedup";
-import { formatHousingCode, housingAreaString, formatPhone } from "@/lib/housing-code";
+import { formatHousingCode, housingAreaString, formatPhone, formatPhoneInput } from "@/lib/housing-code";
 import { detectCrossIssues, crossCheckSummary, type CrossCheckIssue } from "@/lib/customer-cross-check";
 
 interface Customer {
@@ -1200,9 +1200,16 @@ function CustomersPageInner() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-ink-2 mb-1">연락처</label>
-                  <input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    value={form.phone}
+                    onChange={(e) => setForm((p) => ({ ...p, phone: formatPhoneInput(e.target.value) }))}
+                    onBlur={(e) => setForm((p) => ({ ...p, phone: formatPhone(e.target.value) }))}
                     placeholder="010-0000-0000"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
+                    maxLength={13}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">

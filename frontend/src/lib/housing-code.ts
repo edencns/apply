@@ -122,3 +122,47 @@ export function formatPhone(raw: string | null | undefined): string {
   }
   return src;
 }
+
+/**
+ * 입력 중 실시간 포맷 — 타이핑하면서 하이픈이 자동 삽입됨
+ * 완성 전이어도 부분 포맷 제공.
+ *
+ * 예시 (휴대전화):
+ *   "0" → "0"
+ *   "010" → "010"
+ *   "0101" → "010-1"
+ *   "01012345" → "010-1234-5"
+ *   "01012345678" → "010-1234-5678"
+ *
+ * 예시 (서울 02):
+ *   "02" → "02"
+ *   "021234" → "02-1234"
+ *   "02123456" → "02-1234-56"
+ */
+export function formatPhoneInput(raw: string): string {
+  const digits = String(raw ?? "").replace(/\D/g, "").slice(0, 11);
+  if (!digits) return "";
+
+  // 02 서울 (2자리 지역번호)
+  if (digits.startsWith("02")) {
+    if (digits.length <= 2) return digits;
+    // 중간 부분 3자리 vs 4자리는 전체 길이로 판단
+    if (digits.length <= 6) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+    if (digits.length <= 9) {
+      // 9자리: 02-XXX-XXXX
+      return `${digits.slice(0, 2)}-${digits.slice(2, 5)}-${digits.slice(5)}`;
+    }
+    // 10자리: 02-XXXX-XXXX
+    return `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6, 10)}`;
+  }
+
+  // 휴대전화 010/011/016/017/018/019 + 기타 3자리 지역번호 (0XX)
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  // 11자리: 010-XXXX-XXXX / 10자리: 010-XXX-XXXX
+  if (digits.length === 11) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  }
+  // 8~10자리 중간 상태 — 4자리 중간 가정 후 나머지
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}

@@ -25,6 +25,7 @@ import {
   SUPPLY_TYPE_DOCUMENTS,
 } from "@/lib/document-checklist";
 import { calculateSubscriptionScore } from "@/lib/score-calculator";
+import { formatPhoneInput, formatPhone } from "@/lib/housing-code";
 import { evaluateFinal } from "@/lib/verification-rules";
 import { findStandbyCandidates, buildPromotionUpdates, PromotionCandidate } from "@/lib/standby-promotion";
 import { pullAll } from "@/lib/cloud-sync";
@@ -404,8 +405,16 @@ function RegistrationStage({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <Field label="성명" value={form.name} editable={editMode}
             onChange={(v) => setForm((p) => ({ ...p, name: v }))} />
-          <Field label="연락처" value={form.phone} editable={editMode} placeholder="010-0000-0000"
-            onChange={(v) => setForm((p) => ({ ...p, phone: v }))} />
+          <Field
+            label="연락처"
+            value={form.phone}
+            editable={editMode}
+            placeholder="010-0000-0000"
+            format={formatPhoneInput}
+            inputMode="tel"
+            maxLength={13}
+            onChange={(v) => setForm((p) => ({ ...p, phone: v }))}
+          />
           <div>
             <label className="text-xs text-ink-3 block mb-1">주민번호</label>
             <p className="font-medium text-ink font-mono text-xs">{fmtRRN(customer.rrn_front, customer.rrn_back)}</p>
@@ -701,16 +710,29 @@ function DocumentsStage({
 
 function Field({
   label, value, editable, placeholder, onChange,
-}: { label: string; value: any; editable: boolean; placeholder?: string; onChange: (v: string) => void }) {
+  format, inputMode, maxLength,
+}: {
+  label: string;
+  value: any;
+  editable: boolean;
+  placeholder?: string;
+  onChange: (v: string) => void;
+  /** 입력 중 값 변환 함수 (예: 전화번호 하이픈 자동 삽입) */
+  format?: (raw: string) => string;
+  inputMode?: "numeric" | "tel" | "email" | "text";
+  maxLength?: number;
+}) {
   return (
     <div>
       <label className="text-xs text-ink-3 block mb-1">{label}</label>
       {editable ? (
         <input
-          type="text"
+          type={inputMode === "tel" ? "tel" : "text"}
+          inputMode={inputMode}
+          maxLength={maxLength}
           value={value ?? ""}
           placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => onChange(format ? format(e.target.value) : e.target.value)}
           className="w-full border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
         />
       ) : (
