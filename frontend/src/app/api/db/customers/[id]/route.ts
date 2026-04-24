@@ -92,21 +92,25 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       ],
     });
 
-    // 감사 기록 — 판정 변경 및 수기 서명은 별도 액션으로도 기록
+    // 감사 기록 — 주요 필드만 before/after로 추려 기록
+    // 실제 담당자가 수정하는 필드(이름·연락처·주소·주택형 등)와 판정·서명 상태
+    const snapshot = (src: any) => ({
+      name: src?.name ?? null,
+      phone: src?.phone ?? null,
+      address: src?.address ?? null,
+      supply_type: src?.supply_type ?? null,
+      unit_type: src?.unit_type ?? null,
+      verification_verdict: src?.verification_verdict ?? null,
+      superseded: !!src?.superseded,
+      is_standby: !!src?.is_standby,
+      manual_review_signed: !!src?.manual_review?.signed_off,
+      reviewer_name: src?.manual_review?.reviewer_name ?? null,
+      past_winnings_count: (src?.past_winnings || []).length,
+    });
     await logAudit({
       session, entity: "customer", entity_id: id, action: "update",
-      before: {
-        verification_verdict: existing.verification_verdict ?? null,
-        superseded: !!existing.superseded,
-        manual_review_signed: !!existing?.manual_review?.signed_off,
-        past_winnings_count: (existing?.past_winnings || []).length,
-      },
-      after: {
-        verification_verdict: merged.verification_verdict ?? null,
-        superseded: !!merged.superseded,
-        manual_review_signed: !!merged?.manual_review?.signed_off,
-        past_winnings_count: (merged?.past_winnings || []).length,
-      },
+      before: snapshot(existing),
+      after: snapshot(merged),
       req,
     });
     await logVerdictChange(

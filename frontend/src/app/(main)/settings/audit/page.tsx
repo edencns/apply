@@ -67,7 +67,189 @@ function EntityBadge({ entity, id }: { entity: string; id: number }) {
   );
 }
 
+/** 기술 필드명 → 한글 레이블 */
+const FIELD_LABELS: Record<string, string> = {
+  verification_verdict: "최종 판정",
+  superseded: "승계됨",
+  manual_review_signed: "수기 서명 완료",
+  past_winnings_count: "과거 당첨 이력(건)",
+  reviewer_name: "검토자명",
+  signed_at: "서명 시각",
+  name: "이름",
+  rrn_front: "주민번호 앞자리",
+  phone: "연락처",
+  address: "주소",
+  email: "이메일",
+  role: "권한",
+  title: "공고명",
+  status: "상태",
+  announcement_id: "공고 ID",
+  supply_type: "공급유형",
+  unit_type: "주택형",
+  is_standby: "예비자",
+  note: "메모",
+  filename: "파일명",
+  size: "크기",
+  kind: "용도",
+  action_detail: "세부 액션",
+  bulk: "일괄 작업",
+  total_in_request: "요청 내 총 건수",
+  announcementTitle: "공고명",
+  winDate: "당첨일",
+  canonicalType: "공급유형",
+  restrictionYears: "재당첨 제한(년)",
+  filters: "필터",
+  limit: "조회 건수",
+  password_changed: "비밀번호 변경됨",
+};
+
+/** 특정 필드의 코드값 → 한글 */
+const VALUE_MAPPERS: Record<string, (v: any) => string> = {
+  verification_verdict: (v) => {
+    if (v == null) return "—";
+    const s = String(v).toLowerCase();
+    if (s === "eligible" || (s.includes("적합") && !s.includes("부"))) return "✅ 적합";
+    if (s === "ineligible" || s.includes("부적합")) return "❌ 부적합";
+    if (s === "pending" || s.includes("보류")) return "⏸ 판정 보류";
+    if (s === "standby" || s.includes("예비")) return "대기(예비)";
+    return String(v);
+  },
+  phone: (v) => {
+    if (!v) return "—";
+    const s = String(v);
+    // 뒷 4자리만 표시: 010-****-1234
+    const m = s.match(/(\d{2,4})[-\s]?(\d{3,4})[-\s]?(\d{4})$/);
+    if (m) return `${m[1]}-****-${m[3]}`;
+    return s;
+  },
+  address: (v) => {
+    if (!v) return "—";
+    const s = String(v).trim();
+    const parts = s.split(/\s+/);
+    if (parts.length <= 3) return s;
+    return parts.slice(0, 3).join(" ") + " ***";
+  },
+  status: (v) => {
+    const s = String(v || "").toLowerCase();
+    if (s === "draft") return "작성 중";
+    if (s === "published") return "공개";
+    if (s === "closed") return "종료";
+    return String(v ?? "—");
+  },
+  role: (v) => {
+    const s = String(v || "").toLowerCase();
+    if (s === "admin") return "관리자";
+    if (s === "staff") return "담당자";
+    return String(v ?? "—");
+  },
+  action_detail: (v) => {
+    const s = String(v || "");
+    if (s === "download") return "파일 다운로드";
+    if (s === "audit_read") return "감사 로그 조회";
+    return s;
+  },
+};
+
+function labelFor(key: string): string {
+  return FIELD_LABELS[key] || key;
+}
+
+function formatVal(v: any, key?: string): string {
+  if (key && VALUE_MAPPERS[key]) return VALUE_MAPPERS[key](v);
+  if (v === null || v === undefined || v === "") return "—";
+  if (typeof v === "boolean") return v ? "예" : "아니오";
+  if (typeof v === "object") {
+    try { return JSON.stringify(v, null, 0).slice(0, 100); } catch { return "—"; }
+  }
+  return String(v);
+}
+
+/** 변경된 필드만 뽑아서 "이름: 전 → 후" 한 줄 요약 생성 */
+function buildSummary(before: any, after: any): string[] {
+  const keys = new Set<string>([
+    ...Object.keys(before || {}),
+    ...Object.keys(after || {}),
+  ]);
+  const out: string[] = [];
+  keys.forEach((k) => {
+    const b = before?.[k];
+    const a = after?.[k];
+    if (JSON.stringify(b) === JSON.stringify(a)) return;
+    out.push(`${labelFor(k)}: ${formatVal(b, k)} → ${formatVal(a, k)}`);
+  });
+  return out;
+}
+
+function AuditRowItem({
+  row,
+  expanded,
+  onToggle,
+}: {
+  row: AuditRow;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const summaryLines = buildSummary(row.before, row.after);
+  const hasDetail = row.before || row.after;
+
+  return (
+    <div className="px-4 py-3 hover:bg-surface2/60 transition-colors">
+      <div
+        className="flex items-center gap-3 flex-wrap cursor-pointer"
+        onClick={onToggle}
+      >
+        {/* 시각 */}
+        <div className="text-[11px] text-ink-3 flex items-center gap-1 min-w-[140px] font-mono">
+          <Clock className="w-3 h-3" />
+          {row.ts.replace("T", " ").slice(0, 19)}
+        </div>
+        {/* 사용자 */}
+        <div className="text-[12px] font-semibold text-ink min-w-[80px]">
+          {row.user_email || `user#${row.user_id}`}
+        </div>
+        {/* 액션 */}
+        <ActionBadge action={row.action} />
+        {/* 대상 */}
+        <EntityBadge entity={row.entity} id={row.entity_id} />
+        {/* 펼침 화살표 */}
+        <div className="ml-auto text-[11px] text-ink-3">
+          {expanded ? "▲ 접기" : "▼ 상세"}
+        </div>
+      </div>
+
+      {/* 한 줄 요약 — 펼치지 않아도 핵심 변경이 바로 보임 */}
+      {!expanded && summaryLines.length > 0 && (
+        <div className="mt-1.5 pl-[152px] text-[12px] text-ink-2 space-y-0.5">
+          {summaryLines.slice(0, 3).map((line, i) => (
+            <div key={i} className="truncate">· {line}</div>
+          ))}
+          {summaryLines.length > 3 && (
+            <div className="text-[11px] text-ink-3">…외 {summaryLines.length - 3}건</div>
+          )}
+        </div>
+      )}
+
+      {/* 상세 (펼침 시) */}
+      {expanded && (
+        <div className="mt-2 pl-3 border-l-2 border-border-soft">
+          {hasDetail && (
+            <DiffView before={row.before} after={row.after} />
+          )}
+          <div className="mt-2 text-[10px] text-ink-3 font-mono">
+            {row.ip && <span className="mr-3">IP: {row.ip}</span>}
+            {row.user_agent && (
+              <span>UA: {row.user_agent.slice(0, 60)}{row.user_agent.length > 60 ? "…" : ""}</span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DiffView({ before, after }: { before: any; after: any }) {
+  const [showAll, setShowAll] = useState(false);
+
   const keys = new Set<string>([
     ...Object.keys(before || {}),
     ...Object.keys(after || {}),
@@ -82,37 +264,81 @@ function DiffView({ before, after }: { before: any; after: any }) {
     rows.push({ key: k, b, a, changed });
   });
 
+  const changedRows = rows.filter((r) => r.changed);
+  const unchangedRows = rows.filter((r) => !r.changed);
+  const visibleRows = showAll ? rows : changedRows;
+
+  if (changedRows.length === 0 && !showAll) {
+    return (
+      <div className="mt-2 text-[11px] text-ink-3 italic">
+        이 변경에는 주요 필드 차이가 없습니다.
+        {unchangedRows.length > 0 && (
+          <button
+            onClick={() => setShowAll(true)}
+            className="ml-2 text-accent hover:underline"
+          >
+            전체 {unchangedRows.length}개 필드 보기
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="mt-2 border border-border-soft rounded overflow-hidden">
-      <table className="w-full text-[11px]">
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.key} className={r.changed ? "bg-amber-50" : ""}>
-              <td className="px-2 py-1 font-mono text-ink-3 border-b border-border-soft w-32">{r.key}</td>
-              <td className="px-2 py-1 text-ink-2 border-b border-border-soft">
-                <span className={r.changed ? "line-through text-red-600" : ""}>
-                  {formatVal(r.b)}
-                </span>
-              </td>
-              <td className="px-2 py-1 border-b border-border-soft">→</td>
-              <td className="px-2 py-1 text-ink border-b border-border-soft">
-                <span className={r.changed ? "text-green-700 font-medium" : ""}>
-                  {formatVal(r.a)}
-                </span>
-              </td>
+    <div className="mt-2">
+      <div className="border border-border-soft rounded overflow-hidden">
+        <table className="w-full text-[12px]">
+          <thead className="bg-surface2/60">
+            <tr>
+              <th className="px-3 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-wide text-ink-3 w-36">항목</th>
+              <th className="px-3 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-wide text-ink-3">이전</th>
+              <th className="px-3 py-1.5 w-8"></th>
+              <th className="px-3 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-wide text-ink-3">변경 후</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {visibleRows.map((r) => (
+              <tr
+                key={r.key}
+                className={r.changed ? "bg-amber-50/60" : "text-ink-3"}
+              >
+                <td className="px-3 py-1.5 font-medium border-t border-border-soft text-ink-2">
+                  {labelFor(r.key)}
+                </td>
+                <td className="px-3 py-1.5 border-t border-border-soft">
+                  <span className={r.changed ? "line-through text-red-600" : ""}>
+                    {formatVal(r.b, r.key)}
+                  </span>
+                </td>
+                <td className="px-3 py-1.5 text-ink-3 border-t border-border-soft">→</td>
+                <td className="px-3 py-1.5 border-t border-border-soft">
+                  <span className={r.changed ? "text-green-700 font-semibold" : ""}>
+                    {formatVal(r.a, r.key)}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!showAll && unchangedRows.length > 0 && (
+        <button
+          onClick={() => setShowAll(true)}
+          className="mt-1 text-[11px] text-ink-3 hover:text-ink hover:underline"
+        >
+          변경되지 않은 {unchangedRows.length}개 필드도 보기
+        </button>
+      )}
+      {showAll && (
+        <button
+          onClick={() => setShowAll(false)}
+          className="mt-1 text-[11px] text-ink-3 hover:text-ink hover:underline"
+        >
+          변경된 것만 보기
+        </button>
+      )}
     </div>
   );
-}
-
-function formatVal(v: any): string {
-  if (v === null || v === undefined) return "—";
-  if (typeof v === "boolean") return v ? "예" : "아니오";
-  if (typeof v === "object") return JSON.stringify(v);
-  return String(v);
 }
 
 export default function AuditPage() {
@@ -247,45 +473,12 @@ export default function AuditPage() {
         ) : (
           <div className="divide-y divide-border-soft">
             {rows.map((row) => (
-              <div key={row.id} className="px-4 py-3 hover:bg-surface2/60 transition-colors">
-                <div
-                  className="flex items-center gap-3 flex-wrap cursor-pointer"
-                  onClick={() => toggleExpand(row.id)}
-                >
-                  {/* 시각 */}
-                  <div className="text-[11px] text-ink-3 flex items-center gap-1 min-w-[140px] font-mono">
-                    <Clock className="w-3 h-3" />
-                    {row.ts.replace("T", " ").slice(0, 19)}
-                  </div>
-                  {/* 사용자 */}
-                  <div className="text-[12px] font-semibold text-ink min-w-[80px]">
-                    {row.user_email || `user#${row.user_id}`}
-                  </div>
-                  {/* 액션 */}
-                  <ActionBadge action={row.action} />
-                  {/* 대상 */}
-                  <EntityBadge entity={row.entity} id={row.entity_id} />
-                  {/* 펼침 화살표 */}
-                  <div className="ml-auto text-[11px] text-ink-3">
-                    {expanded.has(row.id) ? "▲ 접기" : "▼ 상세"}
-                  </div>
-                </div>
-
-                {/* 상세 (펼침 시) */}
-                {expanded.has(row.id) && (
-                  <div className="mt-2 pl-3 border-l-2 border-border-soft">
-                    {(row.before || row.after) && (
-                      <DiffView before={row.before} after={row.after} />
-                    )}
-                    <div className="mt-2 text-[10px] text-ink-3 font-mono">
-                      {row.ip && <span className="mr-3">IP: {row.ip}</span>}
-                      {row.user_agent && (
-                        <span>UA: {row.user_agent.slice(0, 60)}{row.user_agent.length > 60 ? "…" : ""}</span>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <AuditRowItem
+                key={row.id}
+                row={row}
+                expanded={expanded.has(row.id)}
+                onToggle={() => toggleExpand(row.id)}
+              />
             ))}
           </div>
         )}
