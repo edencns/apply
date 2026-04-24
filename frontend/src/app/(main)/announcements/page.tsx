@@ -646,18 +646,14 @@ export default function AnnouncementsPage() {
       }
       setPdfFilled(filled);
 
-      // ─── 자동 고급 분석 트리거 ───────────────────────────
-      // 기본 파싱 결과만으로 부족한 경우 (주택관리번호·지역우선공급·서류상세·예치금 등)
-      // 사용자가 별도로 버튼 누를 필요 없이 백그라운드에서 추가 추출.
-      // 판정: Core 결과가 성공했고 확장 필드가 비어있으면 자동 실행.
-      const needsExtended = (() => {
-        const r = d as any;
-        // 기본 파싱이 지역우선공급·서류상세·예치금·주택관리번호 정보를 커버하지 못하는 구조
-        // → 무조건 확장 분석 필요 (Core 스키마에는 이 필드가 없음)
-        return true;
-      })();
-      if (needsExtended) {
-        // 의도적으로 await 안 함 — UI 블로킹 없이 백그라운드 실행
+      // ─── 고급 분석은 수동 버튼으로 ───────────────────────────
+      // 과거에는 자동 실행했지만 Gemini API 비용 누수가 커서 기본 비활성.
+      // 필요 시 "🔬 고급 분석" 버튼을 담당자가 직접 클릭.
+      // 강제로 자동 실행하려면 NEXT_PUBLIC_AUTO_EXTENDED_ANALYSIS=1
+      const autoExtended =
+        typeof process !== "undefined" &&
+        process.env.NEXT_PUBLIC_AUTO_EXTENDED_ANALYSIS === "1";
+      if (autoExtended) {
         runExtendedSilent(file).catch((e) => {
           console.warn("[auto-extended] 실패:", e?.message);
         });

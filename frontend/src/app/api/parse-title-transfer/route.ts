@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI, Type } from "@google/genai";
 import { getSession } from "@/lib/auth";
 import { guardRequest } from "@/lib/rate-limit";
+import { sha256Base64, getCached, setCached, makeCacheKey } from "@/lib/llm-cache";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -163,6 +164,21 @@ export async function POST(req: NextRequest) {
     }
 
     const arrayBuf = await file.arrayBuffer();
+
+    // 같은 PDF 재호출 방지 캐시
+    const hash = await sha256Base64(arrayBuf);
+    const cacheKey = makeCacheKey("parse-title-transfer", hash);
+    const cached = getCached<any>(cacheKey);
+    if (cached) {
+      return NextResponse.json({
+        success: true,
+        filename: file.name,
+        ...cached,
+        durationMs: 0,
+        cached: true,
+      });
+    }
+
     const base64 = Buffer.from(arrayBuf).toString("base64");
 
     const ai = new GoogleGenAI({ apiKey });
@@ -197,6 +213,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    setCached(cacheKey, parsed);
     return NextResponse.json({
       success: true,
       filename: file.name,

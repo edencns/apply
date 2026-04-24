@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { extractExtendedWithGemini } from "@/lib/parse-engines/gemini";
 import { getSession } from "@/lib/auth";
 import { guardRequest } from "@/lib/rate-limit";
+import { sha256Base64, getCached, setCached, makeCacheKey } from "@/lib/llm-cache";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // Vercel Pro 기본.
@@ -38,6 +39,19 @@ export async function POST(req: NextRequest) {
     const arrayBuf = await file.arrayBuffer();
     const buf = Buffer.from(arrayBuf);
 
+    // 같은 PDF 재호출 방지용 캐시 (세션 내 30분)
+    const hash = await sha256Base64(arrayBuf);
+    const cacheKey = makeCacheKey("parse-announcement-extended", hash);
+    const cached = getCached<any>(cacheKey);
+    if (cached) {
+      return NextResponse.json({
+        success: true,
+        data: cached.data,
+        durationMs: 0,
+        cached: true,
+      });
+    }
+
     const result = await extractExtendedWithGemini(new Uint8Array(buf));
 
     if (result.error) {
@@ -47,6 +61,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    setCached(cacheKey, { data: result.data });
     return NextResponse.json({
       success: true,
       data: result.data,
