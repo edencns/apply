@@ -258,6 +258,42 @@ export default function AnnouncementsPage() {
     return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
+  /**
+   * 공고 기준일 자동 폴백 체인 (무주택 기간·세대원 수 등 모든 자격 판정 기준)
+   *
+   * 우선순위:
+   *  1. 이미 announcement_base_date가 있으면 그대로 유지
+   *  2. 공고 발표일(announcement_date)이 있으면 → 폴백 ★ 가장 정확
+   *  3. 특별공급 접수일(special_apply_date)이 있으면 → 폴백
+   *  4. 청약 접수 시작일(application_start)로 폴백 ★ 마지막 수단
+   *
+   * 상시 감시: 사용자가 직접 날짜를 수정하거나, 고급 분석이 늦게 완료되거나,
+   * 공고 편집 중 로드될 때도 자동으로 채워짐.
+   */
+  useEffect(() => {
+    const rules: any = form.rules || {};
+    if (rules.announcement_base_date) return; // 이미 있으면 건드리지 않음
+
+    const candidate =
+      rules.announcement_date ||
+      rules.special_apply_date ||
+      form.application_start ||
+      null;
+
+    if (candidate) {
+      setForm((p) => ({
+        ...p,
+        rules: { ...p.rules, announcement_base_date: candidate } as any,
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    (form.rules as any).announcement_date,
+    (form.rules as any).special_apply_date,
+    form.application_start,
+    (form.rules as any).announcement_base_date,
+  ]);
+
   const normalizeDateTime = (v: string): string | null => {
     if (!v) return null;
     return /\d{2}:\d{2}:\d{2}/.test(v) ? v : `${v}:00`;
@@ -672,13 +708,7 @@ export default function AnnouncementsPage() {
         put("duplicate_application_rule", "중복청약 규칙", d.duplicateApplicationRule);
         put("passbook_reuse_blocked", "통장 재사용 불가", d.passbookReuseBlocked);
         put("long_term_overseas_restriction", "해외체류 제한", d.longTermOverseasRestriction);
-
-        // 폴백: 공고 기준일이 추출되지 않았고 공고 발표일은 있으면
-        // 대부분 "공고 기준일 = 공고 발표일(모집공고일)"이므로 자동 채움
-        if (!next.rules.announcement_base_date && next.rules.announcement_date) {
-          next.rules.announcement_base_date = next.rules.announcement_date;
-          filled.push("공고기준일(발표일로 자동 폴백)");
-        }
+        // 공고기준일 폴백은 상위 useEffect에서 상시 자동 처리됨
         return next;
       });
       if (filled.length > 0) {
@@ -749,12 +779,7 @@ export default function AnnouncementsPage() {
         put("duplicate_application_rule", "중복청약 규칙", d.duplicateApplicationRule);
         put("passbook_reuse_blocked", "통장 재사용 불가", d.passbookReuseBlocked);
         put("long_term_overseas_restriction", "해외체류 제한", d.longTermOverseasRestriction);
-
-        // 폴백: 공고 기준일 = 공고 발표일 (대부분의 공고가 동일)
-        if (!next.rules.announcement_base_date && next.rules.announcement_date) {
-          next.rules.announcement_base_date = next.rules.announcement_date;
-          filled.push("공고기준일(발표일로 자동 폴백)");
-        }
+        // 공고기준일 폴백은 상위 useEffect에서 상시 자동 처리됨
         return next;
       });
       if (filled.length === 0) filled.push("확장 필드 추출 결과 없음");
@@ -1287,30 +1312,36 @@ export default function AnnouncementsPage() {
                               : "border-gray-300"
                           }`}
                         />
-                        {!(form.rules as any).announcement_base_date && (
-                          <div className="mt-1 flex items-center gap-2">
-                            <span className="text-[11px] text-red-600">
-                              ⚠ 비어있음. 공고 발표일과 동일한 경우가 많습니다.
-                            </span>
-                            {(form.rules as any).announcement_date && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setForm((p) => ({
-                                    ...p,
-                                    rules: {
-                                      ...p.rules,
-                                      announcement_base_date: (p.rules as any).announcement_date,
-                                    } as any,
-                                  }))
-                                }
-                                className="text-[11px] text-accent underline hover:opacity-80"
-                              >
-                                공고 발표일({(form.rules as any).announcement_date})로 자동 채움
-                              </button>
-                            )}
-                          </div>
-                        )}
+                        {(() => {
+                          const base = (form.rules as any).announcement_base_date;
+                          const annDate = (form.rules as any).announcement_date;
+                          const spApply = (form.rules as any).special_apply_date;
+                          const appStart = form.application_start;
+
+                          if (base) {
+                            // 자동 폴백으로 채워진 상태인지 표시
+                            const source =
+                              base === annDate ? "공고 발표일과 동일하게 자동 채움" :
+                              base === spApply ? "특별공급 접수일로 자동 채움" :
+                              base === appStart ? "청약 접수 시작일로 자동 채움" :
+                              null;
+                            if (source) {
+                              return (
+                                <div className="mt-1 text-[11px] text-ink-3">
+                                  ℹ️ {source} (필요하면 위에서 직접 수정하세요)
+                                </div>
+                              );
+                            }
+                            return null;
+                          }
+                          // 비어있는 상태 — 어떤 후보도 없는 심각한 상황
+                          return (
+                            <div className="mt-1 text-[11px] text-red-600">
+                              ⚠ 비어있음. 공고 발표일·접수 시작일 중 하나라도 있어야 자동 채움이 가능합니다.
+                              위에서 직접 날짜를 입력하세요.
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
