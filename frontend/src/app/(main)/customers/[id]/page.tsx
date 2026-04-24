@@ -35,6 +35,7 @@ import { parseStageParam, STAGE_NUMBER, StageKey } from "@/components/verificati
 import { HouseholdPanel, PropertyPanel, SavingsPanel } from "@/components/verification/panels";
 import ManualReviewBlock from "@/components/ManualReviewBlock";
 import PastWinningsBlock from "@/components/PastWinningsBlock";
+import TitleTransferBlock from "@/components/TitleTransferBlock";
 import {
   ArrowLeft, User, Phone, Calculator, Loader2, AlertCircle, Trash2, Edit2, Save, X,
   Home, Baby, CreditCard, Landmark, BookOpen, ChevronRight, FileText, CheckCircle2,
@@ -615,6 +616,9 @@ function DocumentsStage({
 
       {/* Phase #8 — 청약홈 과거 당첨 이력 */}
       <PastWinningsBlock customer={customer} onUpdate={(c) => c && onUpdate(c)} />
+
+      {/* 명의변경 이력 — 계약 체결 이후 상속·증여·전매 발생 시 */}
+      <TitleTransferBlock customer={customer} onUpdate={(c) => c && onUpdate(c)} />
 
       {/* Phase #6 — 담당자 승인 체크리스트 + 서명 */}
       <ManualReviewBlock customer={customer} onUpdate={(c) => c && onUpdate(c)} />

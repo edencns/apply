@@ -158,6 +158,27 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       });
     }
 
+    // 명의변경 이력 — 신규 또는 갱신 시 별도 액션으로 기록
+    const beforeTT = JSON.stringify(existing?.title_transfer || null);
+    const afterTT = JSON.stringify(merged?.title_transfer || null);
+    if (beforeTT !== afterTT) {
+      await logAudit({
+        session, entity: "customer", entity_id: id, action: "title_transfer",
+        before: existing?.title_transfer ? {
+          reason: existing.title_transfer.reason,
+          newHolder: existing.title_transfer.newHolder?.name,
+        } : null,
+        after: merged?.title_transfer ? {
+          reason: merged.title_transfer.reason,
+          transferDate: merged.title_transfer.transferDate,
+          newHolder: merged.title_transfer.newHolder?.name,
+          relation: merged.title_transfer.newHolder?.relation,
+          confidence: merged.title_transfer.aiConfidence,
+        } : null,
+        req,
+      });
+    }
+
     await broadcast("customer:updated", {
       id, announcement_id: merged.announcement_id, by: Number(session.sub),
     });

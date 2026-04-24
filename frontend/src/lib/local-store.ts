@@ -340,6 +340,34 @@ export interface LocalCustomer {
   }>;
   /** 분리세대 주택소유 PDF 업로드 시각 */
   separated_property_checked_at?: string;
+  /**
+   * 명의변경 이력 — 상속·증여·전매·이혼재산분할 등으로 계약자가 바뀐 경우.
+   * 계약 체결 이후 발생하는 이벤트라 워크플로우 6단계에서 별도 처리.
+   */
+  title_transfer?: {
+    reason: "상속" | "배우자증여" | "부모자녀증여" | "이혼재산분할" | "전매" | "기타";
+    transferDate?: string;          // YYYY-MM-DD
+    oldHolder?: {
+      name?: string;
+      rrn?: string;                 // 기존 명의자 주민번호
+      address?: string;
+    };
+    newHolder?: {
+      name?: string;
+      rrn?: string;                 // 신 명의자 주민번호 (암호화 대상)
+      address?: string;
+      phone?: string;
+      relation?: string;            // 배우자/자녀/부모/상속인 등
+    };
+    submittedDocuments?: string[];  // 제출된 서류 목록
+    originalFileUrl?: string;       // 스캔본 PDF 프록시 URL
+    originalFileName?: string;
+    aiConfidence?: "high" | "med" | "low";
+    aiNotes?: string;               // AI가 담당자에게 전달한 특이사항
+    reviewedBy?: number;            // 승인한 담당자 user_id
+    reviewedAt?: string;            // 승인 시각
+    createdAt: string;              // 레코드 생성 시각
+  };
   savings_priority?: {
     verified: boolean;
     bankCode?: string;

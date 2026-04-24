@@ -35,6 +35,7 @@ const ACTION_LABELS: Record<string, { label: string; color: string; icon: any }>
   update_verdict: { label: "판정 변경", color: "bg-amber-100 text-amber-800", icon: AlertTriangle },
   manual_sign: { label: "수기 서명", color: "bg-emerald-100 text-emerald-800", icon: FileSignature },
   past_winnings_change: { label: "과거당첨 수정", color: "bg-purple-100 text-purple-800", icon: History },
+  title_transfer: { label: "명의변경", color: "bg-rose-100 text-rose-800", icon: History },
   role_change: { label: "권한 변경", color: "bg-orange-100 text-orange-800", icon: Shield },
 };
 
@@ -439,6 +440,7 @@ export default function AuditPage() {
             <option value="update_verdict">판정 변경</option>
             <option value="manual_sign">수기 서명</option>
             <option value="past_winnings_change">과거당첨 수정</option>
+            <option value="title_transfer">명의변경</option>
             <option value="role_change">권한 변경</option>
           </select>
         </div>

@@ -74,6 +74,14 @@ export const WORKFLOW_STEPS: WorkflowStep[] = [
     description: "공급유형별 필수 서류 체크리스트 + 4단계 종합으로 최종 적합·부적합 판정을 내립니다. 부적합일 경우 예비 승계가 가능합니다.",
     href: "/workflow/documents",
   },
+  {
+    step: 6,
+    key: "transfers",
+    title: "명의변경",
+    description: "계약 체결 이후 상속·증여·전매 등으로 계약자가 바뀐 경우 서류 스캔본을 업로드하면 AI가 사유·신·구 명의자·관계를 자동 추출합니다. 배치 처리.",
+    fileHint: "명의변경 서류 스캔본 PDF (파일명 예: 101-101)",
+    href: "/workflow/transfers",
+  },
 ];
 
 // 단계 간 prev/next 자동 세팅

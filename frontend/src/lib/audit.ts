@@ -21,6 +21,7 @@ export type AuditAction =
   | "update_verdict"
   | "manual_sign"
   | "past_winnings_change"
+  | "title_transfer"
   | "role_change";
 
 export interface AuditParams {
