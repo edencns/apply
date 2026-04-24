@@ -37,6 +37,7 @@ import { HouseholdPanel, PropertyPanel, SavingsPanel } from "@/components/verifi
 import ManualReviewBlock from "@/components/ManualReviewBlock";
 import PastWinningsBlock from "@/components/PastWinningsBlock";
 import TitleTransferBlock from "@/components/TitleTransferBlock";
+import DocumentPageMapper from "@/components/DocumentPageMapper";
 import {
   ArrowLeft, User, Phone, Calculator, Loader2, AlertCircle, Trash2, Edit2, Save, X,
   Home, Baby, CreditCard, Landmark, BookOpen, ChevronRight, FileText, CheckCircle2,
@@ -497,10 +498,41 @@ function DocumentsStage({
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(customer.verification_checked_at || null);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+  const [mapperOpen, setMapperOpen] = useState(false);
+  const [mapperInitialPage, setMapperInitialPage] = useState(1);
 
   useEffect(() => { setLocalSubmitted(submitted); }, [customer.id]); // eslint-disable-line
 
   const docFiles = customer.document_files || {};
+  const bundle = docFiles["서류 묶음(통합)"];
+
+  /** 매퍼 열기 — 특정 서류의 기존 지정 페이지에서 시작 */
+  const openMapperFor = (docName?: string) => {
+    const startPage = docName && docFiles[docName]?.page ? docFiles[docName]!.page! : 1;
+    setMapperInitialPage(startPage);
+    setMapperOpen(true);
+  };
+
+  /** 특정 서류에 페이지 지정 / 해제 */
+  const handleAssignPage = (docName: string, page: number | undefined) => {
+    const nextFiles = { ...(customer.document_files || {}) };
+    const prev = nextFiles[docName] || {};
+    if (page === undefined) {
+      // 해제 — page만 제거, 체크포인트 결과는 유지
+      delete nextFiles[docName];
+      setLocalSubmitted((p) => ({ ...p, [docName]: false }));
+    } else {
+      nextFiles[docName] = { ...prev, page };
+      setLocalSubmitted((p) => ({ ...p, [docName]: true }));
+    }
+    const updated = localCustomers.update(customer.id, {
+      document_files: nextFiles,
+      documents_submitted: page === undefined
+        ? { ...localSubmitted, [docName]: false }
+        : { ...localSubmitted, [docName]: true },
+    } as any);
+    if (updated) onUpdate(updated);
+  };
 
   /** 특정 서류에 PDF/이미지 업로드 → Blob → customer.document_files에 저장 */
   const handleUploadDoc = async (docName: string, file: File) => {
@@ -723,6 +755,30 @@ function DocumentsStage({
             style={{ width: `${percent}%` }}
           />
         </div>
+
+        {/* 서류 묶음 PDF 매퍼 진입점 */}
+        {bundle?.url && (
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => openMapperFor()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm"
+            >
+              📋 페이지 매퍼 열기
+            </button>
+            <span className="text-[11px] text-ink-3">
+              묶음 PDF를 페이지별로 넘기며 각 서류 위치를 한 번에 지정합니다
+            </span>
+            <a
+              href={bundle.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] text-accent hover:underline ml-auto"
+            >
+              📄 전체 PDF 원본 ({bundle.filename || "열기"})
+            </a>
+          </div>
+        )}
       </div>
 
       {/* 서류 체크리스트 */}
@@ -766,35 +822,34 @@ function DocumentsStage({
                             조건부
                           </span>
                         )}
-                        {file && (
-                          <>
-                            <a
-                              href={file.page && file.page > 1 ? `${file.url}#page=${file.page}` : file.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-0.5 text-[11px] text-accent hover:underline"
-                              title={`${file.filename}${file.page && file.page > 1 ? ` (${file.page}p부터)` : ""}`}
-                            >
-                              📄 원본 열기{file.page && file.page > 1 ? ` (${file.page}p)` : ""}
-                            </a>
-                            <label className="inline-flex items-center gap-0.5 text-[10px] text-ink-3">
-                              시작페이지
-                              <input
-                                type="number"
-                                min={1}
-                                value={file.page ?? 1}
-                                onChange={(e) => {
-                                  const p = Math.max(1, Number(e.target.value) || 1);
-                                  const next = { ...(customer.document_files || {}) };
-                                  next[d.name] = { ...file, page: p };
-                                  const u = localCustomers.update(customer.id, { document_files: next } as any);
-                                  if (u) onUpdate(u);
-                                }}
-                                className="w-12 border border-gray-200 rounded px-1 py-0 text-[10px]"
-                                title="서류 묶음 PDF 내에서 이 서류가 시작되는 페이지 번호"
-                              />
-                            </label>
-                          </>
+                        {/* 묶음 PDF 내 지정된 페이지 표시 */}
+                        {file?.page && bundle?.url && d.name !== "서류 묶음(통합)" && (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-medium">
+                            📄 {d.name}_{file.page}p
+                          </span>
+                        )}
+                        {/* 개별 업로드된 파일 (드물게) */}
+                        {file?.url && d.name !== "서류 묶음(통합)" && !bundle?.url && (
+                          <a
+                            href={file.page && file.page > 1 ? `${file.url}#page=${file.page}` : file.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-0.5 text-[11px] text-accent hover:underline"
+                          >
+                            📄 개별 파일 열기
+                          </a>
+                        )}
+                        {/* 묶음 PDF 자체의 경우 원본 열기 */}
+                        {d.name === "서류 묶음(통합)" && file?.url && (
+                          <a
+                            href={file.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-0.5 text-[11px] text-accent hover:underline"
+                            title={file.filename}
+                          >
+                            📄 전체 PDF 열기
+                          </a>
                         )}
                       </div>
 
@@ -902,37 +957,97 @@ function DocumentsStage({
                       )}
                     </div>
 
-                    {/* 업로드 영역 */}
+                    {/* 액션 영역 — 묶음 PDF 있으면 페이지 점프/지정, 없으면 개별 업로드 */}
                     <div className="flex flex-col gap-1 flex-shrink-0">
-                      <label className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium cursor-pointer transition ${
-                        file
-                          ? "bg-gray-100 text-ink-2 hover:bg-gray-200"
-                          : "bg-indigo-100 text-indigo-800 hover:bg-indigo-200"
-                      } ${isUploading ? "opacity-50 pointer-events-none" : ""}`}>
-                        {isUploading ? (
-                          <><Loader2 className="w-3 h-3 animate-spin" /> 업로드</>
-                        ) : file ? (
-                          <>🔄 교체</>
+                      {d.name === "서류 묶음(통합)" ? (
+                        // 서류 묶음 행: 파일 업로드 & 교체
+                        <label className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium cursor-pointer transition ${
+                          file
+                            ? "bg-gray-100 text-ink-2 hover:bg-gray-200"
+                            : "bg-indigo-100 text-indigo-800 hover:bg-indigo-200"
+                        } ${isUploading ? "opacity-50 pointer-events-none" : ""}`}>
+                          {isUploading ? (
+                            <><Loader2 className="w-3 h-3 animate-spin" /> 업로드</>
+                          ) : file ? (
+                            <>🔄 교체</>
+                          ) : (
+                            <>📎 묶음 PDF</>
+                          )}
+                          <input
+                            type="file"
+                            accept=".pdf"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) handleUploadDoc(d.name, f);
+                            }}
+                          />
+                        </label>
+                      ) : bundle?.url ? (
+                        // 개별 서류 행 (묶음 있음): 페이지 열기/지정
+                        file?.page ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const url = `${bundle.url}#page=${file.page}`;
+                                window.open(url, "_blank", "noopener,noreferrer");
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                              title={`묶음 PDF ${file.page}페이지 열기`}
+                            >
+                              📄 {file.page}p 열기
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openMapperFor(d.name)}
+                              className="text-[10px] text-accent hover:underline"
+                            >
+                              🔄 페이지 변경
+                            </button>
+                          </>
                         ) : (
-                          <>📎 파일 첨부</>
-                        )}
-                        <input
-                          type="file"
-                          accept=".pdf,.jpg,.jpeg,.png"
-                          className="hidden"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) handleUploadDoc(d.name, f);
-                          }}
-                        />
-                      </label>
-                      {file && (
+                          <button
+                            type="button"
+                            onClick={() => openMapperFor(d.name)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-indigo-100 text-indigo-800 hover:bg-indigo-200"
+                            title="묶음 PDF에서 이 서류가 있는 페이지를 지정"
+                          >
+                            📌 페이지 지정
+                          </button>
+                        )
+                      ) : (
+                        // 묶음 PDF 없음: 기존 개별 업로드 fallback
+                        <label className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium cursor-pointer transition ${
+                          file
+                            ? "bg-gray-100 text-ink-2 hover:bg-gray-200"
+                            : "bg-indigo-100 text-indigo-800 hover:bg-indigo-200"
+                        } ${isUploading ? "opacity-50 pointer-events-none" : ""}`}>
+                          {isUploading ? (
+                            <><Loader2 className="w-3 h-3 animate-spin" /> 업로드</>
+                          ) : file ? (
+                            <>🔄 교체</>
+                          ) : (
+                            <>📎 개별 파일</>
+                          )}
+                          <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) handleUploadDoc(d.name, f);
+                            }}
+                          />
+                        </label>
+                      )}
+                      {file?.page && d.name !== "서류 묶음(통합)" && (
                         <button
                           type="button"
-                          onClick={() => handleRemoveDoc(d.name)}
+                          onClick={() => handleAssignPage(d.name, undefined)}
                           className="text-[10px] text-red-500 hover:text-red-700"
                         >
-                          연결 해제
+                          지정 해제
                         </button>
                       )}
                       {isSubmitted && <CheckCircle2 className="w-3.5 h-3.5 text-green-600 mx-auto" />}
@@ -959,6 +1074,21 @@ function DocumentsStage({
           )}
         </button>
       </div>
+
+      {/* 페이지 매퍼 모달 */}
+      {bundle?.url && (
+        <DocumentPageMapper
+          isOpen={mapperOpen}
+          onClose={() => setMapperOpen(false)}
+          bundleUrl={bundle.url}
+          bundleFilename={bundle.filename}
+          totalPages={(bundle as any).totalPages}
+          documents={documentList}
+          fileMap={docFiles}
+          onAssignPage={handleAssignPage}
+          initialPage={mapperInitialPage}
+        />
+      )}
     </>
   );
 }
