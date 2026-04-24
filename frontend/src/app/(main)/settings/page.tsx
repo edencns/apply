@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
-  Settings as SettingsIcon, UserPlus, Trash2, KeyRound, Loader2, User,
+  Settings as SettingsIcon, UserPlus, Trash2, KeyRound, Loader2, User, Shield,
 } from "lucide-react";
 
 interface DbUser {
@@ -103,10 +104,20 @@ export default function SettingsPage() {
         <div className="flex items-center gap-1.5 text-[11px] text-ink-3 mb-1 uppercase tracking-[0.6px] font-medium">
           <SettingsIcon className="w-3 h-3" /> 설정
         </div>
-        <h1 className="text-xl font-bold text-ink tracking-[-0.3px]">계정 관리</h1>
-        <p className="text-xs text-ink-3 mt-1">
-          다른 담당자에게 발급할 아이디·비밀번호를 생성·관리합니다.
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold text-ink tracking-[-0.3px]">계정 관리</h1>
+            <p className="text-xs text-ink-3 mt-1">
+              다른 담당자에게 발급할 아이디·비밀번호를 생성·관리합니다.
+            </p>
+          </div>
+          <Link
+            href="/settings/audit"
+            className="btn-secondary text-xs inline-flex items-center gap-1.5 shrink-0"
+          >
+            <Shield className="w-3.5 h-3.5" /> 감사 로그 보기
+          </Link>
+        </div>
       </div>
 
       {/* 메시지 */}
