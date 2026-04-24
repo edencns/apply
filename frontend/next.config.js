@@ -14,16 +14,18 @@ const securityHeaders = [
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
       "connect-src 'self' https://*.pusher.com wss://*.pusher.com https://realtime.ably.io wss://realtime.ably.io https://*.ably-realtime.com wss://*.ably-realtime.com https://*.blob.vercel-storage.com",
+      // 우리 앱 내부의 PDF 미리보기 iframe 허용 (same-origin) + blob (로컬 업로드 미리보기)
       "frame-src 'self' blob:",
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",
-      "frame-ancestors 'none'",
+      // 타 사이트의 clickjacking은 막고, 우리 앱 내부 iframe은 허용
+      "frame-ancestors 'self'",
       "upgrade-insecure-requests",
     ].join("; "),
   },
-  // Clickjacking 방어
-  { key: "X-Frame-Options", value: "DENY" },
+  // Clickjacking 방어 — 같은 오리진만 iframe 가능
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
   // MIME sniffing 차단
   { key: "X-Content-Type-Options", value: "nosniff" },
   // Referrer 정책 — 외부 링크에 full URL 노출 금지

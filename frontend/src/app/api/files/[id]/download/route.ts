@@ -88,6 +88,8 @@ export async function GET(
         "cache-control": "private, no-store, max-age=0",
         "x-content-type-options": "nosniff",
         "referrer-policy": "no-referrer",
+        // 같은 오리진의 iframe(페이지 매퍼 등)에서 로드 허용 + 타 사이트 차단
+        "x-frame-options": "SAMEORIGIN",
       },
     });
   } catch (err: any) {
