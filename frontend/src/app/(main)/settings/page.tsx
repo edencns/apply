@@ -175,48 +175,50 @@ export default function SettingsPage() {
 
       {/* 목록 */}
       <div className="bg-surface border border-border rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-border text-[13px] font-semibold text-ink">
+        <div className="px-4 py-3 border-b border-border text-[14px] font-semibold text-ink">
           등록된 계정 ({users.length})
         </div>
         <table className="w-full">
           <thead className="bg-surface2 border-b border-border-soft">
             <tr>
-              <th className="text-left px-4 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.3px] text-ink-3">아이디</th>
-              <th className="text-left px-4 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.3px] text-ink-3">이름</th>
-              <th className="text-left px-4 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.3px] text-ink-3">생성일</th>
-              <th className="px-4 py-2.5 w-32"></th>
+              <th className="text-left px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.3px] text-ink-3">아이디</th>
+              <th className="text-left px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.3px] text-ink-3">이름</th>
+              <th className="text-left px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.3px] text-ink-3">생성일</th>
+              <th className="px-4 py-2.5 w-44"></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={4} className="text-center py-8 text-ink-4">
                 <Loader2 className="w-4 h-4 mx-auto mb-1 animate-spin opacity-60" />
-                <span className="text-xs">불러오는 중…</span>
+                <span className="text-sm">불러오는 중…</span>
               </td></tr>
             ) : users.length === 0 ? (
-              <tr><td colSpan={4} className="text-center py-8 text-xs text-ink-4">
+              <tr><td colSpan={4} className="text-center py-8 text-sm text-ink-4">
                 생성된 계정 없음. 위 폼에서 첫 번째 계정을 만들어 주세요.
               </td></tr>
             ) : users.map((u) => (
               <tr key={u.id} className="border-t border-border-soft">
-                <td className="px-4 py-2.5 text-[12px] font-semibold text-ink font-mono">{u.email}</td>
-                <td className="px-4 py-2.5 text-[12px] text-ink-2">{u.name}</td>
-                <td className="px-4 py-2.5 text-[11px] text-ink-3">{(u.created_at || "").slice(0, 10)}</td>
-                <td className="px-4 py-2.5 text-right">
+                <td className="px-4 py-3 text-[13.5px] font-semibold text-ink font-mono">{u.email}</td>
+                <td className="px-4 py-3 text-[13.5px] text-ink-2">{u.name}</td>
+                <td className="px-4 py-3 text-[12.5px] text-ink-3">{(u.created_at || "").slice(0, 10)}</td>
+                <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <div className="inline-flex items-center gap-1">
                   <button
                     onClick={() => setPwModal({ id: u.id, email: u.email })}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] text-ink-2 hover:bg-surface2 mr-1"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded text-[12.5px] text-ink-2 hover:bg-surface2"
                     title="비밀번호 재설정"
                   >
-                    <KeyRound className="w-3 h-3" /> 비번 재설정
+                    <KeyRound className="w-3.5 h-3.5" /> 비번 재설정
                   </button>
                   <button
                     onClick={() => handleDelete(u)}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] text-fail hover:bg-fail-soft"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded text-[12.5px] text-fail hover:bg-fail-soft"
                     title="삭제"
                   >
-                    <Trash2 className="w-3 h-3" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
+                  </div>
                 </td>
               </tr>
             ))}
