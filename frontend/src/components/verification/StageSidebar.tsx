@@ -21,11 +21,12 @@ const STAGES: Array<{
   label: string;
   icon: typeof UserCheck;
   field: keyof FinalVerdict["stages"];
+  optional?: boolean;
 }> = [
   { key: "registration", label: "당첨자 등록",   icon: UserCheck, field: "registration" },
   { key: "household",    label: "세대원 확인",   icon: Users,     field: "household" },
   { key: "property",     label: "주택소유 조회", icon: Home,      field: "property" },
-  { key: "savings",      label: "청약통장 순위", icon: Banknote,  field: "savings" },
+  { key: "savings",      label: "청약통장 순위", icon: Banknote,  field: "savings", optional: true },
   { key: "documents",    label: "서류·판정",     icon: FileText,  field: "documents" },
 ];
 
@@ -93,9 +94,12 @@ export default function StageSidebar({
         {STAGES.map((s, i) => {
           const v = finalVerdict.stages[s.field];
           // 승계 완료(포기) 상태면 모든 단계를 회색으로 표시
+          // 선택사항(savings) + missing은 회색 circle로 표시 (경고 아님)
           const { Icon: StateIcon, cls } = isSuperseded
             ? { Icon: Circle, cls: "text-ink-4" }
-            : stateIcon(v);
+            : s.optional && v.missing
+              ? { Icon: Circle, cls: "text-ink-4" }
+              : stateIcon(v);
           const StepIcon = s.icon;
           const active = current === s.key;
           return (
@@ -112,7 +116,14 @@ export default function StageSidebar({
                   0{i + 1}
                 </span>
                 <StepIcon className={`w-4 h-4 flex-shrink-0 ${active ? "text-accent" : "text-ink-3"}`} />
-                <span className="flex-1 font-medium">{s.label}</span>
+                <span className="flex-1 font-medium flex items-center gap-1.5">
+                  {s.label}
+                  {s.optional && (
+                    <span className="text-[9px] px-1 py-0 rounded bg-gray-100 text-ink-3 font-normal">
+                      선택
+                    </span>
+                  )}
+                </span>
                 <StateIcon className={`w-4 h-4 ${cls}`} />
               </button>
             </li>

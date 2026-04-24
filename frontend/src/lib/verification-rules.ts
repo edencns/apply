@@ -125,7 +125,12 @@ export function evaluateProperty(
   return { ok: true, reasons: [], warnings, missing: false, context: { count, regulation: regulation || "비규제" } };
 }
 
-/* ─── Stage 4: 청약통장 순위 ───────────────────────── */
+/* ─── Stage 4: 청약통장 순위 (선택사항 — 경고만, 부적합 판정 X) ─────────
+
+   청약 당첨자는 이미 청약통장 1순위 요건을 통과한 상태이므로 본 시스템의
+   서류 검수 단계에서 통장 조건으로 재차 부적합 처리하는 건 과도함.
+   데이터 수집 목적은 유지하되 모든 이슈는 warnings(참고)로만 표시.
+   ──────────────────────────────────────────── */
 
 export function evaluateSavings(
   customer: LocalCustomer,
@@ -134,24 +139,29 @@ export function evaluateSavings(
   const s = customer.savings_priority;
   if (!s) return missing();
 
-  const reasons: string[] = [];
+  const warnings: string[] = [];
 
-  // 1) 순위확인 검증 결과
+  // 1) 순위확인 검증 결과 — 경고로만 표시
   if (!s.verified) {
-    const note = s.errorNote || `결과 코드 ${s.resultLength})`;
-    reasons.push(`청약통장 순위확인 실패: ${note}`);
+    const note = s.errorNote || `결과 코드 ${s.resultLength}`;
+    warnings.push(`청약통장 순위확인 실패 (참고): ${note}`);
   }
 
-  // 2) 공고의 최소 가입기간 조건
+  // 2) 공고의 최소 가입기간 조건 — 경고로만 표시
   const minMonths = announcement?.eligibility_rules?.min_subscription_period as number | undefined;
   const cust = customer.subscription_months ?? 0;
   if (typeof minMonths === "number" && minMonths > 0 && cust < minMonths) {
-    reasons.push(`청약통장 가입기간 부족 — 최소 ${minMonths}개월 필요, 현재 ${cust}개월`);
+    warnings.push(`청약통장 가입기간 참고: 공고 최소 ${minMonths}개월, 현재 ${cust}개월`);
   }
 
-  return reasons.length > 0
-    ? fail(reasons, { context: { minMonths, current: cust } })
-    : ok({ context: { minMonths, current: cust } });
+  // 항상 ok=true 반환 (부적합 사유에서 제외)
+  return {
+    ok: true,
+    reasons: [],
+    warnings,
+    missing: false,
+    context: { minMonths, current: cust, advisory: true },
+  };
 }
 
 /* ─── Stage 5: 서류 제출 ───────────────────────────── */
@@ -213,7 +223,10 @@ export function evaluateFinal(
   }
 
   // 데이터 누락 단계는 판정 보류 (pending)
-  const hasMissing = Object.values(stages).some((s) => s.missing);
+  // 단, savings(청약통장)는 선택사항 — missing이어도 pending으로 만들지 않음
+  const hasMissing = (Object.entries(stages) as Array<[string, StageVerdict]>)
+    .filter(([key]) => key !== "savings")
+    .some(([, s]) => s.missing);
   const verdict: "eligible" | "ineligible" | "pending" =
     reasons.length > 0
       ? "ineligible"

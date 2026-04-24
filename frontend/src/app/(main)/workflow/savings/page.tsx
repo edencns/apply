@@ -185,11 +185,23 @@ export default function SavingsStepPage() {
     <WorkflowShell step={step} selected={selected} onSelect={setSelected}>
       {selected && (
         <>
+          {/* 선택사항 안내 — 당첨자는 이미 통장 요건 통과 상태이므로 본 시스템에서는 참고 정보로만 활용 */}
+          <div className="mb-3 p-3 rounded-lg bg-gray-50 border border-gray-200 text-xs text-ink-2 flex items-start gap-2">
+            <Banknote className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-ink-3" />
+            <div>
+              <span className="inline-block px-1.5 py-0.5 rounded bg-gray-200 text-ink-2 text-[10px] font-semibold mr-1.5">
+                선택 사항
+              </span>
+              청약 당첨자는 이미 통장 요건을 통과한 상태입니다. 본 단계는 <strong>참고용</strong>으로 활용하세요 —
+              이슈가 있어도 <strong>최종 판정에는 영향을 주지 않습니다</strong>.
+            </div>
+          </div>
+
           {typeof minMonths === "number" && minMonths > 0 && (
             <div className="mb-3 p-3 rounded-lg bg-indigo-50 border border-indigo-100 text-xs text-indigo-800 flex items-center gap-2">
               <Banknote className="w-3.5 h-3.5" />
               <span>
-                <strong>공고 최소 가입기간: {minMonths}개월</strong> — 고객 가입기간이 이보다 적으면 부적합
+                공고 최소 가입기간(참고): <strong>{minMonths}개월</strong>
               </span>
             </div>
           )}
