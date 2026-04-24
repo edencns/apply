@@ -27,6 +27,7 @@ import {
 import { calculateSubscriptionScore } from "@/lib/score-calculator";
 import { formatPhoneInput, formatPhone } from "@/lib/housing-code";
 import { evaluateFinal } from "@/lib/verification-rules";
+import { getCheckpointsForDocument } from "@/lib/document-checkpoints";
 import { findStandbyCandidates, buildPromotionUpdates, PromotionCandidate } from "@/lib/standby-promotion";
 import { pullAll } from "@/lib/cloud-sync";
 import { useRealtimeSync } from "@/lib/realtime/useRealtimeSync";
@@ -293,6 +294,7 @@ function CustomerDetailInner() {
           {stage === "documents" && (
             <DocumentsStage
               customer={customer}
+              announcement={announcement}
               documentList={documentList}
               submitted={submittedDocs}
               finalVerdict={finalVerdict}
@@ -478,12 +480,14 @@ function RegistrationStage({
 
 function DocumentsStage({
   customer,
+  announcement,
   documentList,
   submitted,
   finalVerdict,
   onUpdate,
 }: {
   customer: LocalCustomer;
+  announcement: LocalAnnouncement | null;
   documentList: Array<{ name: string; category: string; conditional: boolean }>;
   submitted: Record<string, boolean>;
   finalVerdict: ReturnType<typeof evaluateFinal>;
@@ -492,8 +496,53 @@ function DocumentsStage({
   const [localSubmitted, setLocalSubmitted] = useState<Record<string, boolean>>(submitted);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(customer.verification_checked_at || null);
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
 
   useEffect(() => { setLocalSubmitted(submitted); }, [customer.id]); // eslint-disable-line
+
+  const docFiles = customer.document_files || {};
+
+  /** 특정 서류에 PDF/이미지 업로드 → Blob → customer.document_files에 저장 */
+  const handleUploadDoc = async (docName: string, file: File) => {
+    setUploadingDoc(docName);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("kind", "other");
+      if (customer.announcement_id) fd.append("announcement_id", String(customer.announcement_id));
+      const res = await fetch("/api/files/upload", { method: "POST", body: fd });
+      if (!res.ok) throw new Error(`업로드 실패 (${res.status})`);
+      const json = await res.json();
+
+      const nextFiles = { ...(customer.document_files || {}) };
+      nextFiles[docName] = {
+        url: json.url,
+        filename: file.name,
+        uploadedAt: new Date().toISOString(),
+      };
+      const updated = localCustomers.update(customer.id, {
+        document_files: nextFiles,
+      } as any);
+      if (updated) onUpdate(updated);
+
+      // 업로드와 동시에 체크박스 자동 체크
+      setLocalSubmitted((p) => ({ ...p, [docName]: true }));
+    } catch (err: any) {
+      alert(err?.message || "업로드 실패");
+    } finally {
+      setUploadingDoc(null);
+    }
+  };
+
+  const handleRemoveDoc = (docName: string) => {
+    if (!confirm(`${docName} 파일 연결을 해제할까요? (원본은 유지됩니다)`)) return;
+    const nextFiles = { ...(customer.document_files || {}) };
+    delete nextFiles[docName];
+    const updated = localCustomers.update(customer.id, {
+      document_files: nextFiles,
+    } as any);
+    if (updated) onUpdate(updated);
+  };
 
   // 카테고리 그룹핑
   const grouped: Record<string, typeof documentList> = {};
@@ -656,36 +705,125 @@ function DocumentsStage({
               {category === "공통" ? "전원 공통" : `${category} 전용`}
             </span>
           </div>
-          <ul className="space-y-1.5">
+          <ul className="space-y-2">
             {docs.map((d) => {
               const isSubmitted = !!localSubmitted[d.name];
+              const file = docFiles[d.name];
+              const checkpoints = getCheckpointsForDocument(d.name, customer, announcement || undefined);
+              const isUploading = uploadingDoc === d.name;
               return (
-                <li key={d.name}>
-                  <label className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${
-                    isSubmitted
-                      ? "border-green-200 bg-green-50"
-                      : d.conditional
-                        ? "border-amber-200 bg-amber-50/50"
-                        : "border-border hover:bg-surface2"
-                  }`}>
+                <li key={d.name} className={`p-3 rounded-lg border transition-colors ${
+                  isSubmitted
+                    ? "border-green-200 bg-green-50/60"
+                    : d.conditional
+                      ? "border-amber-200 bg-amber-50/40"
+                      : "border-border"
+                }`}>
+                  <div className="flex items-start gap-3">
                     <input
                       type="checkbox"
                       checked={isSubmitted}
                       onChange={() => handleToggle(d.name)}
-                      className="mt-0.5 w-4 h-4 accent-green-600 flex-shrink-0"
+                      className="mt-0.5 w-4 h-4 accent-green-600 flex-shrink-0 cursor-pointer"
                     />
                     <div className="flex-1 min-w-0">
-                      <span className={`text-sm ${isSubmitted ? "text-green-800 font-medium" : "text-ink-2"}`}>
-                        {d.name}
-                      </span>
-                      {d.conditional && (
-                        <span className="ml-2 text-[10px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded">
-                          조건부 (해당자만)
+                      <div className="flex items-center flex-wrap gap-1.5">
+                        <span className={`text-sm ${isSubmitted ? "text-green-800 font-medium" : "text-ink-2 font-medium"}`}>
+                          {d.name}
                         </span>
+                        {d.conditional && (
+                          <span className="text-[10px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded">
+                            조건부
+                          </span>
+                        )}
+                        {file && (
+                          <a
+                            href={file.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-0.5 text-[11px] text-accent hover:underline"
+                            title={file.filename}
+                          >
+                            📄 원본 열기
+                          </a>
+                        )}
+                      </div>
+
+                      {/* 체크포인트 */}
+                      {checkpoints.length > 0 && (
+                        <div className="mt-1.5 p-2 rounded bg-white/60 border border-blue-100 text-[11px] space-y-0.5">
+                          <div className="text-[10px] font-semibold text-blue-900 mb-0.5">
+                            💡 담당자 확인 포인트
+                          </div>
+                          {checkpoints.map((cp) => (
+                            <div key={cp.key} className="flex items-start gap-1.5">
+                              <span className={`flex-shrink-0 mt-0.5 ${
+                                cp.severity === "must"
+                                  ? "text-red-600"
+                                  : cp.severity === "verify"
+                                    ? "text-amber-600"
+                                    : "text-ink-3"
+                              }`}>
+                                {cp.severity === "must" ? "●" : cp.severity === "verify" ? "◉" : "◯"}
+                              </span>
+                              <span className="flex-1 text-ink-2">
+                                {cp.label}
+                                {cp.expected && (
+                                  <span className="ml-1 font-semibold text-ink">
+                                    {cp.expected}
+                                  </span>
+                                )}
+                                <span className="ml-1.5 text-[9px] text-ink-4">
+                                  [{cp.source}]
+                                </span>
+                                {cp.hint && (
+                                  <div className="text-[10px] text-ink-4 mt-0.5">
+                                    ↳ {cp.hint}
+                                  </div>
+                                )}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
-                    {isSubmitted && <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />}
-                  </label>
+
+                    {/* 업로드 영역 */}
+                    <div className="flex flex-col gap-1 flex-shrink-0">
+                      <label className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium cursor-pointer transition ${
+                        file
+                          ? "bg-gray-100 text-ink-2 hover:bg-gray-200"
+                          : "bg-indigo-100 text-indigo-800 hover:bg-indigo-200"
+                      } ${isUploading ? "opacity-50 pointer-events-none" : ""}`}>
+                        {isUploading ? (
+                          <><Loader2 className="w-3 h-3 animate-spin" /> 업로드</>
+                        ) : file ? (
+                          <>🔄 교체</>
+                        ) : (
+                          <>📎 파일 첨부</>
+                        )}
+                        <input
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleUploadDoc(d.name, f);
+                          }}
+                        />
+                      </label>
+                      {file && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDoc(d.name)}
+                          className="text-[10px] text-red-500 hover:text-red-700"
+                        >
+                          연결 해제
+                        </button>
+                      )}
+                      {isSubmitted && <CheckCircle2 className="w-3.5 h-3.5 text-green-600 mx-auto" />}
+                    </div>
+                  </div>
                 </li>
               );
             })}

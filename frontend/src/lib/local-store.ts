@@ -368,6 +368,51 @@ export interface LocalCustomer {
     reviewedAt?: string;            // 승인 시각
     createdAt: string;              // 레코드 생성 시각
   };
+  /**
+   * 5단계 서류 판정용 — 각 서류별 제출된 파일.
+   * key = 서류 이름 (예: "주민등록등본", "가족관계증명서").
+   */
+  document_files?: Record<string, {
+    url: string;                  // Vercel Blob 프록시 URL
+    filename: string;
+    uploadedAt: string;
+    uploadedBy?: number;
+    checkpointResults?: Record<string, {
+      status: "pass" | "fail" | "pending";
+      note?: string;
+    }>;
+  }>;
+  /**
+   * 최종 계약 정보 — 청약홈 검증·계약 체결까지 완료된 계약자 상태.
+   * (현 Phase에서는 사용 안 함 — 향후 6단계 명의변경용)
+   */
+  contract?: {
+    status: "signed" | "occupancy" | "cancelled";
+    contractDate?: string;          // 계약일 (YYYY-MM-DD)
+    unitType?: string;              // 평형 (예: "84.8636")
+    typeCode?: string;              // TYPE 컬럼
+    totalPrice?: number;            // 총 분양가
+    downPayment?: number;           // 계약금 합계
+    midPayments?: number[];         // 중도금 1~6차
+    finalPayment?: number;          // 잔금
+    optionPrice?: number;           // 옵션 금액
+    paymentScheduleText?: string;   // 자유 메모
+    coContractor?: {                // 공동명의
+      name?: string;
+      phone?: string;
+      code?: string;
+    };
+    residentAddress?: string;       // 주민등록 주소
+    livingAddress?: string;         // 거주지 주소
+    contractNo?: string;            // 계약서번호
+    email?: string;
+    /** 원본 서류 스캔본 (Vercel Blob 프록시 URL) */
+    documentScanUrl?: string;
+    documentScanFileName?: string;
+    documentScanUploadedAt?: string;
+    /** 일괄 등록 시각 */
+    importedAt?: string;
+  };
   savings_priority?: {
     verified: boolean;
     bankCode?: string;

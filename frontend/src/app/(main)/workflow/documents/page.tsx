@@ -169,6 +169,7 @@ export default function DocumentsStepPage() {
     }
   };
 
+
   return (
     <WorkflowShell step={step} selected={selected} onSelect={setSelected}>
       {selected && (
@@ -250,6 +251,7 @@ export default function DocumentsStepPage() {
               * 세대원/주택/통장 어느 쪽이든 자동 인식하여 반영
             </span>
           </div>
+
 
           {verifyResult && (
             <div className="card mb-4 p-3 text-sm bg-emerald-50/60 border-emerald-100">
