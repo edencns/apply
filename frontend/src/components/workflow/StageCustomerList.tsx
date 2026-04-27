@@ -19,7 +19,10 @@ import {
 import { customersApi } from "@/lib/api";
 import { pullAll } from "@/lib/cloud-sync";
 import { useRealtimeSync } from "@/lib/realtime/useRealtimeSync";
-import type { StageVerdict } from "@/lib/verification-rules";
+import {
+  evaluateRegistration, evaluateHousehold, evaluateProperty, evaluateSavings,
+  type StageVerdict,
+} from "@/lib/verification-rules";
 import { formatHousingCode } from "@/lib/housing-code";
 import {
   ChevronRight, Loader2, Search,
@@ -32,6 +35,9 @@ export interface StageColumn {
   cls?: string;
 }
 
+/** 이전 단계 부적합자 캐스케이드 필터링용 */
+type PriorStage = "registration" | "household" | "property" | "savings";
+
 interface Props {
   announcement: LocalAnnouncement;
   /** 각 고객의 해당 단계 verdict 계산 함수 */
@@ -41,9 +47,39 @@ interface Props {
   prefixColumns?: StageColumn[];
   /** 이 단계에 해당하는 URL stage 숫자 (행 클릭 시 /customers/[id]?stage=N) */
   stageNumber: number;
+  /**
+   * 이전 단계에서 명확히 부적합(fail)으로 판정된 고객을 리스트에서 제외.
+   * 예: 3단계(주택소유)에서는 ['registration', 'household']을 전달하면
+   *     1·2단계 부적합자가 가려진다. 사용자는 토글로 다시 볼 수 있음.
+   */
+  excludeFailedStages?: PriorStage[];
 }
 
-export default function StageCustomerList({ announcement, evaluate, columns, prefixColumns = [], stageNumber }: Props) {
+/** 특정 단계에서 명확히 fail인지 판정 (missing은 데이터 부족 — 제외 대상 아님) */
+function evaluatePriorStage(
+  stage: PriorStage,
+  c: LocalCustomer,
+  ann: LocalAnnouncement,
+): StageVerdict {
+  switch (stage) {
+    case "registration": return evaluateRegistration(c);
+    case "household":    return evaluateHousehold(c);
+    case "property":     return evaluateProperty(c, ann);
+    case "savings":      return evaluateSavings(c, ann);
+  }
+}
+
+const STAGE_LABEL_KO: Record<PriorStage, string> = {
+  registration: "당첨자 등록",
+  household: "세대원 확인",
+  property: "주택소유",
+  savings: "청약통장",
+};
+
+export default function StageCustomerList({
+  announcement, evaluate, columns, prefixColumns = [], stageNumber,
+  excludeFailedStages = [],
+}: Props) {
   const router = useRouter();
   const [customers, setCustomers] = useState<LocalCustomer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +88,8 @@ export default function StageCustomerList({ announcement, evaluate, columns, pre
   const [statusFilter, setStatusFilter] = useState<"all" | "ok" | "fail" | "missing">("all");
   const [unitFilter, setUnitFilter] = useState<string>("all");
   const [supplyFilter, setSupplyFilter] = useState<string>("all");
+  /** 이전 단계 부적합자를 가려둘지 여부 (기본 true — excludeFailedStages가 있으면 자동 활성) */
+  const [hidePriorFailed, setHidePriorFailed] = useState<boolean>(true);
 
   const loadCustomers = useCallback(async () => {
     setLoading(true);
@@ -94,11 +132,31 @@ export default function StageCustomerList({ announcement, evaluate, columns, pre
     },
   });
 
+  /** 이 고객이 excludeFailedStages 중 하나에서 fail이면 true */
+  const isPriorFailed = useCallback(
+    (c: LocalCustomer) => {
+      if (excludeFailedStages.length === 0) return false;
+      for (const stage of excludeFailedStages) {
+        const v = evaluatePriorStage(stage, c, announcement);
+        // missing(데이터 부족)은 가리지 않음 — fail(명백한 부적합)만 제외
+        if (!v.ok && !v.missing) return true;
+      }
+      return false;
+    },
+    [excludeFailedStages, announcement],
+  );
+
   const rows = useMemo(() => {
     return customers
       .filter((c) => !c.superseded) // 포기·승계된 사람은 기본 제외
-      .map((c) => ({ customer: c, verdict: evaluate(c, announcement) }));
-  }, [customers, announcement, evaluate]);
+      .map((c) => ({
+        customer: c,
+        verdict: evaluate(c, announcement),
+        priorFailed: isPriorFailed(c),
+      }));
+  }, [customers, announcement, evaluate, isPriorFailed]);
+
+  const priorFailedCount = rows.filter((r) => r.priorFailed).length;
 
   // 주택형·공급유형 옵션 (현재 공고의 고객 데이터에서 추출)
   const unitOptions = useMemo(
@@ -110,7 +168,9 @@ export default function StageCustomerList({ announcement, evaluate, columns, pre
     [customers],
   );
 
-  const filtered = rows.filter(({ customer: c, verdict: v }) => {
+  const filtered = rows.filter(({ customer: c, verdict: v, priorFailed }) => {
+    // 이전 단계 부적합자는 토글 OFF일 때 가림
+    if (hidePriorFailed && priorFailed) return false;
     if (listTab === "winners" && c.is_standby) return false;
     if (listTab === "standbys" && !c.is_standby) return false;
     if (statusFilter === "ok" && !(v.ok && !v.missing)) return false;
@@ -165,6 +225,23 @@ export default function StageCustomerList({ announcement, evaluate, columns, pre
             );
           })}
         </div>
+
+        {/* 이전 단계 부적합자 토글 — excludeFailedStages가 있을 때만 노출 */}
+        {excludeFailedStages.length > 0 && priorFailedCount > 0 && (
+          <button
+            onClick={() => setHidePriorFailed((v) => !v)}
+            title={`이전 단계(${excludeFailedStages.map((s) => STAGE_LABEL_KO[s]).join(", ")})에서 부적합 판정된 ${priorFailedCount}명을 ${hidePriorFailed ? "숨김" : "표시"} 중`}
+            className={`px-2.5 py-1 rounded-md text-[11.5px] inline-flex items-center gap-1.5 border transition-colors ${
+              hidePriorFailed
+                ? "bg-surface2 text-ink-3 border-border hover:text-ink"
+                : "bg-amber-50 text-amber-800 border-amber-300"
+            }`}
+          >
+            <span>{hidePriorFailed ? "👁️‍🗨️" : "👁️"}</span>
+            {hidePriorFailed ? "이전 단계 부적합자 숨김" : "전부 표시 중"}
+            <span className="text-[10px] text-ink-4 tnum">({priorFailedCount}명 제외)</span>
+          </button>
+        )}
 
         {/* 검증 상태 필터 */}
         <div className="inline-flex rounded-md bg-surface2 p-0.5 border border-border">

@@ -845,6 +845,8 @@ export default function DocumentsStepPage() {
             prefixColumns={prefixColumns}
             columns={columns}
             stageNumber={5}
+            // 이전 1~4단계 부적합자는 5단계에서 가림 (서류 검수 대상에서 제외)
+            excludeFailedStages={["registration", "household", "property", "savings"]}
           />
         </>
       )}

@@ -439,6 +439,8 @@ export default function PropertyStepPage() {
             evaluate={evaluate}
             columns={columns}
             stageNumber={3}
+            // 1단계(당첨자 등록)·2단계(세대원)에서 부적합으로 걸러진 사람은 가림
+            excludeFailedStages={["registration", "household"]}
           />
         </>
       )}
