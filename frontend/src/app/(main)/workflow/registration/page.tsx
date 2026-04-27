@@ -496,6 +496,11 @@ function CustomersPageInner() {
           const dependentsRaw = pick(row, "부양가족수", "전체 미성년 자녀수(태아포함)");
           const dependents = dependentsRaw ? (toNum(dependentsRaw.match(/\d+/)?.[0]) ?? 0) : 0;
 
+          // 동/호 — 5단계 배치 매칭(파일명 동-호수 자동 첨부)에 핵심이라
+          // winner_info뿐 아니라 customer.unit_dong/unit_ho에도 동시 저장
+          const dongRaw = pick(row, "동수");
+          const hoRaw = pick(row, "호수");
+
           const cand: IncomingCustomer & { _winnerInfo?: LocalCustomer["winner_info"]; is_standby?: boolean; standby_rank?: string } = {
             name,
             phone,
@@ -512,12 +517,14 @@ function CustomersPageInner() {
             // 주택형 — 전산 코드(0848636)를 "84.8636(84)" 형식으로 표시, 면적 문자열 별도 저장
             unit_type: formatHousingCode(housingCode) || housingCode,
             unit_area: housingAreaString(housingCode) || undefined,
+            unit_dong: dongRaw || undefined,
+            unit_ho: hoRaw || undefined,
             is_standby: meta.isStandby,
             standby_rank: standbyRank,
             _winnerInfo: {
               sheet_source: sheetName,
-              building: pick(row, "동수"),
-              unit_no: pick(row, "호수"),
+              building: dongRaw,
+              unit_no: hoRaw,
               selection_method: selectionMethod,
               application_date: formatYmd(applicationDate),
               savings_opened: formatYmd(pick(row, "청약통장개설일")),
@@ -586,6 +593,8 @@ function CustomersPageInner() {
             supply_type: c.supply_type,
             unit_type: c.unit_type,
             unit_area: c.unit_area,
+            unit_dong: (c as any).unit_dong,
+            unit_ho: (c as any).unit_ho,
             is_standby: anyC.is_standby === true,
             standby_rank: anyC.standby_rank,
             winner_info: anyC._winnerInfo,

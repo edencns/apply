@@ -336,6 +336,9 @@ export default function DocumentsStepPage() {
       document_files: nextFiles,
       documents_submitted: { ...submittedNow, "서류 묶음(통합)": true },
     };
+    // 동호수 자동 보강 — 비어 있으면 파일명에서 파싱한 값으로 채움.
+    // winner_info.building/unit_no가 있어도 customer 레벨 필드를 채워야
+    // 다음 배치에서 1순위 매칭 가능 (이름까지 일치 시 dongHoName tier).
     if (parsedDong && !(latest as any).unit_dong) patch.unit_dong = parsedDong;
     if (parsedHo && !(latest as any).unit_ho) patch.unit_ho = parsedHo;
     localCustomers.update(target.id, patch as any);
@@ -422,6 +425,30 @@ export default function DocumentsStepPage() {
     setBatchResult(null);
     setBatchProgress(null);
     try {
+      // ── 단계 0: 레거시 customer 백필 ────────────────────
+      // winner_info.building/unit_no는 있는데 unit_dong/unit_ho가 비어 있는
+      // 레거시 등록자들을 자동으로 채워 — 매칭·정렬·표시 모두 한 곳에서 처리되도록.
+      {
+        const all = localCustomers.listByAnnouncement(selected.id);
+        let backfilled = 0;
+        for (const c of all) {
+          const wd = c.winner_info?.building?.toString().trim();
+          const wh = c.winner_info?.unit_no?.toString().trim();
+          const cd = (c as any).unit_dong?.toString().trim();
+          const ch = (c as any).unit_ho?.toString().trim();
+          const patch: any = {};
+          if (wd && !cd) patch.unit_dong = wd;
+          if (wh && !ch) patch.unit_ho = wh;
+          if (Object.keys(patch).length > 0) {
+            localCustomers.update(c.id, patch);
+            backfilled++;
+          }
+        }
+        if (backfilled > 0) {
+          console.log(`[batch-docs] 동호수 자동 백필: ${backfilled}명`);
+        }
+      }
+
       const customers = localCustomers.listByAnnouncement(selected.id);
       let unmatched = 0, pending = 0;
       const errors: string[] = [];
@@ -443,9 +470,12 @@ export default function DocumentsStepPage() {
         }
         const [, dong, ho, nameHint] = m;
         const cleanNameHint = nameHint?.trim() || "";
+        // 동호 fallback: customer에 unit_dong/unit_ho가 비어 있어도
+        // winner_info.building/unit_no(전산추첨결과 원본 동·호)로 매칭 가능하도록 함.
+        // legacy로 등록된 당첨자(unit_dong 없음)도 동호수만 있는 파일과 자동 매칭됨.
         const byDongHo = customers.filter((c) => {
-          const cd = String((c as any).unit_dong || "").trim();
-          const ch = String((c as any).unit_ho || "").trim();
+          const cd = String((c as any).unit_dong || c.winner_info?.building || "").trim();
+          const ch = String((c as any).unit_ho || c.winner_info?.unit_no || "").trim();
           return cd && ch && cd === dong && ch === ho;
         });
 
