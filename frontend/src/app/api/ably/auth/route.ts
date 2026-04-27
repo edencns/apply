@@ -8,6 +8,8 @@ import * as Ably from "ably";
 import { getSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
+// 세션 쿠키를 읽으므로 정적 렌더링 불가 — 빌드 시 동적 사용 경고 제거
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {

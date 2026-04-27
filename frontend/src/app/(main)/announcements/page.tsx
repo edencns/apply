@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { sitesApi, api } from "@/lib/api";
 import { localSites, localAnnouncements, isNetworkError, isAnnouncementDone } from "@/lib/local-store";
@@ -61,7 +61,7 @@ const DEFAULT_RULES = {
 /** 공고가 완료 상태인지 판별 — 가장 늦은 일정이 오늘 이전이면 완료 */
 const isDone = (ann: Announcement): boolean => isAnnouncementDone(ann);
 
-export default function AnnouncementsPage() {
+function AnnouncementsPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [sites, setSites] = useState<any[]>([]);
@@ -1616,5 +1616,13 @@ export default function AnnouncementsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AnnouncementsPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-ink-4">불러오는 중...</div>}>
+      <AnnouncementsPageInner />
+    </Suspense>
   );
 }
