@@ -9,7 +9,7 @@ import { localCustomers, type LocalAnnouncement, type LocalCustomer } from "@/li
 import { ingestAutoStage, stageLabel, type WorkflowIngestResult } from "@/lib/workflow-ingest";
 import {
   CheckCircle2, XCircle, Clock, FileText, FileSpreadsheet, Loader2, Gavel,
-  FolderUp, ShieldCheck,
+  FolderUp, ShieldCheck, FileQuestion, PauseCircle,
 } from "lucide-react";
 
 const step = WORKFLOW_STEPS[4]; // documents
@@ -88,29 +88,83 @@ const columns: StageColumn[] = [
     key: "verdict",
     header: "최종 판정",
     render: (c) => {
-      const v = c.verification_verdict;
-      if (v === "eligible") {
-        return (
-          <span className="inline-flex items-center gap-1 text-sm text-green-700 font-semibold">
-            <CheckCircle2 className="w-3.5 h-3.5" /> 적합
-          </span>
-        );
+      const status = computeReviewStatus(c);
+      switch (status) {
+        case "eligible":
+          return (
+            <span className="inline-flex items-center gap-1 text-sm text-green-700 font-semibold">
+              <CheckCircle2 className="w-3.5 h-3.5" /> 적합
+            </span>
+          );
+        case "ineligible":
+          return (
+            <span className="inline-flex items-center gap-1 text-sm text-red-700 font-semibold">
+              <XCircle className="w-3.5 h-3.5" /> 부적합
+            </span>
+          );
+        case "in_review":
+          return (
+            <span className="inline-flex items-center gap-1 text-xs text-amber-700 font-medium">
+              <PauseCircle className="w-3.5 h-3.5" /> 검수 보류
+            </span>
+          );
+        case "uploaded":
+          return (
+            <span className="inline-flex items-center gap-1 text-xs text-blue-700 font-medium">
+              <Clock className="w-3.5 h-3.5" /> 미검수
+            </span>
+          );
+        case "missing":
+        default:
+          return (
+            <span className="inline-flex items-center gap-1 text-xs text-ink-4">
+              <FileQuestion className="w-3.5 h-3.5" /> 미등록
+            </span>
+          );
       }
-      if (v === "ineligible") {
-        return (
-          <span className="inline-flex items-center gap-1 text-sm text-red-700 font-semibold">
-            <XCircle className="w-3.5 h-3.5" /> 부적합
-          </span>
-        );
-      }
-      return (
-        <span className="inline-flex items-center gap-1 text-xs text-ink-3">
-          <Clock className="w-3 h-3" /> 미검수
-        </span>
-      );
     },
   },
 ];
+
+/**
+ * 5단계 서류 검수 상태를 5가지로 분류.
+ *
+ *  - missing    : 서류 파일이 하나도 등록되지 않음
+ *  - uploaded   : 파일은 등록됐지만 아직 어떤 체크포인트도 검토하지 않음 (= 미검수)
+ *  - in_review  : 일부 체크포인트만 ✓/✕ 처리 — 담당자가 중간에 멈춤 (= 검수 보류)
+ *  - eligible   : 최종 적합
+ *  - ineligible : 최종 부적합
+ *
+ * 청약홈 자동검증 서류는 파일이 없어도 검증 완료로 간주되므로
+ * registration_source === "applyhome"인 경우 documents_submitted에서 그 항목들이
+ * true로 사전 체크되어 있다 — 이들은 "uploaded"로 잡힘.
+ */
+function computeReviewStatus(
+  c: LocalCustomer,
+): "missing" | "uploaded" | "in_review" | "eligible" | "ineligible" {
+  if (c.verification_verdict === "eligible") return "eligible";
+  if (c.verification_verdict === "ineligible") return "ineligible";
+
+  const submitted = c.documents_submitted || {};
+  const hasSubmitted = Object.values(submitted).some(Boolean);
+  const docFiles = c.document_files || {};
+  const hasFile = Object.values(docFiles).some(
+    (f: any) => f?.url || (Array.isArray(f?.pages) && f.pages.length > 0) || f?.page,
+  );
+
+  // 체크포인트 중 하나라도 pass/fail이면 검수 보류
+  const hasReviewProgress = Object.values(docFiles).some((f: any) =>
+    f?.checkpointResults
+      ? Object.values(f.checkpointResults).some(
+          (r: any) => r?.status === "pass" || r?.status === "fail",
+        )
+      : false,
+  );
+
+  if (hasReviewProgress) return "in_review";
+  if (hasFile || hasSubmitted) return "uploaded";
+  return "missing";
+}
 
 export default function DocumentsStepPage() {
   const [selected, setSelected] = useState<LocalAnnouncement | null>(null);
