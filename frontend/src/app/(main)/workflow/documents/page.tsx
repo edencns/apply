@@ -181,11 +181,29 @@ export default function DocumentsStepPage() {
   const [batchResult, setBatchResult] = useState<{
     attached: number;
     unmatched: number;
+    pending: number;
     total: number;
     errors: string[];
   } | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ eligible: number } | null>(null);
+
+  /**
+   * 동호수+이름 양쪽 다 일치하지 않은 파일은 자동 첨부하지 않고 보류 큐에 둡니다.
+   * 담당자가 후보 중에서 어느 고객에 첨부할지 직접 고른 뒤 업로드/첨부합니다.
+   * (File 객체는 메모리에만 보유 — 페이지 이탈 시 휘발)
+   */
+  type PendingMatch = {
+    id: string;            // 고유 키 (UI 식별용)
+    file: File;
+    parsedDong: string;
+    parsedHo: string;
+    parsedName: string;
+    tier: "dongHoOnly" | "nameOnly";
+    candidates: LocalCustomer[];
+  };
+  const [pendingMatches, setPendingMatches] = useState<PendingMatch[]>([]);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
 
   const evaluate = (c: LocalCustomer, a: LocalAnnouncement) => {
     const docList = computeDocList(c, a);
@@ -238,6 +256,73 @@ export default function DocumentsStepPage() {
     }
   };
 
+  /**
+   * 단일 파일을 특정 고객의 「서류 묶음(통합)」 슬롯에 업로드하고 첨부.
+   * 동호수가 비어 있으면 파싱된 dong/ho로 보강.
+   */
+  const uploadAndAttach = async (
+    file: File,
+    target: LocalCustomer,
+    parsedDong?: string,
+    parsedHo?: string,
+  ): Promise<void> => {
+    if (!selected) throw new Error("공고 미선택");
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("kind", "other");
+    fd.append("announcement_id", String(selected.id));
+    const res = await fetch("/api/files/upload", { method: "POST", body: fd });
+    if (!res.ok) throw new Error(`업로드 실패 ${res.status}`);
+    const json = await res.json();
+
+    const existing = target.document_files || {};
+    const nextFiles = {
+      ...existing,
+      "서류 묶음(통합)": {
+        url: json.url,
+        filename: file.name,
+        uploadedAt: new Date().toISOString(),
+        fileId: json.id,
+      },
+    };
+    const submittedNow = target.documents_submitted || {};
+    const patch: Partial<LocalCustomer> & Record<string, any> = {
+      document_files: nextFiles,
+      documents_submitted: { ...submittedNow, "서류 묶음(통합)": true },
+    };
+    if (parsedDong && !(target as any).unit_dong) patch.unit_dong = parsedDong;
+    if (parsedHo && !(target as any).unit_ho) patch.unit_ho = parsedHo;
+    localCustomers.update(target.id, patch as any);
+  };
+
+  /** 보류 항목을 사용자가 선택한 고객에게 첨부 */
+  const resolvePendingMatch = async (pendingId: string, customerId: number) => {
+    const p = pendingMatches.find((x) => x.id === pendingId);
+    if (!p) return;
+    const target = p.candidates.find((c) => c.id === customerId);
+    if (!target) return;
+    setResolvingId(pendingId);
+    try {
+      await uploadAndAttach(p.file, target, p.parsedDong, p.parsedHo);
+      setPendingMatches((prev) => prev.filter((x) => x.id !== pendingId));
+      setReloadKey((k) => k + 1);
+    } catch (err: any) {
+      alert(err?.message || "첨부 실패");
+    } finally {
+      setResolvingId(null);
+    }
+  };
+
+  const skipPendingMatch = (pendingId: string) => {
+    setPendingMatches((prev) => prev.filter((x) => x.id !== pendingId));
+  };
+
+  const clearAllPending = () => {
+    if (pendingMatches.length === 0) return;
+    if (!confirm(`보류 중인 ${pendingMatches.length}개 파일을 모두 비울까요?`)) return;
+    setPendingMatches([]);
+  };
+
   /** 서류 스캔본 배치 업로드 — 파일명 "동-호수 이름.pdf" 매칭 후 각 당첨자의 "서류 묶음" 슬롯에 저장 */
   const handleBatchDocs = async (files: FileList | null) => {
     if (!selected) { alert("먼저 공고를 선택해주세요"); return; }
@@ -246,7 +331,7 @@ export default function DocumentsStepPage() {
     setBatchResult(null);
     try {
       const customers = localCustomers.listByAnnouncement(selected.id);
-      let attached = 0, unmatched = 0;
+      let attached = 0, unmatched = 0, pending = 0;
       const errors: string[] = [];
       const total = files.length;
 
@@ -270,110 +355,68 @@ export default function DocumentsStepPage() {
           return cd && ch && cd === dong && ch === ho;
         });
 
-        // 1순위: 동호수 + 이름 모두 일치
+        // 1순위: 동호수 + 이름 모두 일치 → 자동 첨부
         let target: typeof customers[number] | undefined;
-        let matchTier: "dongHoName" | "dongHoOnly" | "nameOnly" | undefined;
         if (cleanNameHint) {
           target = byDongHo.find((c) => c.name === cleanNameHint);
-          if (target) matchTier = "dongHoName";
         }
 
-        // 2순위: 동호수만 일치 (이름이 없거나 일치하지 않는 경우)
+        // 2순위/3순위는 자동 첨부하지 않고 보류 — 담당자가 어느 고객인지 직접 선택.
         if (!target) {
-          if (byDongHo.length === 1) {
-            target = byDongHo[0];
-            matchTier = "dongHoOnly";
-          } else if (byDongHo.length > 1) {
-            // 같은 동호에 여러 후보 — 이름 일치 없으면 모호
+          // 후보군 추리기: 동호 일치 우선, 없으면 이름 일치
+          let candidates: typeof customers = [];
+          let tier: "dongHoOnly" | "nameOnly";
+          if (byDongHo.length > 0) {
+            candidates = byDongHo;
+            tier = "dongHoOnly";
+          } else if (cleanNameHint) {
+            candidates = customers.filter((c) => c.name === cleanNameHint);
+            tier = "nameOnly";
+          } else {
+            tier = "dongHoOnly";
+          }
+
+          if (candidates.length === 0) {
+            // 어떤 후보도 없으면 진짜 매칭 실패 — errors로
             unmatched++;
+            const dongHoFuzzy = customers
+              .filter((c) => {
+                const cd = String((c as any).unit_dong || "").trim();
+                const ch = String((c as any).unit_ho || "").trim();
+                return cd === dong || ch === ho;
+              })
+              .slice(0, 3)
+              .map((c) => `${c.name}(${(c as any).unit_dong || "?"}-${(c as any).unit_ho || "?"})`)
+              .join(", ");
             errors.push(
-              `${file.name}: 동호수 ${dong}-${ho}에 ${byDongHo.length}명 매칭` +
-              ` (${byDongHo.slice(0, 3).map((c) => c.name).join(", ")}) — 파일명에 이름 추가 필요`,
+              `${file.name}: ${dong}-${ho}${cleanNameHint ? ` "${cleanNameHint}"` : ""} 매칭 실패. ` +
+              `동호 유사: [${dongHoFuzzy || "없음"}]`,
             );
             continue;
           }
-        }
 
-        // 3순위 (legacy): 동호수 데이터가 없는 고객 대상으로 이름만 매칭
-        if (!target && cleanNameHint) {
-          const byName = customers.filter((c) => {
-            const cd = String((c as any).unit_dong || "").trim();
-            const ch = String((c as any).unit_ho || "").trim();
-            return c.name === cleanNameHint && (!cd || !ch);
-          });
-          if (byName.length === 1) {
-            target = byName[0];
-            matchTier = "nameOnly";
-          } else if (byName.length > 1) {
-            unmatched++;
-            errors.push(`${file.name}: 동명이인 ${byName.length}명 — dong/ho 필드 필요`);
-            continue;
-          }
-        }
-        void matchTier;
-
-        if (!target) {
-          unmatched++;
-          const nameCandidates = nameHint
-            ? customers
-                .filter((c) => c.name?.includes(nameHint.trim()) || nameHint.trim().includes(c.name || ""))
-                .slice(0, 3)
-                .map((c) => `${c.name}(id:${c.id})`)
-                .join(", ")
-            : "";
-          const dongHoCandidates = customers
-            .filter((c) => {
-              const cd = String((c as any).unit_dong || "").trim();
-              const ch = String((c as any).unit_ho || "").trim();
-              return cd === dong || ch === ho;
-            })
-            .slice(0, 3)
-            .map((c) => `${c.name}(${(c as any).unit_dong || "?"}-${(c as any).unit_ho || "?"})`)
-            .join(", ");
-          errors.push(
-            `${file.name}: ${dong}-${ho}${nameHint ? ` "${nameHint}"` : ""} 매칭 실패. ` +
-            `이름 유사: [${nameCandidates || "없음"}] · 동호 유사: [${dongHoCandidates || "없음"}]`,
-          );
+          // 보류 큐에 추가 — 담당자가 직접 선택
+          const pid = `${file.name}#${Date.now()}#${Math.random().toString(36).slice(2, 8)}`;
+          setPendingMatches((prev) => [
+            ...prev,
+            {
+              id: pid,
+              file,
+              parsedDong: dong,
+              parsedHo: ho,
+              parsedName: cleanNameHint,
+              tier,
+              candidates,
+            },
+          ]);
+          // 보류는 unmatched로 카운트하지 않고 별도 표시
+          pending++;
           continue;
         }
 
-        // 매칭 성공 시 dong/ho가 비었으면 자동 보강
-        if (!(target as any).unit_dong || !(target as any).unit_ho) {
-          localCustomers.update(target.id, {
-            unit_dong: dong,
-            unit_ho: ho,
-          } as any);
-        }
-
-        if (nameHint && target.name && !nameHint.trim().includes(target.name) && !target.name.includes(nameHint.trim())) {
-          console.warn(`[batch-docs] ${file.name}: 이름 불일치(${nameHint} vs ${target.name})`);
-        }
-
+        // 1순위 매칭 — 자동 첨부
         try {
-          const fd = new FormData();
-          fd.append("file", file);
-          fd.append("kind", "other");
-          fd.append("announcement_id", String(selected.id));
-          const res = await fetch("/api/files/upload", { method: "POST", body: fd });
-          if (!res.ok) throw new Error(`업로드 실패 ${res.status}`);
-          const json = await res.json();
-
-          const existing = target.document_files || {};
-          const nextFiles = {
-            ...existing,
-            "서류 묶음(통합)": {
-              url: json.url,
-              filename: file.name,
-              uploadedAt: new Date().toISOString(),
-              fileId: json.id,
-            },
-          };
-          // 체크리스트 "서류 묶음(통합)"도 자동 체크
-          const submittedNow = target.documents_submitted || {};
-          localCustomers.update(target.id, {
-            document_files: nextFiles,
-            documents_submitted: { ...submittedNow, "서류 묶음(통합)": true },
-          } as any);
+          await uploadAndAttach(file, target, dong, ho);
           attached++;
         } catch (err: any) {
           errors.push(`${file.name}: ${err?.message || "오류"}`);
@@ -381,7 +424,7 @@ export default function DocumentsStepPage() {
         }
       }
 
-      setBatchResult({ attached, unmatched, total, errors });
+      setBatchResult({ attached, unmatched, pending, total, errors });
       setReloadKey((k) => k + 1);
     } finally {
       setBatchBusy(false);
@@ -517,8 +560,13 @@ export default function DocumentsStepPage() {
                   전체 {batchResult.total}개
                 </span>
                 <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900">
-                  매칭 & 첨부 {batchResult.attached}건
+                  ✓ 자동 첨부 {batchResult.attached}건
                 </span>
+                {batchResult.pending > 0 && (
+                  <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-medium">
+                    ⏸ 수동 매칭 필요 {batchResult.pending}건
+                  </span>
+                )}
                 {batchResult.unmatched > 0 && (
                   <span className="px-2 py-0.5 rounded bg-red-100 text-red-800">
                     매칭 실패 {batchResult.unmatched}건
@@ -533,6 +581,101 @@ export default function DocumentsStepPage() {
                     </ul>
                   </details>
                 )}
+              </div>
+            )}
+
+            {/* 수동 매칭 큐 — 동호수+이름이 모두 일치하지 않아 자동 첨부 보류된 파일들 */}
+            {pendingMatches.length > 0 && (
+              <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-300">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-amber-900">
+                      ⏸ 수동 매칭 필요 ({pendingMatches.length}건)
+                    </h3>
+                    <p className="text-[11px] text-amber-800 mt-0.5">
+                      동호수+이름이 모두 일치하지 않은 파일입니다. 후보 중 어느 고객에 첨부할지 직접 선택하세요.
+                    </p>
+                  </div>
+                  <button
+                    onClick={clearAllPending}
+                    className="text-[11px] text-amber-700 hover:underline"
+                  >
+                    모두 비우기
+                  </button>
+                </div>
+                <ul className="space-y-2">
+                  {pendingMatches.map((p) => {
+                    const isResolving = resolvingId === p.id;
+                    return (
+                      <li
+                        key={p.id}
+                        className="p-2.5 rounded-md bg-white border border-amber-200"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-mono text-ink truncate" title={p.file.name}>
+                              📄 {p.file.name}
+                            </div>
+                            <div className="text-[10px] text-ink-3 mt-0.5 flex flex-wrap gap-2">
+                              <span>파싱: <strong className="text-ink-2">{p.parsedDong}-{p.parsedHo}</strong></span>
+                              {p.parsedName && <span>이름: <strong className="text-ink-2">{p.parsedName}</strong></span>}
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                                p.tier === "dongHoOnly"
+                                  ? "bg-blue-100 text-blue-700"
+                                  : "bg-purple-100 text-purple-700"
+                              }`}>
+                                {p.tier === "dongHoOnly" ? "동호수 일치" : "이름만 일치"}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => skipPendingMatch(p.id)}
+                            disabled={isResolving}
+                            className="text-[10px] text-ink-4 hover:text-red-600 px-1 disabled:opacity-40"
+                            title="이 파일 건너뛰기 (큐에서 제거)"
+                          >
+                            건너뛰기
+                          </button>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-[10px] text-ink-3 font-medium">
+                            후보 {p.candidates.length}명 — 선택해서 첨부:
+                          </div>
+                          {p.candidates.map((c) => {
+                            const dh = `${(c as any).unit_dong || "?"}-${(c as any).unit_ho || "?"}`;
+                            const supply = c.supply_type || "—";
+                            return (
+                              <button
+                                key={c.id}
+                                onClick={() => resolvePendingMatch(p.id, c.id)}
+                                disabled={isResolving}
+                                className="w-full text-left p-1.5 rounded border border-border hover:border-indigo-400 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                              >
+                                <span className="font-mono text-[11px] text-ink">{dh}</span>
+                                <span className="text-[11px] font-semibold text-ink">{c.name}</span>
+                                <span className="text-[10px] px-1 py-0.5 rounded bg-surface2 text-ink-2">
+                                  {supply}
+                                </span>
+                                {c.is_standby && (
+                                  <span className="text-[9.5px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded">
+                                    예비 {c.standby_rank || ""}
+                                  </span>
+                                )}
+                                {isResolving ? (
+                                  <Loader2 className="w-3 h-3 animate-spin ml-auto text-indigo-500" />
+                                ) : (
+                                  <span className="ml-auto text-[10px] text-indigo-600 font-medium">
+                                    이 고객에 첨부 →
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
             )}
             {bulkResult && (
