@@ -194,12 +194,115 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 }
 
 /**
- * 클라이언트가 Blob 업로드 완료 후, 방금 등록된 파일의 우리 DB id를
- * 알아내기 위한 작은 헬퍼. blob.url을 받아 files.id를 돌려준다.
+ * Blob 업로드 완료 후 클라이언트가 직접 호출 — files 테이블에 메타 등록.
  *
- * (handleUpload onUploadCompleted는 Blob CDN이 별도로 호출하므로 클라이언트는
- *  그 응답을 직접 받을 수 없음 — 그래서 url로 id를 다시 조회.)
+ * 왜 onUploadCompleted 웹훅에 의존하지 않나:
+ *   Vercel Blob의 onUploadCompleted는 Blob CDN → 우리 서버로 fire되는 webhook이라
+ *   네트워크/콜드스타트로 인해 누락·지연되는 경우가 종종 있음 (배포·라우트 캐시,
+ *   Edge → Region 라우팅 등). 그러면 클라가 GET 폴링으로 50초를 기다려도 INSERT가
+ *   되지 않아 504. 클라이언트는 upload() 반환값으로 이미 url을 알고 있으므로
+ *   직접 PUT 한 번으로 등록하는 편이 훨씬 안정적이다.
+ *
+ * GET ?url=... — 레거시 폴링 호환용 (혹시 onUploadCompleted가 먼저 끝났으면 사용)
+ * PUT body:{url, filename, kind?, announcement_id?} — 정식 등록 경로
  */
+async function registerBlobFile(params: {
+  userId: number;
+  url: string;
+  filename: string;
+  kind: string;
+  announcementId: number | null;
+  contentType: string | null;
+  size: number | null;
+}): Promise<{ id: number; filename: string }> {
+  const db = getDb();
+  // 멱등: 같은 url이 이미 있으면 그 id 재사용
+  const dup = await db.execute({
+    sql: "SELECT id, filename FROM files WHERE url=? LIMIT 1",
+    args: [params.url],
+  });
+  if (dup.rows.length > 0) {
+    return {
+      id: Number(dup.rows[0].id),
+      filename: String(dup.rows[0].filename),
+    };
+  }
+  const ins = await db.execute({
+    sql: `INSERT INTO files (user_id, announcement_id, kind, filename, content_type, size, url)
+          VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+    args: [
+      params.userId,
+      params.announcementId,
+      params.kind,
+      params.filename,
+      params.contentType,
+      params.size,
+      params.url,
+    ],
+  });
+  return {
+    id: Number(ins.rows[0]?.id),
+    filename: params.filename,
+  };
+}
+
+export async function PUT(req: NextRequest): Promise<NextResponse> {
+  try {
+    await ensureSchema();
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
+    const userId = Number(session.sub);
+
+    const body = await req.json();
+    const url = String(body?.url || "");
+    const filename = String(body?.filename || "file");
+    const kind = String(body?.kind || "other");
+    const announcementId = body?.announcement_id != null ? Number(body.announcement_id) : null;
+    const contentType = body?.contentType ? String(body.contentType) : null;
+    const size = body?.size != null ? Number(body.size) : null;
+
+    if (!url || !url.startsWith("https://")) {
+      return NextResponse.json({ error: "잘못된 url" }, { status: 400 });
+    }
+    // 보안: 우리 Blob 도메인만 허용 — 외부 url 등록 차단
+    if (!/\.blob\.vercel-storage\.com\//.test(url)) {
+      return NextResponse.json({ error: "허용되지 않은 호스트" }, { status: 400 });
+    }
+
+    const result = await registerBlobFile({
+      userId, url, filename, kind, announcementId, contentType, size,
+    });
+
+    // 부수효과 — fire-and-forget
+    (async () => {
+      try {
+        await logAudit({
+          session, entity: "file", entity_id: result.id, action: "create",
+          after: { filename, kind, announcement_id: announcementId, client_upload: true },
+          req,
+        });
+      } catch (e) { console.error("[client-upload PUT] audit 실패", e); }
+      try {
+        await broadcast("file:uploaded", {
+          id: result.id,
+          announcement_id: announcementId ?? undefined,
+          by: userId,
+        });
+      } catch (e) { console.error("[client-upload PUT] broadcast 실패", e); }
+    })();
+
+    return NextResponse.json({
+      id: result.id,
+      filename: result.filename,
+      url: `/api/files/${result.id}/download`,
+    });
+  } catch (err: any) {
+    console.error("[client-upload PUT]", err);
+    return NextResponse.json({ error: err?.message || "등록 실패" }, { status: 500 });
+  }
+}
+
+/** 레거시 호환: onUploadCompleted webhook 정상 동작 시 폴링으로 id 조회 */
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     await ensureSchema();
@@ -208,37 +311,29 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const url = req.nextUrl.searchParams.get("url");
     if (!url) return NextResponse.json({ error: "url 파라미터 필요" }, { status: 400 });
 
-    // 폴링: 첫 번째는 즉시(0ms 대기), 이후 점진 증가.
-    // Vercel 함수 maxDuration=60초 안에서 ~50초까지 대기 가능 — 콜드스타트 안전망.
+    // 짧게만 폴링 (5초). 그래도 없으면 클라가 PUT으로 fallback 호출.
     const db = getDb();
-    let found: { id: number; filename: string } | null = null;
-    const delays = [0, 100, 150, 200, 300, 400, 500, 700, 1000, 1500, 2000, 3000];
+    const delays = [0, 100, 200, 300, 500, 700, 1000, 1500, 2000];
     let elapsed = 0;
-    let attempts = 0;
-    const MAX_ELAPSED_MS = 50_000;
-    for (let i = 0; elapsed < MAX_ELAPSED_MS; i++) {
+    let found: { id: number; filename: string } | null = null;
+    for (let i = 0; elapsed < 5_000; i++) {
       const wait = delays[Math.min(i, delays.length - 1)];
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       elapsed += wait;
-      attempts++;
       const r = await db.execute({
         sql: "SELECT id, filename FROM files WHERE url=? ORDER BY id DESC LIMIT 1",
         args: [url],
       });
       if (r.rows.length > 0) {
         found = { id: Number(r.rows[0].id), filename: String(r.rows[0].filename) };
-        console.log(`[client-upload GET] found url after ${attempts} attempts / ${elapsed}ms`);
         break;
       }
     }
     if (!found) {
-      console.error(`[client-upload GET] timeout: no DB row for url after ${attempts} attempts / ${elapsed}ms — onUploadCompleted may have failed`);
+      // 클라가 PUT으로 직접 등록하도록 404 신호 — 504보다 의미 명확
       return NextResponse.json(
-        {
-          error: "업로드 메타 기록 시간 초과 — 페이지 새로고침 후 다시 시도해 주세요. (서버 콜백 지연 또는 DB 오류)",
-          diagnostics: { attempts, elapsedMs: elapsed, url },
-        },
-        { status: 504 },
+        { error: "메타 미기록 — 클라이언트에서 PUT으로 직접 등록 필요" },
+        { status: 404 },
       );
     }
 

@@ -94,28 +94,37 @@ export async function uploadFileViaClient(
 
   log(`✓ Blob 업로드 완료: ${blob.url}`);
 
-  // Blob CDN이 onUploadCompleted를 비동기로 호출 → DB에 files 레코드 INSERT됨.
-  // 그 id를 알아내기 위해 url로 폴링. 라우트가 자체 폴링하므로 여기는 한 번만 호출.
-  log(`▶ 메타 조회(DB INSERT 대기): ${blob.url}`);
-  const lookupStart = Date.now();
-  const lookup = await fetch(
-    `/api/files/client-upload?url=${encodeURIComponent(blob.url)}`,
-  );
-  const lookupMs = Date.now() - lookupStart;
-  log(`◆ 메타 조회 응답: status=${lookup.status} (${lookupMs}ms)`);
+  // 클라이언트가 직접 PUT으로 메타 등록 — onUploadCompleted webhook에 의존하지 않음.
+  // (webhook은 누락·지연되는 경우가 있어 폴링이 504로 끝나는 문제 발생)
+  log(`▶ DB 등록 요청 (PUT): ${blob.url}`);
+  const regStart = Date.now();
+  const reg = await fetch("/api/files/client-upload", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      url: blob.url,
+      filename: file.name,
+      kind,
+      announcement_id: announcementId,
+      contentType: explicitType,
+      size: file.size,
+    }),
+  });
+  const regMs = Date.now() - regStart;
+  log(`◆ DB 등록 응답: status=${reg.status} (${regMs}ms)`);
 
-  if (!lookup.ok) {
+  if (!reg.ok) {
     let detail = "";
     try {
-      const j = await lookup.json();
+      const j = await reg.json();
       detail = j?.error || JSON.stringify(j);
     } catch {
-      detail = await lookup.text().catch(() => "");
+      detail = await reg.text().catch(() => "");
     }
-    log(`✕ 메타 조회 실패: ${detail}`);
-    throw new Error(detail || `메타 조회 실패 (HTTP ${lookup.status})`);
+    log(`✕ DB 등록 실패: ${detail}`);
+    throw new Error(detail || `DB 등록 실패 (HTTP ${reg.status})`);
   }
-  const data = await lookup.json();
+  const data = await reg.json();
   log(`✓ 등록 완료: id=${data.id}, url=${data.url}`);
   return {
     id: data.id,
