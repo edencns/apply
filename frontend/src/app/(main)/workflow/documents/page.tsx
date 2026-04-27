@@ -13,7 +13,8 @@ import {
   FolderUp, ShieldCheck, FileQuestion, PauseCircle,
 } from "lucide-react";
 
-const step = WORKFLOW_STEPS[4]; // documents
+// 인덱스 대신 key 검색 — 단계 순서 바뀌어도 안전
+const step = WORKFLOW_STEPS.find((s) => s.key === "documents")!;
 
 function computeDocList(
   c: LocalCustomer,
@@ -40,7 +41,7 @@ function computeDocList(
   return items;
 }
 
-/** 동·호수 prefix 컬럼 — 동·호 매칭이 핵심인 5단계에서 가장 먼저 노출 */
+/** 동·호수 prefix 컬럼 — 동·호 매칭이 핵심인 단계에서 가장 먼저 노출 */
 const prefixColumns: StageColumn[] = [
   {
     key: "unitNo",
@@ -52,11 +53,23 @@ const prefixColumns: StageColumn[] = [
       const ho = (c as any).unit_ho
         || c.winner_info?.unit_no
         || "";
+      const tt = (c as any).title_transfer;
+      const newName = tt?.newHolder?.name;
       if (!dong && !ho) return <span className="text-xs text-ink-4">—</span>;
       return (
-        <span className="text-[12px] text-ink font-mono whitespace-nowrap">
-          {dong || "?"}-{ho || "?"}
-        </span>
+        <div className="flex flex-col gap-0.5 leading-tight">
+          <span className="text-[12px] text-ink font-mono whitespace-nowrap">
+            {dong || "?"}-{ho || "?"}
+          </span>
+          {tt && (
+            <span
+              className="inline-flex items-center gap-0.5 text-[9.5px] text-rose-700 bg-rose-50 px-1 py-0.5 rounded font-medium whitespace-nowrap"
+              title={`명의변경 (${tt.reason || "사유 미상"}) — 새 명의자: ${newName || "—"}`}
+            >
+              🔄 명의변경{newName ? ` → ${newName}` : ""}
+            </span>
+          )}
+        </div>
       );
     },
   },
@@ -535,6 +548,33 @@ export default function DocumentsStepPage() {
               부적합 시 같은 주택형의 예비에서 승계 가능합니다.
             </span>
           </div>
+
+          {/* 명의변경 적용 세대 알림 */}
+          {(() => {
+            const transferCount = localCustomers
+              .listByAnnouncement(selected.id)
+              .filter((c) => !c.superseded && (c as any).title_transfer)
+              .length;
+            if (transferCount === 0) return null;
+            return (
+              <div className="mb-3 p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-900 flex items-start gap-2">
+                <span className="text-base leading-none flex-shrink-0">🔄</span>
+                <div className="flex-1">
+                  <div className="font-semibold">명의변경 적용된 세대 {transferCount}건</div>
+                  <div className="mt-0.5 text-rose-800">
+                    리스트의 동호수 옆에 <span className="inline-block px-1 py-0.5 rounded bg-rose-100 text-[9.5px] font-medium">🔄 명의변경 → 새이름</span> 배지가 표시됩니다.
+                    이들은 새 명의자 기준으로 서류 검수가 필요합니다.
+                  </div>
+                </div>
+                <a
+                  href="/workflow/transfers"
+                  className="text-[11px] text-rose-700 hover:underline whitespace-nowrap"
+                >
+                  ← 명의변경 단계로
+                </a>
+              </div>
+            );
+          })()}
 
           {/* Phase #5 — 면책 디스클레이머 */}
           <div className="mb-4 p-3 rounded-lg bg-red-50 border-2 border-red-300 text-xs text-red-900 flex items-start gap-2">
