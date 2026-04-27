@@ -642,6 +642,7 @@ export function parsePropertyOwnership(wb: XLSXWorkBook, fileName: string): File
     if (headerIdx === -1) continue;
     const map = buildColMap(rows[headerIdx]);
 
+    let skippedPreservation = 0;
     for (let i = headerIdx + 1; i < rows.length; i++) {
       const row = rows[i];
       if (!row || row.every((c) => c === "" || c === null)) continue;
@@ -649,6 +650,23 @@ export function parsePropertyOwnership(wb: XLSXWorkBook, fileName: string): File
       const name = normalizeName(pick(row, map, "성명"));
       const address = String(pick(row, map, "물건지주소") ?? "").trim();
       if (!rrn || !address) continue;
+
+      const changeReason = String(pick(row, map, "건축물대장상 소유권등 변동원인") ?? "").trim();
+
+      // 소유권보존 제외 규칙:
+      //   - 다가구주택의 건물 단위 등기 보존(소유권보존)은 같은 건물의 호별
+      //     소유 레코드와 중복 카운트됨 (실제 호 단위 소유권은 매매/증여 등의
+      //     변동원인으로 따로 잡힘).
+      //   - 호번호가 없는 주소(예: "...312-222번지")에 소유권보존만 찍힌 경우는
+      //     건물 등기 보존이라 무주택 판정에서 제외해야 함.
+      // 단, 단독주택처럼 건물 = 1가구이고 해당 건물의 유일한 등기가 소유권보존인
+      // 경우는 실 소유로 봐야 하므로 호번호 형태(0001 0xxxx)가 주소 끝에 있는
+      // 경우는 그대로 유지.
+      const hasUnitSuffix = /\b\d{4}\s+\d{4,5}\s*$/.test(address);
+      if (changeReason === "소유권보존" && !hasUnitSuffix) {
+        skippedPreservation++;
+        continue;
+      }
 
       properties.push({
         ownerRrn: rrn,
@@ -660,7 +678,7 @@ export function parsePropertyOwnership(wb: XLSXWorkBook, fileName: string): File
         acquiredDate: String(pick(row, map, "취득일") ?? "").trim() || undefined,
         transferredDate: String(pick(row, map, "양도일") ?? "").trim() || undefined,
         usage: String(pick(row, map, "용도 등", "용도") ?? "").trim() || undefined,
-        changeReason: String(pick(row, map, "건축물대장상 소유권등 변동원인") ?? "").trim() || undefined,
+        changeReason: changeReason || undefined,
         changeDate: String(pick(row, map, "건축물대장상 소유권등 변동일") ?? "").trim() || undefined,
         saleReportDate: String(pick(row, map, "매매신고일") ?? "").trim() || undefined,
         contractDate: String(pick(row, map, "계약일") ?? "").trim() || undefined,
@@ -668,6 +686,9 @@ export function parsePropertyOwnership(wb: XLSXWorkBook, fileName: string): File
         rightsType: String(pick(row, map, "권리구분") ?? "").trim() || undefined,
         buySell: String(pick(row, map, "매수매도구분") ?? "").trim() || undefined,
       });
+    }
+    if (skippedPreservation > 0) {
+      notes.push(`소유권보존 건물 단위 등기 ${skippedPreservation}건 제외 (호별 소유와 중복)`);
     }
   }
 
