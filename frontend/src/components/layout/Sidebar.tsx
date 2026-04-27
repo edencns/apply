@@ -22,11 +22,11 @@ const topItems: NavItem[] = [
 
 const workflowItems: NavItem[] = [
   { href: "/workflow/registration", icon: UserCheck, label: "당첨자 등록" },
-  { href: "/workflow/household",    icon: Users,     label: "세대원 확인" },
-  { href: "/workflow/property",     icon: Home,      label: "주택소유" },
-  { href: "/workflow/savings",      icon: Banknote,  label: "청약통장" },
-  { href: "/workflow/documents",    icon: FileText,  label: "서류·판정" },
-  { href: "/workflow/transfers",    icon: RefreshCw, label: "명의변경" },
+  { href: "/workflow/household",    icon: Users,     label: "세대·가족관계" },
+  { href: "/workflow/property",     icon: Home,      label: "주택소유 조회" },
+  { href: "/workflow/savings",      icon: Banknote,  label: "청약통장 검증" },
+  { href: "/workflow/documents",    icon: FileText,  label: "서류검토·판정" },
+  { href: "/workflow/transfers",    icon: RefreshCw, label: "명의변경 관리" },
 ];
 
 const bottomItems: NavItem[] = [

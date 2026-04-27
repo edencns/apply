@@ -23,11 +23,11 @@ const STAGES: Array<{
   field: keyof FinalVerdict["stages"];
   optional?: boolean;
 }> = [
-  { key: "registration", label: "당첨자 등록",   icon: UserCheck, field: "registration" },
-  { key: "household",    label: "세대원 확인",   icon: Users,     field: "household" },
-  { key: "property",     label: "주택소유 조회", icon: Home,      field: "property" },
-  { key: "savings",      label: "청약통장 순위", icon: Banknote,  field: "savings", optional: true },
-  { key: "documents",    label: "서류·판정",     icon: FileText,  field: "documents" },
+  { key: "registration", label: "당첨자 등록",       icon: UserCheck, field: "registration" },
+  { key: "household",    label: "세대·가족관계",     icon: Users,     field: "household" },
+  { key: "property",     label: "주택소유 조회",     icon: Home,      field: "property" },
+  { key: "savings",      label: "청약통장 검증",     icon: Banknote,  field: "savings", optional: true },
+  { key: "documents",    label: "서류검토·최종판정", icon: FileText,  field: "documents" },
 ];
 
 function stateIcon(v: FinalVerdict["stages"][keyof FinalVerdict["stages"]]) {

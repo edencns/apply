@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import {
   localAnnouncements, activeAnnouncement,
@@ -20,11 +21,11 @@ import { useRealtimeSync } from "@/lib/realtime/useRealtimeSync";
 import { allDeadlineAlerts, alertLabel, alertColorClass } from "@/lib/deadline-alerts";
 
 const WORKFLOW_STEPS_META = [
-  { n: 1, key: "registration", label: "당첨자 등록", href: "/workflow/registration" },
-  { n: 2, key: "household",    label: "세대원 확인", href: "/workflow/household" },
-  { n: 3, key: "property",     label: "주택소유",    href: "/workflow/property" },
-  { n: 4, key: "savings",      label: "청약통장",    href: "/workflow/savings" },
-  { n: 5, key: "documents",    label: "서류·판정",   href: "/workflow/documents" },
+  { n: 1, key: "registration", label: "당첨자 등록",      href: "/workflow/registration" },
+  { n: 2, key: "household",    label: "세대·가족관계",    href: "/workflow/household" },
+  { n: 3, key: "property",     label: "주택소유 조회",    href: "/workflow/property" },
+  { n: 4, key: "savings",      label: "청약통장 검증",    href: "/workflow/savings" },
+  { n: 5, key: "documents",    label: "서류검토·최종판정", href: "/workflow/documents" },
 ];
 
 function computeDocList(c: LocalCustomer, a: LocalAnnouncement) {
@@ -44,6 +45,7 @@ function computeDocList(c: LocalCustomer, a: LocalAnnouncement) {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [announcements, setAnnouncements] = useState<LocalAnnouncement[]>([]);
   const [activeAnn, setActiveAnn] = useState<LocalAnnouncement | null>(null);
   const [customers, setCustomers] = useState<LocalCustomer[]>([]);
@@ -130,17 +132,46 @@ export default function DashboardPage() {
     onFileUploaded: refetchFromCloud,
   });
 
-  // 통계 계산
+  // 통계 계산 — 실무에서 '오늘 뭘 처리해야 하나'에 답하는 카드들
   const stats = useMemo(() => {
     const active = customers.filter((c) => !c.superseded);
     const winners = active.filter((c) => !c.is_standby);
     const standbys = active.filter((c) => c.is_standby);
     let eligible = 0, ineligible = 0, needsReview = 0;
+    let notSubmitted = 0;   // 서류 한 장도 안 올린 사람 (미제출)
+    let atRisk = 0;         // 부적격 위험 (verdict 미확정 + reasons 또는 fail)
+    let contractReady = 0;  // 계약 가능 (eligible + 서류 묶음 첨부됨)
+
     for (const c of winners) {
       const v = c.verification_verdict;
-      if (v === "eligible") eligible++;
-      else if (v === "ineligible") ineligible++;
-      else needsReview++;
+      if (v === "eligible") {
+        eligible++;
+        // 계약 가능: 적합 + 묶음 PDF 첨부됨 (실제 계약 진행 가능 상태)
+        if ((c as any).document_files?.["서류 묶음(통합)"]) contractReady++;
+        else contractReady++; // 적합이면 일단 계약 가능 후보로 카운트
+      } else if (v === "ineligible") {
+        ineligible++;
+      } else {
+        needsReview++;
+        // 미제출: document_files에 url/pages가 하나도 없음
+        const docFiles = (c as any).document_files || {};
+        const hasFile = Object.values(docFiles).some((f: any) =>
+          f?.url || (Array.isArray(f?.pages) && f.pages.length > 0) || f?.page,
+        );
+        if (!hasFile) notSubmitted++;
+
+        // 부적격 위험: 활성 공고 기준 — 단계 평가에서 fail이 1개 이상 있는 사람
+        if (activeAnn) {
+          const docList = computeDocList(c, activeAnn);
+          const final = evaluateFinal(c, activeAnn, c.documents_submitted || {}, docList);
+          const hasFail =
+            (!final.stages.registration.ok && !final.stages.registration.missing) ||
+            (!final.stages.household.ok && !final.stages.household.missing) ||
+            (!final.stages.property.ok && !final.stages.property.missing) ||
+            (!final.stages.savings.ok && !final.stages.savings.missing);
+          if (hasFail) atRisk++;
+        }
+      }
     }
     return {
       totalCustomers: active.length,
@@ -149,8 +180,11 @@ export default function DashboardPage() {
       eligible,
       ineligible,
       needsReview,
+      notSubmitted,
+      atRisk,
+      contractReady: eligible, // '계약 가능' = 적합 판정자 (정확한 정의)
     };
-  }, [customers]);
+  }, [customers, activeAnn]);
 
   // 단계별 진행률 — 각 단계를 통과(또는 데이터 있음)하는 고객 수 / 전체 당첨자
   const stageProgress = useMemo(() => {
@@ -171,40 +205,92 @@ export default function DashboardPage() {
     }));
   }, [customers]);
 
-  // 확인 필요 목록
+  // 확인 필요 목록 — 위험도(높음/중간/낮음) 순으로 정렬
+  type Risk = "high" | "med" | "low";
   const attentionList = useMemo(() => {
     if (!activeAnn) return [];
     const winners = customers.filter((c) => !c.is_standby && !c.superseded);
-    const rows: Array<{ id: number; name: string; reason: string; stage: string }> = [];
+    const rows: Array<{
+      id: number;
+      name: string;
+      supplyType: string;
+      reason: string;
+      risk: Risk;
+      riskRank: number;
+      dueLabel: string;
+      dueDays: number;
+    }> = [];
+    // 가장 가까운 마감일 (서류접수 마감 우선)
+    const docEnd = (activeAnn as any).document_submit_end || (activeAnn as any).contract_end;
+    const dueDate = docEnd ? new Date(docEnd) : null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const daysLeft = dueDate
+      ? Math.round((dueDate.getTime() - today.getTime()) / 86400000)
+      : 999;
+
     for (const c of winners) {
       const docList = computeDocList(c, activeAnn);
       const final = evaluateFinal(c, activeAnn, c.documents_submitted || {}, docList);
-      if (final.reasons.length === 0) continue;
-      // 우선순위: 어느 단계에서 터진 이슈인지 찾기
-      const stageName =
-        !final.stages.property.ok ? "주택소유"
-        : !final.stages.savings.ok ? "청약통장"
-        : !final.stages.household.ok ? "세대원"
-        : !final.stages.documents.ok ? "서류"
-        : "";
+
+      // 적합 확정/부적합 확정/계약 완료자는 '확인 필요' 대상 아님
+      if (final.verdict === "eligible" || final.verdict === "ineligible") continue;
+      // 부적합 사유 또는 경고가 있는 사람만
+      const hasReasons = final.reasons.length > 0;
+      const hasWarnings = final.warnings.length > 0;
+      if (!hasReasons && !hasWarnings) continue;
+
+      // 위험도 산정:
+      //   - 다단계 fail 또는 주택소유 fail → 높음 (부적격 확정 직전)
+      //   - 단일 단계 fail 또는 다수 warning → 중간
+      //   - 단일 warning만 → 낮음
+      const failedStages = [
+        !final.stages.registration.ok && !final.stages.registration.missing,
+        !final.stages.household.ok && !final.stages.household.missing,
+        !final.stages.property.ok && !final.stages.property.missing,
+        !final.stages.savings.ok && !final.stages.savings.missing,
+      ].filter(Boolean).length;
+
+      const propertyFail = !final.stages.property.ok && !final.stages.property.missing;
+      let risk: Risk;
+      let riskRank: number;
+      if (failedStages >= 2 || propertyFail || daysLeft <= 1) {
+        risk = "high";
+        riskRank = 0;
+      } else if (failedStages === 1 || final.warnings.length >= 2 || daysLeft <= 5) {
+        risk = "med";
+        riskRank = 1;
+      } else {
+        risk = "low";
+        riskRank = 2;
+      }
+
       rows.push({
         id: c.id,
         name: c.name,
-        reason: final.reasons[0]?.slice(0, 60) || "",
-        stage: stageName || "검수",
+        supplyType: c.supply_type || "—",
+        reason: (final.reasons[0] || final.warnings[0] || "").slice(0, 60),
+        risk,
+        riskRank,
+        dueLabel: dueDate ? (daysLeft >= 0 ? `D-${daysLeft}` : `D+${-daysLeft}`) : "—",
+        dueDays: daysLeft,
       });
-      if (rows.length >= 5) break;
     }
-    return rows;
+    // 위험도 → 마감 임박 → 이름순으로 정렬
+    rows.sort((a, b) => a.riskRank - b.riskRank || a.dueDays - b.dueDays || a.name.localeCompare(b.name, "ko"));
+    return rows.slice(0, 8);
   }, [customers, activeAnn]);
 
+  /** 카드 정의: 위에서부터 자주 보는 순서 — 실무 우선순위 반영
+   *  href는 클릭 시 해당 화면으로 이동 (필터링이 가능한 곳으로 연결) */
   const statCards = [
-    { label: "전체 고객",      value: stats.totalCustomers, tone: "neutral" as const },
-    { label: "당첨자",         value: stats.winners,        tone: "neutral" as const },
-    { label: "검수 완료",      value: stats.eligible,       tone: "ok" as const },
-    { label: "확인 필요",      value: stats.needsReview,    tone: "warn" as const },
-    { label: "부적격",         value: stats.ineligible,     tone: "fail" as const },
-    { label: "예비",           value: stats.standbys,       tone: "neutral" as const },
+    { label: "당첨자",         value: stats.winners,        tone: "neutral" as const, href: "/workflow/registration" },
+    { label: "예비",           value: stats.standbys,       tone: "neutral" as const, href: "/workflow/registration" },
+    { label: "미제출",         value: stats.notSubmitted,   tone: "warn" as const,    href: "/workflow/documents", hint: "서류 한 장도 안 올린 사람" },
+    { label: "확인 필요",      value: stats.needsReview,    tone: "warn" as const,    href: "/workflow/documents", hint: "검수 보류·미검수 합계" },
+    { label: "부적격 위험",    value: stats.atRisk,         tone: "warn" as const,    href: "/workflow/documents", hint: "단계 평가 fail이 1개 이상" },
+    { label: "계약 가능",      value: stats.contractReady,  tone: "ok" as const,      href: "/workflow/documents", hint: "최종 적합 판정자" },
+    { label: "부적격",         value: stats.ineligible,     tone: "fail" as const,    href: "/workflow/documents" },
   ];
   const toneCls: Record<string, string> = {
     ok: "text-ok",
@@ -238,25 +324,29 @@ export default function DashboardPage() {
             onClick={handlePush}
             disabled={!!syncBusy}
             className="btn-secondary inline-flex items-center gap-1"
-            title="로컬 데이터를 클라우드 DB로 업로드"
+            title="이 기기의 로컬 데이터를 클라우드 DB로 백업 업로드"
           >
             {syncBusy === "push" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudUpload className="w-3.5 h-3.5" />}
-            업로드
+            DB 백업 ↑
           </button>
           <button
             onClick={handlePull}
             disabled={!!syncBusy}
             className="btn-secondary inline-flex items-center gap-1"
-            title="클라우드 DB → 로컬로 다운로드 (덮어쓰기)"
+            title="클라우드 DB의 데이터를 이 기기로 가져오기 (로컬 덮어쓰기)"
           >
             {syncBusy === "pull" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudDownload className="w-3.5 h-3.5" />}
-            다운로드
+            DB 가져오기 ↓
           </button>
           <button className="btn-secondary inline-flex items-center gap-1">
             <Download className="w-3.5 h-3.5" /> 보고서
           </button>
-          <Link href="/workflow/registration" className="btn-primary inline-flex items-center gap-1">
-            <Upload className="w-3.5 h-3.5" /> 파일 업로드
+          <Link
+            href="/workflow/registration"
+            className="btn-primary inline-flex items-center gap-1"
+            title="당첨자 명단·서류 PDF 등을 업로드해 당첨자로 등록"
+          >
+            <Upload className="w-3.5 h-3.5" /> 당첨자 등록
           </Link>
         </div>
       </div>
@@ -319,18 +409,38 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Block C — Stats grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-4">
-        {statCards.map((s) => (
-          <div key={s.label} className="card !p-3.5">
-            <div className="text-[11px] text-ink-3 font-medium">{s.label}</div>
-            <div className="flex items-baseline gap-2 mt-1">
-              <div className="text-[22px] font-bold text-ink tracking-[-0.5px] tnum">
-                {s.value.toLocaleString()}
+      {/* Block C — Stats grid (실무 우선순위 7개 카드) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 mb-4">
+        {statCards.map((s) => {
+          const valueCls =
+            s.tone === "ok" ? "text-ok"
+            : s.tone === "warn" ? "text-warn"
+            : s.tone === "fail" ? "text-fail"
+            : "text-ink";
+          const card = (
+            <div
+              className="card !p-3.5 transition-colors hover:bg-surface2 cursor-pointer h-full"
+              title={(s as any).hint}
+            >
+              <div className="text-[11px] text-ink-3 font-medium">{s.label}</div>
+              <div className="flex items-baseline gap-2 mt-1">
+                <div className={`text-[22px] font-bold tracking-[-0.5px] tnum ${valueCls}`}>
+                  {s.value.toLocaleString()}
+                </div>
               </div>
+              {(s as any).hint && (
+                <div className="text-[9.5px] text-ink-4 mt-1 leading-tight">
+                  {(s as any).hint}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+          return (s as any).href ? (
+            <Link key={s.label} href={(s as any).href}>{card}</Link>
+          ) : (
+            <div key={s.label}>{card}</div>
+          );
+        })}
       </div>
 
       {/* Block D — Stage progress */}
@@ -390,10 +500,13 @@ export default function DashboardPage() {
 
       {/* Block E — 2 col */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-3.5">
-        {/* 확인 필요 */}
+        {/* 확인 필요 — 위험도 순 */}
         <div className="bg-surface border border-border rounded-lg p-4">
           <div className="flex items-center justify-between mb-2.5">
-            <div className="text-[13px] font-semibold text-ink">확인이 필요한 건</div>
+            <div>
+              <div className="text-[13px] font-semibold text-ink">확인이 필요한 건</div>
+              <div className="text-[10px] text-ink-4 mt-0.5">위험도 높음 → 낮음 + 마감 임박 순</div>
+            </div>
             <Link href="/workflow/documents" className="text-[11px] text-accent font-medium">
               전체 보기
             </Link>
@@ -402,22 +515,62 @@ export default function DashboardPage() {
             <div className="py-8 text-center text-xs text-ink-4">
               확인이 필요한 건이 없습니다
             </div>
-          ) : attentionList.map((r, i) => (
-            <Link
-              href={`/customers/${r.id}`}
-              key={r.id}
-              className={`flex items-center gap-3 py-2.5 ${
-                i > 0 ? "border-t border-border-soft" : ""
-              } hover:bg-surface2 -mx-2 px-2 rounded transition-colors`}
-            >
-              <div className="text-[12.5px] font-semibold text-ink w-[52px]">{r.name}</div>
-              <div className="flex-1 text-xs text-ink-2 truncate">{r.reason}</div>
-              <div className="text-[10.5px] text-ink-3 bg-surface2 px-2 py-0.5 rounded">
-                {r.stage}
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 text-ink-4" />
-            </Link>
-          ))}
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="text-[10px] uppercase tracking-wide text-ink-4">
+                  <tr className="border-b border-border-soft">
+                    <th className="text-left py-1.5 pr-2 font-medium">위험도</th>
+                    <th className="text-left py-1.5 pr-2 font-medium">이름</th>
+                    <th className="text-left py-1.5 pr-2 font-medium">공급유형</th>
+                    <th className="text-left py-1.5 pr-2 font-medium">사유</th>
+                    <th className="text-right py-1.5 font-medium">마감</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attentionList.map((r) => {
+                    const riskCls =
+                      r.risk === "high" ? "bg-fail text-white"
+                      : r.risk === "med" ? "bg-warn text-white"
+                      : "bg-ink-4 text-white";
+                    const riskLabel =
+                      r.risk === "high" ? "높음" : r.risk === "med" ? "중간" : "낮음";
+                    return (
+                      <tr
+                        key={r.id}
+                        onClick={() => router.push(`/customers/${r.id}`)}
+                        className="cursor-pointer border-b border-border-soft hover:bg-surface2 transition-colors"
+                      >
+                        <td className="py-2 pr-2">
+                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${riskCls}`}>
+                            {riskLabel}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-2 font-semibold text-ink whitespace-nowrap">
+                          {r.name}
+                        </td>
+                        <td className="py-2 pr-2 text-ink-2">{r.supplyType}</td>
+                        <td className="py-2 pr-2 text-ink-2 max-w-[220px] truncate" title={r.reason}>
+                          {r.reason || "—"}
+                        </td>
+                        <td className="py-2 text-right">
+                          <span
+                            className={`text-[10.5px] font-mono tnum ${
+                              r.dueDays <= 1 ? "text-fail font-bold"
+                              : r.dueDays <= 5 ? "text-warn font-semibold"
+                              : "text-ink-3"
+                            }`}
+                          >
+                            {r.dueLabel}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* 최근 활동 */}
