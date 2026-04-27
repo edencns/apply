@@ -381,8 +381,10 @@ export interface LocalCustomer {
     uploadedBy?: number;
     /** files 테이블 ID (페이지 수 조회 등 API 호출용) */
     fileId?: number;
-    /** 이 서류가 묶음 PDF 내에서 시작되는 페이지 번호 (기본 1) */
+    /** 이 서류가 묶음 PDF 내에서 시작되는 페이지 번호 (단일 페이지 — 레거시 호환용) */
     page?: number;
+    /** 이 서류가 묶음 PDF에서 차지하는 페이지들 (여러 장 가능) */
+    pages?: number[];
     /** PDF 총 페이지 수 (자동 감지되면 저장) */
     totalPages?: number;
     checkpointResults?: Record<string, {

@@ -23,6 +23,7 @@ import {
 import {
   COMMON_DOCUMENTS,
   SUPPLY_TYPE_DOCUMENTS,
+  parseDocumentName,
 } from "@/lib/document-checklist";
 import { calculateSubscriptionScore } from "@/lib/score-calculator";
 import { formatPhoneInput, formatPhone } from "@/lib/housing-code";
@@ -149,18 +150,30 @@ function CustomerDetailInner() {
   const documentList = useMemo(() => {
     if (!customer) return [];
     const parsedDocs: Record<string, string[]> = announcement?.eligibility_rules?.required_documents || {};
-    const items: Array<{ name: string; category: string; conditional: boolean }> = [];
+    const items: Array<{
+      name: string;
+      shortName: string;
+      condition?: string;
+      category: string;
+      conditional: boolean;
+    }> = [];
+    // 짧은 이름 기준으로 중복 제거 — 예: "가족관계증명서 (상세)"와 "가족관계증명서 (상세, 자녀 확인)" 충돌 방지
+    const seenShort = new Set<string>();
+    const pushOnce = (raw: string, category: string) => {
+      const { shortName, condition, isConditional } = parseDocumentName(raw);
+      if (seenShort.has(shortName)) return;
+      seenShort.add(shortName);
+      items.push({ name: raw, shortName, condition, category, conditional: isConditional });
+    };
+
     const common = (parsedDocs["공통"] && parsedDocs["공통"].length >= 3) ? parsedDocs["공통"] : COMMON_DOCUMENTS;
-    for (const doc of common) {
-      items.push({ name: doc, category: "공통", conditional: /해당\s*시|해당자/.test(doc) });
-    }
+    for (const doc of common) pushOnce(doc, "공통");
+
     const typeDocs = (parsedDocs[supplyType] && parsedDocs[supplyType].length >= 2)
       ? parsedDocs[supplyType]
       : (SUPPLY_TYPE_DOCUMENTS[supplyType] || SUPPLY_TYPE_DOCUMENTS["일반공급"] || []);
-    for (const doc of typeDocs) {
-      if (items.some((it) => it.name === doc)) continue;
-      items.push({ name: doc, category: supplyType, conditional: /해당\s*시|해당자|임신|기혼자/.test(doc) });
-    }
+    for (const doc of typeDocs) pushOnce(doc, supplyType);
+
     return items;
   }, [announcement, supplyType, customer]);
 
@@ -489,7 +502,13 @@ function DocumentsStage({
 }: {
   customer: LocalCustomer;
   announcement: LocalAnnouncement | null;
-  documentList: Array<{ name: string; category: string; conditional: boolean }>;
+  documentList: Array<{
+    name: string;
+    shortName: string;
+    condition?: string;
+    category: string;
+    conditional: boolean;
+  }>;
   submitted: Record<string, boolean>;
   finalVerdict: ReturnType<typeof evaluateFinal>;
   onUpdate: (c: LocalCustomer) => void;
@@ -508,26 +527,67 @@ function DocumentsStage({
 
   /** 매퍼 열기 — 특정 서류의 기존 지정 페이지에서 시작 */
   const openMapperFor = (docName?: string) => {
-    const startPage = docName && docFiles[docName]?.page ? docFiles[docName]!.page! : 1;
-    setMapperInitialPage(startPage);
+    if (docName && docFiles[docName]) {
+      const f: any = docFiles[docName];
+      const pages: number[] | undefined = f.pages;
+      const startPage = (pages && pages.length > 0) ? pages[0] : (f.page || 1);
+      setMapperInitialPage(startPage);
+    } else {
+      setMapperInitialPage(1);
+    }
     setMapperOpen(true);
   };
 
-  /** 특정 서류에 페이지 지정 / 해제 */
+  /**
+   * 페이지 토글:
+   *   page=number → 기존 pages에 토글 (있으면 제거, 없으면 추가)
+   *   page=undefined → 해당 서류의 페이지 지정 전체 해제
+   */
   const handleAssignPage = (docName: string, page: number | undefined) => {
     const nextFiles = { ...(customer.document_files || {}) };
-    const prev = nextFiles[docName] || {};
+    const prev: any = nextFiles[docName] || {};
     if (page === undefined) {
-      // 해제 — page만 제거, 체크포인트 결과는 유지
-      delete nextFiles[docName];
+      // 전체 해제 — 메타데이터(파일/체크포인트)는 유지하되 페이지 매핑만 제거
+      const keepCheckpoints = prev.checkpointResults;
+      const keepFile = prev.url ? { url: prev.url, filename: prev.filename, uploadedAt: prev.uploadedAt, fileId: prev.fileId } : null;
+      if (keepFile || keepCheckpoints) {
+        nextFiles[docName] = {
+          ...(keepFile || { url: "", filename: "", uploadedAt: new Date().toISOString() }),
+          ...(keepCheckpoints ? { checkpointResults: keepCheckpoints } : {}),
+        };
+      } else {
+        delete nextFiles[docName];
+      }
       setLocalSubmitted((p) => ({ ...p, [docName]: false }));
     } else {
-      nextFiles[docName] = { ...prev, page };
-      setLocalSubmitted((p) => ({ ...p, [docName]: true }));
+      // 토글 — 다페이지 지원. 레거시 page 필드는 pages로 흡수.
+      const existingPages: number[] = Array.isArray(prev.pages)
+        ? [...prev.pages]
+        : (prev.page ? [prev.page] : []);
+      const idx = existingPages.indexOf(page);
+      let nextPages: number[];
+      if (idx >= 0) {
+        nextPages = existingPages.filter((p) => p !== page);
+      } else {
+        nextPages = [...existingPages, page].sort((a, b) => a - b);
+      }
+      const meta = prev.url
+        ? { url: prev.url, filename: prev.filename, uploadedAt: prev.uploadedAt, uploadedBy: prev.uploadedBy, fileId: prev.fileId }
+        : { url: "", filename: "", uploadedAt: new Date().toISOString() };
+      nextFiles[docName] = {
+        ...meta,
+        ...(prev.checkpointResults ? { checkpointResults: prev.checkpointResults } : {}),
+        // 첫 페이지를 page에도 넣어 기존 코드(file.page) 호환
+        ...(nextPages.length > 0
+          ? { pages: nextPages, page: nextPages[0] }
+          : {}),
+      };
+      setLocalSubmitted((p) => ({ ...p, [docName]: nextPages.length > 0 }));
     }
+    const isNowSubmitted = !!(nextFiles[docName] as any)?.pages?.length;
     const updated = localCustomers.update(customer.id, {
       document_files: nextFiles,
-      documents_submitted: page === undefined
+      documents_submitted: !isNowSubmitted
         ? { ...localSubmitted, [docName]: false }
         : { ...localSubmitted, [docName]: true },
     } as any);
@@ -816,19 +876,36 @@ function DocumentsStage({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center flex-wrap gap-1.5">
                         <span className={`text-sm ${isSubmitted ? "text-green-800 font-medium" : "text-ink-2 font-medium"}`}>
-                          {d.name}
+                          {d.shortName || d.name}
                         </span>
-                        {d.conditional && (
-                          <span className="text-[10px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded">
-                            조건부
+                        {d.conditional ? (
+                          <span
+                            className="text-[10px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded font-semibold"
+                            title={d.condition ? `해당자 — ${d.condition}만 제출` : "해당자만 제출"}
+                          >
+                            추가(해당자)
                           </span>
+                        ) : (
+                          d.name !== "서류 묶음(통합)" && (
+                            <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-semibold">
+                              필수
+                            </span>
+                          )
                         )}
-                        {/* 묶음 PDF 내 지정된 페이지 표시 */}
-                        {file?.page && bundle?.url && d.name !== "서류 묶음(통합)" && (
-                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-medium">
-                            📄 {d.name}_{file.page}p
-                          </span>
-                        )}
+                        {/* 묶음 PDF 내 지정된 페이지 표시 — 다페이지 지원 */}
+                        {(() => {
+                          if (!bundle?.url || d.name === "서류 묶음(통합)") return null;
+                          const pages = (file as any)?.pages as number[] | undefined;
+                          const list = pages && pages.length > 0
+                            ? pages
+                            : (file?.page ? [file.page] : []);
+                          if (list.length === 0) return null;
+                          return (
+                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-medium">
+                              📄 {list.join(", ")}p
+                            </span>
+                          );
+                        })()}
                         {/* 개별 업로드된 파일 (드물게) */}
                         {file?.url && d.name !== "서류 묶음(통합)" && !bundle?.url && (
                           <a
@@ -853,6 +930,16 @@ function DocumentsStage({
                           </a>
                         )}
                       </div>
+
+                      {/* 조건 / 해당자 안내 */}
+                      {d.condition && (
+                        <div className={`mt-0.5 text-[10.5px] ${
+                          d.conditional ? "text-amber-800" : "text-ink-3"
+                        }`}>
+                          {d.conditional ? <strong>해당 시:</strong> : "📝 "}
+                          {" "}{d.condition}
+                        </div>
+                      )}
 
                       {/* 체크포인트 */}
                       {checkpoints.length > 0 && (
@@ -986,18 +1073,34 @@ function DocumentsStage({
                         </label>
                       ) : bundle?.url ? (
                         // 개별 서류 행 (묶음 있음): 페이지 열기/지정
-                        file?.page ? (
+                        (() => {
+                          const f: any = file;
+                          const pages: number[] = (f?.pages && f.pages.length > 0)
+                            ? f.pages
+                            : (f?.page ? [f.page] : []);
+                          return pages.length > 0;
+                        })() ? (
                           <>
                             <button
                               type="button"
                               onClick={() => {
-                                const url = `${bundle.url}#page=${file.page}`;
+                                const f: any = file;
+                                const pages: number[] = (f?.pages && f.pages.length > 0) ? f.pages : (f?.page ? [f.page] : []);
+                                const url = `${bundle.url}#page=${pages[0]}`;
                                 window.open(url, "_blank", "noopener,noreferrer");
                               }}
                               className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                              title={`묶음 PDF ${file.page}페이지 열기`}
+                              title={(() => {
+                                const f: any = file;
+                                const pages: number[] = (f?.pages && f.pages.length > 0) ? f.pages : (f?.page ? [f.page] : []);
+                                return `묶음 PDF ${pages.join(", ")}페이지`;
+                              })()}
                             >
-                              📄 {file.page}p 열기
+                              {(() => {
+                                const f: any = file;
+                                const pages: number[] = (f?.pages && f.pages.length > 0) ? f.pages : (f?.page ? [f.page] : []);
+                                return `📄 ${pages.length > 1 ? `${pages.length}장 (첫 ${pages[0]}p)` : `${pages[0]}p`} 열기`;
+                              })()}
                             </button>
                             <button
                               type="button"
@@ -1042,7 +1145,11 @@ function DocumentsStage({
                           />
                         </label>
                       )}
-                      {file?.page && d.name !== "서류 묶음(통합)" && (
+                      {(() => {
+                        const f: any = file;
+                        const has = (f?.pages && f.pages.length > 0) || !!f?.page;
+                        return has && d.name !== "서류 묶음(통합)";
+                      })() && (
                         <button
                           type="button"
                           onClick={() => handleAssignPage(d.name, undefined)}

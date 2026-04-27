@@ -113,6 +113,36 @@ export function getAllRequiredDocuments(
   return result;
 }
 
+/**
+ * 서류 이름에서 짧은 핵심 이름과 조건 문구를 분리합니다.
+ *
+ * 예:
+ *   "주민등록등본 (세대원 전원, 주민등록번호 뒷자리 포함)"
+ *     → { shortName: "주민등록등본", condition: "세대원 전원, 주민등록번호 뒷자리 포함", isConditional: false }
+ *   "임신진단서 (임신 중인 경우)"
+ *     → { shortName: "임신진단서", condition: "임신 중인 경우", isConditional: true }
+ *   "혼인관계증명서 (기혼자)"
+ *     → { shortName: "혼인관계증명서", condition: "기혼자", isConditional: true }
+ */
+export function parseDocumentName(rawName: string): {
+  shortName: string;
+  condition?: string;
+  isConditional: boolean;
+} {
+  const m = rawName.match(/^([^(]+)\(([^)]+)\)\s*$/);
+  if (!m) {
+    return {
+      shortName: rawName.trim(),
+      isConditional: /해당\s*시|해당자/.test(rawName),
+    };
+  }
+  const shortName = m[1].trim();
+  const condition = m[2].trim();
+  const isConditional =
+    /해당\s*시|해당자|기혼자|임신|이내\s*자녀|중인\s*경우|발생\s*시/.test(condition);
+  return { shortName, condition, isConditional };
+}
+
 /** 서류 제출 상태 */
 export type DocumentStatus = 'submitted' | 'missing' | 'conditional';
 
