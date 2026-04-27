@@ -820,53 +820,89 @@ export default function DocumentsStepPage() {
                           <div className="text-[10px] text-ink-3 font-medium">
                             후보 {p.candidates.length}명 — 선택해서 첨부:
                           </div>
+                          {(() => {
+                            // 같은 RRN을 가진 후보가 2개 이상이면 진짜 중복(dedup 실패) — 경고
+                            const rrnGroups = new Map<string, number>();
+                            for (const c of p.candidates) {
+                              const key = `${c.rrn_front || ""}-${c.rrn_back || ""}`;
+                              if (key !== "-") rrnGroups.set(key, (rrnGroups.get(key) || 0) + 1);
+                            }
+                            const hasLikelyDuplicate = Array.from(rrnGroups.values()).some((n) => n >= 2);
+                            return hasLikelyDuplicate ? (
+                              <div className="text-[10px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-1.5 py-1 mb-1">
+                                ⚠ 같은 주민번호의 후보가 여러 개입니다 — 시스템 내부에 중복 등록된 가능성. 우선 1건만 첨부 후 1단계 당첨자 등록 화면에서 정리 권장.
+                              </div>
+                            ) : null;
+                          })()}
                           {p.candidates.map((c) => {
                             const cd = String((c as any).unit_dong || "");
                             const ch = String((c as any).unit_ho || "");
                             const hasDh = !!(cd && ch);
                             const supply = c.supply_type || "—";
+                            const rrnFront = c.rrn_front ? String(c.rrn_front).slice(0, 6) : "";
+                            const phoneTail = c.phone ? String(c.phone).replace(/\D/g, "").slice(-4) : "";
+                            const unitType = c.unit_type ? String(c.unit_type) : "";
                             return (
                               <button
                                 key={c.id}
                                 onClick={() => resolvePendingMatch(p.id, c.id)}
                                 disabled={isResolving}
-                                className="w-full text-left p-1.5 rounded border border-border hover:border-indigo-400 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                                className="w-full text-left p-2 rounded border border-border hover:border-indigo-400 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                               >
-                                {hasDh ? (
-                                  <span className="font-mono text-[11px] text-ink">{cd}-{ch}</span>
-                                ) : (
-                                  // 동호수가 비어있으면 파일명에서 파싱한 값을 ↪ 표시 — 첨부 시 자동 입력됨
-                                  <span
-                                    className="inline-flex items-center gap-0.5 font-mono text-[11px]"
-                                    title="고객 레코드에 동호수가 비어 있습니다. 첨부하면 파일명의 동호수가 자동 입력됩니다."
-                                  >
-                                    <span className="text-ink-4 line-through">?-?</span>
-                                    <span className="text-emerald-700">→ {p.parsedDong}-{p.parsedHo}</span>
+                                {/* 1줄: 동호수 + 이름 + 공급유형 + 배지 + 첨부 액션 */}
+                                <div className="flex items-center gap-2">
+                                  {hasDh ? (
+                                    <span className="font-mono text-[11px] text-ink">{cd}-{ch}</span>
+                                  ) : (
+                                    <span
+                                      className="inline-flex items-center gap-0.5 font-mono text-[11px]"
+                                      title="고객 레코드에 동호수가 비어 있습니다. 첨부하면 파일명의 동호수가 자동 입력됩니다."
+                                    >
+                                      <span className="text-ink-4 line-through">?-?</span>
+                                      <span className="text-emerald-700">→ {p.parsedDong}-{p.parsedHo}</span>
+                                    </span>
+                                  )}
+                                  <span className="text-[11px] font-semibold text-ink">{c.name}</span>
+                                  <span className="text-[10px] px-1 py-0.5 rounded bg-surface2 text-ink-2">
+                                    {supply}
                                   </span>
-                                )}
-                                <span className="text-[11px] font-semibold text-ink">{c.name}</span>
-                                <span className="text-[10px] px-1 py-0.5 rounded bg-surface2 text-ink-2">
-                                  {supply}
-                                </span>
-                                {!hasDh && (
-                                  <span
-                                    className="text-[9px] px-1 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                    title="첨부 시 동호수가 자동으로 입력됨"
-                                  >
-                                    동호수 자동입력
-                                  </span>
-                                )}
-                                {c.is_standby && (
-                                  <span className="text-[9.5px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded">
-                                    예비 {c.standby_rank || ""}
-                                  </span>
-                                )}
-                                {isResolving ? (
-                                  <Loader2 className="w-3 h-3 animate-spin ml-auto text-indigo-500" />
-                                ) : (
-                                  <span className="ml-auto text-[10px] text-indigo-600 font-medium">
-                                    이 고객에 첨부 →
-                                  </span>
+                                  {!hasDh && (
+                                    <span
+                                      className="text-[9px] px-1 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                      title="첨부 시 동호수가 자동으로 입력됨"
+                                    >
+                                      동호수 자동입력
+                                    </span>
+                                  )}
+                                  {c.is_standby && (
+                                    <span className="text-[9.5px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded">
+                                      예비 {c.standby_rank || ""}
+                                    </span>
+                                  )}
+                                  {isResolving ? (
+                                    <Loader2 className="w-3 h-3 animate-spin ml-auto text-indigo-500" />
+                                  ) : (
+                                    <span className="ml-auto text-[10px] text-indigo-600 font-medium">
+                                      이 고객에 첨부 →
+                                    </span>
+                                  )}
+                                </div>
+                                {/* 2줄: 식별 정보 (RRN 앞자리, 연락처 끝 4자리, 주택형) */}
+                                {(rrnFront || phoneTail || unitType) && (
+                                  <div className="mt-0.5 ml-1 flex items-center gap-2 text-[10px] text-ink-3">
+                                    {rrnFront && (
+                                      <span title="주민번호 앞 6자리 — 동명이인 식별용">
+                                        🆔 <span className="font-mono">{rrnFront}</span>
+                                      </span>
+                                    )}
+                                    {phoneTail && (
+                                      <span>📞 <span className="font-mono">····-{phoneTail}</span></span>
+                                    )}
+                                    {unitType && (
+                                      <span>🏠 <span className="font-mono">{unitType}</span></span>
+                                    )}
+                                    <span className="text-ink-4 ml-auto">id #{c.id}</span>
+                                  </div>
                                 )}
                               </button>
                             );
