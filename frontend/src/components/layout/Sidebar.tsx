@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Building2, LayoutDashboard, Users, FileText,
   BookOpen, LogOut, PenLine, GitCompareArrows,
-  UserCheck, Home, Banknote, Settings,
+  UserCheck, Home, Banknote, Settings, RefreshCw,
 } from "lucide-react";
 
 interface NavItem {
@@ -26,6 +26,7 @@ const workflowItems: NavItem[] = [
   { href: "/workflow/property",     icon: Home,      label: "주택소유" },
   { href: "/workflow/savings",      icon: Banknote,  label: "청약통장" },
   { href: "/workflow/documents",    icon: FileText,  label: "서류·판정" },
+  { href: "/workflow/transfers",    icon: RefreshCw, label: "명의변경" },
 ];
 
 const bottomItems: NavItem[] = [
