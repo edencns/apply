@@ -84,6 +84,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         return {
           allowedContentTypes: ALLOWED_CONTENT_TYPES,
           maximumSizeInBytes: MAX_FILE_SIZE,
+          // 같은 파일명을 다시 업로드해도 새로운 path를 받도록 — 이전 실패 업로드의
+          // 잔여 메타와 충돌하지 않게 한다. 우리 DB는 url을 유니크 키처럼 사용.
+          addRandomSuffix: true,
           tokenPayload: JSON.stringify({
             userId,
             kind,
@@ -106,20 +109,32 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         }
         try {
           const db = getDb();
-          const ins = await db.execute({
-            sql: `INSERT INTO files (user_id, announcement_id, kind, filename, content_type, size, url)
-                  VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-            args: [
-              payload.userId,
-              payload.announcementId,
-              payload.kind,
-              payload.origFilename,
-              blob.contentType || null,
-              null,
-              blob.url,
-            ],
+          // 멱등성: 같은 url로 이미 row가 있으면 그대로 사용 (Vercel 콜백이 재시도되는
+          // 케이스 안전망). addRandomSuffix=true로 충돌 자체는 거의 없지만,
+          // Vercel이 같은 콜백을 재시도하면 중복 INSERT가 될 수 있어 가드.
+          const dup = await db.execute({
+            sql: "SELECT id FROM files WHERE url=? LIMIT 1",
+            args: [blob.url],
           });
-          const id = Number(ins.rows[0]?.id);
+          let id: number;
+          if (dup.rows.length > 0) {
+            id = Number(dup.rows[0].id);
+          } else {
+            const ins = await db.execute({
+              sql: `INSERT INTO files (user_id, announcement_id, kind, filename, content_type, size, url)
+                    VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+              args: [
+                payload.userId,
+                payload.announcementId,
+                payload.kind,
+                payload.origFilename,
+                blob.contentType || null,
+                null,
+                blob.url,
+              ],
+            });
+            id = Number(ins.rows[0]?.id);
+          }
 
           // 부수효과는 INSERT 응답을 막지 않도록 비동기로 실행 (오류는 로그만)
           (async () => {

@@ -266,6 +266,10 @@ export default function DocumentsStepPage() {
   /**
    * 단일 파일을 특정 고객의 「서류 묶음(통합)」 슬롯에 업로드하고 첨부.
    * 동호수가 비어 있으면 파싱된 dong/ho로 보강.
+   *
+   * ★ 중요: target 인자는 분류 단계에서 캡처된 스냅샷이라 stale일 수 있음.
+   *   업로드가 끝난 시점의 LATEST customer를 다시 읽어와서 머지해야
+   *   다른 서류·체크포인트 업데이트가 덮어쓰여지지 않음.
    */
   const uploadAndAttach = async (
     file: File,
@@ -275,15 +279,16 @@ export default function DocumentsStepPage() {
   ): Promise<void> => {
     if (!selected) throw new Error("공고 미선택");
     // 클라이언트 직접 업로드 — Vercel 함수 본문 제한(~4.5MB) 우회.
-    // 23~30페이지 묶음 PDF는 보통 5~30MB라 기존 /api/files/upload로는 413 발생.
     const json = await uploadFileViaClient(file, {
       kind: "other",
       announcement_id: selected.id,
     });
 
-    const existing = target.document_files || {};
+    // 최신 customer 다시 읽기 — 그 사이 다른 업로드/검토가 있었을 수 있음
+    const latest = localCustomers.get(target.id) || target;
+    const existingFiles = latest.document_files || {};
     const nextFiles = {
-      ...existing,
+      ...existingFiles,
       "서류 묶음(통합)": {
         url: json.url,
         filename: file.name,
@@ -291,13 +296,13 @@ export default function DocumentsStepPage() {
         fileId: json.id,
       },
     };
-    const submittedNow = target.documents_submitted || {};
+    const submittedNow = latest.documents_submitted || {};
     const patch: Partial<LocalCustomer> & Record<string, any> = {
       document_files: nextFiles,
       documents_submitted: { ...submittedNow, "서류 묶음(통합)": true },
     };
-    if (parsedDong && !(target as any).unit_dong) patch.unit_dong = parsedDong;
-    if (parsedHo && !(target as any).unit_ho) patch.unit_ho = parsedHo;
+    if (parsedDong && !(latest as any).unit_dong) patch.unit_dong = parsedDong;
+    if (parsedHo && !(latest as any).unit_ho) patch.unit_ho = parsedHo;
     localCustomers.update(target.id, patch as any);
   };
 
@@ -424,7 +429,17 @@ export default function DocumentsStepPage() {
       }
 
       if (newPendingMatches.length > 0) {
-        setPendingMatches((prev) => [...prev, ...newPendingMatches]);
+        // 중복 제거 — 같은 파일명 + 동호수 + 이름이 이미 보류 중이면 추가하지 않음
+        // (이전 시도 후 같은 배치를 재선택했을 때 큐가 두 배가 되는 문제 방지)
+        setPendingMatches((prev) => {
+          const seen = new Set(
+            prev.map((p) => `${p.file.name}|${p.parsedDong}|${p.parsedHo}|${p.parsedName}`),
+          );
+          const filtered = newPendingMatches.filter(
+            (n) => !seen.has(`${n.file.name}|${n.parsedDong}|${n.parsedHo}|${n.parsedName}`),
+          );
+          return [...prev, ...filtered];
+        });
       }
 
       // ── 단계 2: 1순위 병렬 업로드 ─────────────────────

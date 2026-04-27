@@ -606,19 +606,23 @@ function DocumentsStage({
         announcement_id: customer.announcement_id || null,
       });
 
-      const nextFiles = { ...(customer.document_files || {}) };
+      // 업로드 직후 customer state는 stale일 수 있음 — localStorage에서 latest 읽기
+      const latest = localCustomers.get(customer.id) || customer;
+      const nextFiles = { ...(latest.document_files || {}) };
       nextFiles[docName] = {
         url: json.url,
         filename: file.name,
         uploadedAt: new Date().toISOString(),
         fileId: json.id,
       };
+      const submittedNow = latest.documents_submitted || {};
       const updated = localCustomers.update(customer.id, {
         document_files: nextFiles,
+        documents_submitted: { ...submittedNow, [docName]: true },
       } as any);
       if (updated) onUpdate(updated);
 
-      // 업로드와 동시에 체크박스 자동 체크
+      // 업로드와 동시에 체크박스 자동 체크 (UI state도 동기화)
       setLocalSubmitted((p) => ({ ...p, [docName]: true }));
     } catch (err: any) {
       alert(err?.message || "업로드 실패");

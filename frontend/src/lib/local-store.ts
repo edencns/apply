@@ -491,6 +491,16 @@ export const localCustomers = {
       household_members: input.household_members,
       properties: input.properties,
       savings_priority: input.savings_priority,
+      // 이전 단계에서 들어온 메타도 모두 보존 — create() 시 누락되면 이후 업로드가
+      // 'undefined→객체' 갱신을 해야 해서 업데이트 race 시 데이터 손실 위험.
+      document_files: (input as any).document_files,
+      winner_info: (input as any).winner_info,
+      past_winnings: (input as any).past_winnings,
+      manual_review: (input as any).manual_review,
+      title_transfer: (input as any).title_transfer,
+      contract: (input as any).contract,
+      separated_household_members: (input as any).separated_household_members,
+      separated_properties: (input as any).separated_properties,
       total_score: input.total_score ?? 0,
       status: input.status ?? "inquiry",
       created_at: new Date().toISOString(),
