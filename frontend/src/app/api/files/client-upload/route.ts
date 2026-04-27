@@ -50,7 +50,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     await ensureSchema();
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      return NextResponse.json({ error: "BLOB_READ_WRITE_TOKEN 미설정" }, { status: 500 });
+      console.error("[client-upload POST] BLOB_READ_WRITE_TOKEN 환경변수 미설정");
+      return NextResponse.json(
+        { error: "서버 설정 오류: BLOB_READ_WRITE_TOKEN이 Vercel 환경변수에 없습니다. (Settings → Environment Variables)" },
+        { status: 500 },
+      );
     }
 
     // 두 가지 요청이 들어옴:
@@ -100,11 +104,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         // tokenPayload는 onBeforeGenerateToken에서 우리가 서명·발급한 값이라 신뢰 가능.
         // ★ INSERT는 즉시 실행, 부수효과(audit·broadcast)는 fire-and-forget으로 분리 →
         //   클라이언트의 폴링이 INSERT 직후 바로 결과를 받을 수 있게 함.
-        if (!tokenPayload) return;
+        console.log(`[client-upload onUploadCompleted] url=${blob.url} hasTokenPayload=${!!tokenPayload}`);
+        if (!tokenPayload) {
+          console.error("[client-upload onUploadCompleted] tokenPayload missing — INSERT 건너뜀");
+          return;
+        }
         let payload: TokenPayload;
         try {
           payload = JSON.parse(tokenPayload) as TokenPayload;
-        } catch {
+        } catch (e) {
+          console.error("[client-upload onUploadCompleted] tokenPayload 파싱 실패", e);
           return;
         }
         try {
@@ -119,6 +128,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           let id: number;
           if (dup.rows.length > 0) {
             id = Number(dup.rows[0].id);
+            console.log(`[client-upload onUploadCompleted] 기존 row 재사용 id=${id}`);
           } else {
             const ins = await db.execute({
               sql: `INSERT INTO files (user_id, announcement_id, kind, filename, content_type, size, url)
@@ -134,6 +144,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               ],
             });
             id = Number(ins.rows[0]?.id);
+            console.log(`[client-upload onUploadCompleted] INSERT 성공 id=${id}`);
           }
 
           // 부수효과는 INSERT 응답을 막지 않도록 비동기로 실행 (오류는 로그만)
@@ -197,28 +208,36 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const url = req.nextUrl.searchParams.get("url");
     if (!url) return NextResponse.json({ error: "url 파라미터 필요" }, { status: 400 });
 
-    // 폴링: 첫 번째는 즉시(0ms 대기), 이후 점진 증가 — 대부분 1초 내 발견.
-    // 최악(콜드스타트)에도 ~20초 안에 결과.
+    // 폴링: 첫 번째는 즉시(0ms 대기), 이후 점진 증가.
+    // Vercel 함수 maxDuration=60초 안에서 ~50초까지 대기 가능 — 콜드스타트 안전망.
     const db = getDb();
     let found: { id: number; filename: string } | null = null;
-    const delays = [0, 100, 150, 200, 300, 400, 500, 700, 1000, 1500, 2000];
+    const delays = [0, 100, 150, 200, 300, 400, 500, 700, 1000, 1500, 2000, 3000];
     let elapsed = 0;
-    for (let i = 0; elapsed < 25_000; i++) {
+    let attempts = 0;
+    const MAX_ELAPSED_MS = 50_000;
+    for (let i = 0; elapsed < MAX_ELAPSED_MS; i++) {
       const wait = delays[Math.min(i, delays.length - 1)];
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       elapsed += wait;
+      attempts++;
       const r = await db.execute({
         sql: "SELECT id, filename FROM files WHERE url=? ORDER BY id DESC LIMIT 1",
         args: [url],
       });
       if (r.rows.length > 0) {
         found = { id: Number(r.rows[0].id), filename: String(r.rows[0].filename) };
+        console.log(`[client-upload GET] found url after ${attempts} attempts / ${elapsed}ms`);
         break;
       }
     }
     if (!found) {
+      console.error(`[client-upload GET] timeout: no DB row for url after ${attempts} attempts / ${elapsed}ms — onUploadCompleted may have failed`);
       return NextResponse.json(
-        { error: "업로드 메타 기록 대기 시간 초과 — 다시 시도해 주세요" },
+        {
+          error: "업로드 메타 기록 시간 초과 — 페이지 새로고침 후 다시 시도해 주세요. (서버 콜백 지연 또는 DB 오류)",
+          diagnostics: { attempts, elapsedMs: elapsed, url },
+        },
         { status: 504 },
       );
     }

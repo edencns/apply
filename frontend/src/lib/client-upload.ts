@@ -9,6 +9,9 @@
  * 반환값은 기존 `/api/files/upload` 응답과 동일한 형태:
  *   { id, url, filename }
  * 그래서 호출부 코드를 거의 그대로 재사용 가능.
+ *
+ * 진단을 위해 각 단계마다 console.log로 상황을 남깁니다 — 업로드가 멈추면
+ * 브라우저 DevTools(F12) Console에서 어느 단계인지 확인 가능.
  */
 
 import { upload } from "@vercel/blob/client";
@@ -18,6 +21,13 @@ export interface ClientUploadResult {
   url: string;        // 우리 프록시 URL (/api/files/{id}/download)
   filename: string;
 }
+
+const log = (...args: any[]) => {
+  if (typeof window !== "undefined") {
+    // eslint-disable-next-line no-console
+    console.log("[client-upload]", ...args);
+  }
+};
 
 export async function uploadFileViaClient(
   file: File,
@@ -58,27 +68,55 @@ export async function uploadFileViaClient(
     return guessTypeByExt(file.name) || "application/octet-stream";
   })();
 
-  const blob = await upload(safeName, file, {
-    access: "public",
-    handleUploadUrl: "/api/files/client-upload",
-    contentType: explicitType,
-    clientPayload: JSON.stringify({
-      kind,
-      announcement_id: announcementId,
-      filename: file.name,
-    }),
+  log(`▶ 업로드 시작: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`, {
+    type: explicitType,
+    kind,
+    announcement_id: announcementId,
   });
 
+  let blob;
+  try {
+    blob = await upload(safeName, file, {
+      access: "public",
+      handleUploadUrl: "/api/files/client-upload",
+      contentType: explicitType,
+      clientPayload: JSON.stringify({
+        kind,
+        announcement_id: announcementId,
+        filename: file.name,
+      }),
+    });
+  } catch (e: any) {
+    log(`✕ Blob 업로드 단계 실패 (${file.name}):`, e);
+    // Vercel Blob의 에러 메시지를 그대로 노출 — 토큰 권한, 크기, 타입 등 원인 식별
+    throw new Error(`Blob 업로드 실패: ${e?.message || e}`);
+  }
+
+  log(`✓ Blob 업로드 완료: ${blob.url}`);
+
   // Blob CDN이 onUploadCompleted를 비동기로 호출 → DB에 files 레코드 INSERT됨.
-  // 그 id를 알아내기 위해 url로 짧게 폴링.
+  // 그 id를 알아내기 위해 url로 폴링. 라우트가 자체 폴링하므로 여기는 한 번만 호출.
+  log(`▶ 메타 조회(DB INSERT 대기): ${blob.url}`);
+  const lookupStart = Date.now();
   const lookup = await fetch(
     `/api/files/client-upload?url=${encodeURIComponent(blob.url)}`,
   );
+  const lookupMs = Date.now() - lookupStart;
+  log(`◆ 메타 조회 응답: status=${lookup.status} (${lookupMs}ms)`);
+
   if (!lookup.ok) {
-    const j = await lookup.json().catch(() => ({}));
-    throw new Error(j?.error || `메타 조회 실패 (${lookup.status})`);
+    let detail = "";
+    try {
+      const j = await lookup.json();
+      detail = j?.error || JSON.stringify(j);
+    } catch {
+      detail = await lookup.text().catch(() => "");
+    }
+    log(`✕ 메타 조회 실패: ${detail}`);
+    throw new Error(detail || `메타 조회 실패 (HTTP ${lookup.status})`);
   }
   const data = await lookup.json();
+  log(`✓ 등록 완료: id=${data.id}, url=${data.url}`);
   return {
     id: data.id,
     url: data.url,
