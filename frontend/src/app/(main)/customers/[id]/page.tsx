@@ -159,22 +159,33 @@ function CustomerDetailInner() {
       category: string;
       conditional: boolean;
     }> = [];
-    // 짧은 이름 기준으로 중복 제거 — 예: "가족관계증명서 (상세)"와 "가족관계증명서 (상세, 자녀 확인)" 충돌 방지
-    const seenShort = new Set<string>();
-    const pushOnce = (raw: string, category: string) => {
+    // shortName으로 중복 제거 + 업그레이드:
+    //   - 같은 서류가 공통(추가) + 공급유형(필수)에 동시에 있으면 공급유형 필수 버전이 이김
+    //   - 둘 다 같은 conditional 상태면 먼저 들어온 쪽(공통)을 유지
+    const indexByShort = new Map<string, number>();
+    const pushOrUpgrade = (raw: string, category: string) => {
       const { shortName, condition, isConditional } = parseDocumentName(raw);
-      if (seenShort.has(shortName)) return;
-      seenShort.add(shortName);
-      items.push({ name: raw, shortName, condition, category, conditional: isConditional });
+      const existingIdx = indexByShort.get(shortName);
+      if (existingIdx === undefined) {
+        indexByShort.set(shortName, items.length);
+        items.push({ name: raw, shortName, condition, category, conditional: isConditional });
+        return;
+      }
+      const existing = items[existingIdx];
+      // 기존이 추가(해당자)인데 새 항목이 필수면 업그레이드
+      if (existing.conditional && !isConditional) {
+        items[existingIdx] = { name: raw, shortName, condition, category, conditional: isConditional };
+      }
+      // 그 외(둘 다 필수, 둘 다 추가, 또는 기존이 필수): 무시
     };
 
     const common = (parsedDocs["공통"] && parsedDocs["공통"].length >= 3) ? parsedDocs["공통"] : COMMON_DOCUMENTS;
-    for (const doc of common) pushOnce(doc, "공통");
+    for (const doc of common) pushOrUpgrade(doc, "공통");
 
     const typeDocs = (parsedDocs[supplyType] && parsedDocs[supplyType].length >= 2)
       ? parsedDocs[supplyType]
       : (SUPPLY_TYPE_DOCUMENTS[supplyType] || SUPPLY_TYPE_DOCUMENTS["일반공급"] || []);
-    for (const doc of typeDocs) pushOnce(doc, supplyType);
+    for (const doc of typeDocs) pushOrUpgrade(doc, supplyType);
 
     return items;
   }, [announcement, supplyType, customer]);
