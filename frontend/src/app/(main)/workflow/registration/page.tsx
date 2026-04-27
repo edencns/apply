@@ -23,6 +23,7 @@ import { getSampleAsLocalAnnouncements } from "@/lib/sample-adapter";
 import { classifyIncoming, formatValue, IncomingCustomer, CustomerConflict } from "@/lib/customer-dedup";
 import { formatHousingCode, housingAreaString, formatPhone, formatPhoneInput } from "@/lib/housing-code";
 import { detectCrossIssues, crossCheckSummary, type CrossCheckIssue } from "@/lib/customer-cross-check";
+import { APPLYHOME_AUTO_VERIFIED_DOCUMENTS } from "@/lib/document-checklist";
 
 interface Customer {
   id: number;
@@ -64,6 +65,13 @@ function CustomersPageInner() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  /**
+   * 폼이 열린 의도:
+   *   "manual_winner" — 미달 등 사유로 청약홈을 거치지 않은 당첨자 추가 등록
+   *                    (특별공급신청서·청약통장 순위확인서 자동 체크 안 함)
+   *   "general"       — 일반 수동 등록 (status: inquiry 기본)
+   */
+  const [formMode, setFormMode] = useState<"manual_winner" | "general">("general");
 
   // 신규 고객 폼
   const [form, setForm] = useState({
@@ -275,6 +283,7 @@ function CustomersPageInner() {
         ? form.special_types[0]
         : form.supply_type || "일반공급";
 
+      const isManualWinner = formMode === "manual_winner";
       const payload = {
         site_id: selectedAnn.site_id,
         announcement_id: selectedAnn.id,
@@ -294,10 +303,19 @@ function CustomersPageInner() {
         supply_type: effectiveSupplyType,
         unit_type: form.unit_type || undefined,
         unit_area: form.unit_type ? housingAreaString(form.unit_type) : undefined,
+        // 추가 당첨자 등록은 곧바로 당첨자(winner)로, 청약홈을 거치지 않았으므로
+        // 특별공급신청서·청약통장 순위확인서를 별도 검수 대상으로 둔다.
+        ...(isManualWinner ? {
+          status: "winner" as const,
+          is_standby: false,
+        } : {}),
       };
 
       try {
-        await customersApi.create(payload as any);
+        await customersApi.create({
+          ...payload,
+          registration_source: isManualWinner ? "manual_winner" : "manual",
+        } as any);
       } catch (backendErr: any) {
         if (!isNetworkError(backendErr)) throw backendErr;
         // 네트워크 에러 → 로컬 저장
@@ -318,6 +336,13 @@ function CustomersPageInner() {
           supply_type: payload.supply_type,
           unit_type: payload.unit_type,
           unit_area: payload.unit_area,
+          ...(isManualWinner ? {
+            status: "winner" as any,
+            is_standby: false,
+            registration_source: "manual_winner" as const,
+          } : {
+            registration_source: "manual" as const,
+          }),
         });
       }
 
@@ -534,6 +559,10 @@ function CustomersPageInner() {
       const existing = localCustomers.listByAnnouncement(selectedAnn.id);
       const { toCreate, duplicates, conflicts: foundConflicts } = classifyIncoming(candidates, existing);
 
+      // 청약홈 자동 검증 서류 (특별공급신청서·청약통장 순위확인서) 자동 체크 맵
+      const applyhomePresubmitted: Record<string, boolean> = {};
+      for (const d of APPLYHOME_AUTO_VERIFIED_DOCUMENTS) applyhomePresubmitted[d] = true;
+
       // 신규 등록
       let created = 0, createFailed = 0;
       const createErrors: string[] = [];
@@ -560,6 +589,9 @@ function CustomersPageInner() {
             is_standby: anyC.is_standby === true,
             standby_rank: anyC.standby_rank,
             winner_info: anyC._winnerInfo,
+            // 청약홈을 통해 검증된 서류 자동 체크 (이미 검증되어 별도 제출 불필요)
+            registration_source: "applyhome" as const,
+            documents_submitted: { ...applyhomePresubmitted },
           };
           localCustomers.create(payload);
           created++;
@@ -695,6 +727,21 @@ function CustomersPageInner() {
             }}
           />
 
+          {/* 추가 당첨자 등록 — 미달 등 사유로 청약홈을 거치지 않은 당첨자 직접 등록 */}
+          <button
+            onClick={() => {
+              if (!selectedAnn) return;
+              setFormError(null);
+              setFormMode("manual_winner");
+              setShowForm(true);
+            }}
+            disabled={!selectedAnn}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title="미달 등으로 청약홈을 거치지 않은 당첨자를 직접 등록 — 특별공급신청서·청약통장 순위확인서를 별도 검수해야 합니다"
+          >
+            <UserPlus className="w-4 h-4" /> 추가 당첨자 등록
+          </button>
+
           <div className="w-px h-6 bg-border mx-1" />
 
           {/* Phase #3 교차검증 */}
@@ -707,11 +754,12 @@ function CustomersPageInner() {
             🔍 교차검증
           </button>
 
-          {/* 고객 등록 — 수동 폼 */}
+          {/* 고객 등록 — 일반 수동 폼 (문의·예비 등) */}
           <button
-            onClick={() => { setFormError(null); setShowForm(true); }}
+            onClick={() => { setFormError(null); setFormMode("general"); setShowForm(true); }}
             disabled={!selectedAnn}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-accent hover:bg-accent shadow-sm whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title="일반 수동 등록 (문의 등) — 당첨자 등록은 [추가 당첨자 등록] 버튼을 사용하세요"
           >
             <UserPlus className="w-4 h-4" /> 고객 등록
           </button>
@@ -1225,9 +1273,17 @@ function CustomersPageInner() {
           <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-border-soft flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold">신규 고객 등록</h2>
+                <h2 className="text-lg font-semibold">
+                  {formMode === "manual_winner" ? "추가 당첨자 등록" : "신규 고객 등록"}
+                </h2>
                 {selectedAnn && (
                   <p className="text-xs text-ink-3 mt-0.5">대상 공고: {selectedAnn.title}</p>
+                )}
+                {formMode === "manual_winner" && (
+                  <p className="text-[11px] text-emerald-700 mt-1.5 leading-relaxed bg-emerald-50 border border-emerald-200 rounded-md px-2 py-1.5">
+                    💡 미달 등 사유로 청약홈을 거치지 않은 당첨자입니다. 5단계 서류 검수에서
+                    <strong> 「특별공급신청서·무주택 서약서」와 「청약통장 순위(가입)확인서」</strong>를 별도로 제출·검수해야 합니다.
+                  </p>
                 )}
               </div>
               <button onClick={() => setShowForm(false)} className="p-1 hover:bg-surface2 rounded-full">

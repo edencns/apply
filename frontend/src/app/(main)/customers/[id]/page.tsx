@@ -24,6 +24,7 @@ import {
   COMMON_DOCUMENTS,
   SUPPLY_TYPE_DOCUMENTS,
   parseDocumentName,
+  APPLYHOME_AUTO_VERIFIED_DOCUMENTS,
 } from "@/lib/document-checklist";
 import { calculateSubscriptionScore } from "@/lib/score-calculator";
 import { formatPhoneInput, formatPhone } from "@/lib/housing-code";
@@ -858,6 +859,9 @@ function DocumentsStage({
               const file = docFiles[d.name];
               const checkpoints = getCheckpointsForDocument(d.name, customer, announcement || undefined);
               const isUploading = uploadingDoc === d.name;
+              // 청약홈을 통해 자동 검증된 서류인지 (청약홈 신청자만 해당)
+              const isApplyhomeAuto = customer.registration_source === "applyhome"
+                && APPLYHOME_AUTO_VERIFIED_DOCUMENTS.includes(d.name);
               return (
                 <li key={d.name} className={`p-3 rounded-lg border transition-colors ${
                   isSubmitted
@@ -891,6 +895,14 @@ function DocumentsStage({
                               필수
                             </span>
                           )
+                        )}
+                        {isApplyhomeAuto && (
+                          <span
+                            className="text-[10px] bg-emerald-600 text-white px-1.5 py-0.5 rounded font-semibold inline-flex items-center gap-0.5"
+                            title="청약홈을 통해 청약 신청 시 이미 검증된 서류 — 별도 제출 불필요"
+                          >
+                            ✓ 청약홈 자동확인
+                          </span>
                         )}
                         {/* 묶음 PDF 내 지정된 페이지 표시 — 다페이지 지원 */}
                         {(() => {

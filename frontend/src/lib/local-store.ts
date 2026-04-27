@@ -257,6 +257,16 @@ export interface LocalCustomer {
   succeeded_from?: number;       // (예비→당첨 승계된 경우) 원래 당첨자 ID
   supersede_reason?: string;     // 포기·부적합 사유 요약
   supersede_at?: string;         // 승계 시각 ISO
+  // ── 등록 경로 ──
+  /**
+   * 어떤 경로로 이 고객이 등록됐는지.
+   *   "applyhome"     — 청약홈 전산추첨결과 엑셀 업로드 (당첨자 시트)
+   *   "manual_winner" — 미달 등 사유로 담당자가 직접 추가 등록한 당첨자
+   *   "manual"        — 그 외 일반 수동 등록 (문의 등)
+   * 청약홈을 거쳤다면 「특별공급신청서·무주택 서약서」와 「청약통장 순위(가입)확인서」는
+   * 청약홈에서 이미 검증되어 별도 제출 불필요 → 자동 체크.
+   */
+  registration_source?: "applyhome" | "manual_winner" | "manual";
   // ── 서류 검수 상태 ──
   documents_submitted?: Record<string, boolean>;
   verification_verdict?: "eligible" | "ineligible" | "pending";
@@ -472,6 +482,7 @@ export const localCustomers = {
       succeeded_from: input.succeeded_from,
       supersede_reason: input.supersede_reason,
       supersede_at: input.supersede_at,
+      registration_source: input.registration_source,
       documents_submitted: input.documents_submitted,
       verification_verdict: input.verification_verdict,
       verification_score: input.verification_score,
