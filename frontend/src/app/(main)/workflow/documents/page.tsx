@@ -758,7 +758,9 @@ export default function DocumentsStepPage() {
                             후보 {p.candidates.length}명 — 선택해서 첨부:
                           </div>
                           {p.candidates.map((c) => {
-                            const dh = `${(c as any).unit_dong || "?"}-${(c as any).unit_ho || "?"}`;
+                            const cd = String((c as any).unit_dong || "");
+                            const ch = String((c as any).unit_ho || "");
+                            const hasDh = !!(cd && ch);
                             const supply = c.supply_type || "—";
                             return (
                               <button
@@ -767,11 +769,30 @@ export default function DocumentsStepPage() {
                                 disabled={isResolving}
                                 className="w-full text-left p-1.5 rounded border border-border hover:border-indigo-400 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                               >
-                                <span className="font-mono text-[11px] text-ink">{dh}</span>
+                                {hasDh ? (
+                                  <span className="font-mono text-[11px] text-ink">{cd}-{ch}</span>
+                                ) : (
+                                  // 동호수가 비어있으면 파일명에서 파싱한 값을 ↪ 표시 — 첨부 시 자동 입력됨
+                                  <span
+                                    className="inline-flex items-center gap-0.5 font-mono text-[11px]"
+                                    title="고객 레코드에 동호수가 비어 있습니다. 첨부하면 파일명의 동호수가 자동 입력됩니다."
+                                  >
+                                    <span className="text-ink-4 line-through">?-?</span>
+                                    <span className="text-emerald-700">→ {p.parsedDong}-{p.parsedHo}</span>
+                                  </span>
+                                )}
                                 <span className="text-[11px] font-semibold text-ink">{c.name}</span>
                                 <span className="text-[10px] px-1 py-0.5 rounded bg-surface2 text-ink-2">
                                   {supply}
                                 </span>
+                                {!hasDh && (
+                                  <span
+                                    className="text-[9px] px-1 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    title="첨부 시 동호수가 자동으로 입력됨"
+                                  >
+                                    동호수 자동입력
+                                  </span>
+                                )}
                                 {c.is_standby && (
                                   <span className="text-[9.5px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded">
                                     예비 {c.standby_rank || ""}
