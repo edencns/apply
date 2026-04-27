@@ -369,6 +369,45 @@ export default function DocumentsStepPage() {
     setPendingMatches([]);
   };
 
+  /** 단일 후보 항목 일괄 자동 확정 — 후보가 1명뿐인 보류 항목들을 한 번에 첨부 */
+  const autoResolveSingleCandidates = async () => {
+    const targets = pendingMatches.filter((p) => p.candidates.length === 1);
+    if (targets.length === 0) return;
+    setResolvingId("__bulk__");
+    let ok = 0; let fail = 0;
+    const errors: string[] = [];
+    try {
+      // 병렬 4개씩 처리 — 배치 업로드와 같은 동시성
+      const CONCURRENCY = 4;
+      let cursor = 0;
+      const workers = Array.from({ length: Math.min(CONCURRENCY, targets.length) }, async () => {
+        while (cursor < targets.length) {
+          const idx = cursor++;
+          const p = targets[idx];
+          try {
+            await uploadAndAttach(p.file, p.candidates[0], p.parsedDong, p.parsedHo);
+            ok++;
+          } catch (err: any) {
+            fail++;
+            errors.push(`${p.file.name}: ${err?.message || "오류"}`);
+          }
+        }
+      });
+      await Promise.all(workers);
+      // 성공한 항목만 큐에서 제거
+      const succeededIds = new Set(targets.slice(0, ok).map((p) => p.id));
+      // 정확히 어떤 파일이 성공했는지 추적이 안 되므로, 단일 후보 모두 비움
+      setPendingMatches((prev) => prev.filter((p) => p.candidates.length !== 1));
+      setReloadKey((k) => k + 1);
+      void succeededIds;
+      if (fail > 0) {
+        alert(`자동 확정 ${ok}건 완료, ${fail}건 실패:\n${errors.slice(0, 5).join("\n")}`);
+      }
+    } finally {
+      setResolvingId(null);
+    }
+  };
+
   /** 서류 스캔본 배치 업로드 — 파일명 "동-호수 이름.pdf" 매칭 후 각 당첨자의 "서류 묶음" 슬롯에 저장.
    *
    *  성능 전략:
@@ -450,6 +489,13 @@ export default function DocumentsStepPage() {
           continue;
         }
 
+        // 후보가 1명뿐이면 모호함이 없으므로 자동 첨부 — 보류 큐 거치지 않음
+        if (candidates.length === 1) {
+          tier1Queue.push({ file, target: candidates[0], dong, ho });
+          continue;
+        }
+
+        // 후보가 2명 이상 → 사용자가 직접 선택해야 모호함 해소
         const pid = `${file.name}#${Date.now()}#${Math.random().toString(36).slice(2, 8)}`;
         newPendingMatches.push({
           id: pid,
@@ -712,12 +758,29 @@ export default function DocumentsStepPage() {
                       동호수+이름이 모두 일치하지 않은 파일입니다. 후보 중 어느 고객에 첨부할지 직접 선택하세요.
                     </p>
                   </div>
-                  <button
-                    onClick={clearAllPending}
-                    className="text-[11px] text-amber-700 hover:underline"
-                  >
-                    모두 비우기
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      const single = pendingMatches.filter((p) => p.candidates.length === 1).length;
+                      if (single === 0) return null;
+                      const isRunning = resolvingId === "__bulk__";
+                      return (
+                        <button
+                          onClick={autoResolveSingleCandidates}
+                          disabled={isRunning}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={`후보가 1명뿐인 ${single}건을 한 번에 자동 첨부`}
+                        >
+                          {isRunning ? <><Loader2 className="w-3 h-3 animate-spin" /> 처리 중…</> : <>✓ 단일 후보 {single}건 자동 확정</>}
+                        </button>
+                      );
+                    })()}
+                    <button
+                      onClick={clearAllPending}
+                      className="text-[11px] text-amber-700 hover:underline"
+                    >
+                      모두 비우기
+                    </button>
+                  </div>
                 </div>
                 <ul className="space-y-2">
                   {pendingMatches.map((p) => {
