@@ -129,15 +129,16 @@ const columns: StageColumn[] = [
 /**
  * 5단계 서류 검수 상태를 5가지로 분류.
  *
- *  - missing    : 서류 파일이 하나도 등록되지 않음
+ *  - missing    : 실제 서류 파일이 하나도 업로드되지 않음 (= 미등록)
  *  - uploaded   : 파일은 등록됐지만 아직 어떤 체크포인트도 검토하지 않음 (= 미검수)
  *  - in_review  : 일부 체크포인트만 ✓/✕ 처리 — 담당자가 중간에 멈춤 (= 검수 보류)
  *  - eligible   : 최종 적합
  *  - ineligible : 최종 부적합
  *
- * 청약홈 자동검증 서류는 파일이 없어도 검증 완료로 간주되므로
- * registration_source === "applyhome"인 경우 documents_submitted에서 그 항목들이
- * true로 사전 체크되어 있다 — 이들은 "uploaded"로 잡힘.
+ * "등록"의 기준은 document_files에 url/pages 등 실제 파일 메타가 있는지 여부.
+ * 청약홈 자동검증 서류(documents_submitted에서 true로 사전 체크된 항목)는
+ * 실제 파일 업로드와 무관하므로 등록 판정에 영향을 주지 않음. 이렇게 해야
+ * 파일이 한 장도 안 올라온 사람이 '미검수'가 아니라 '미등록'으로 표시됨.
  */
 function computeReviewStatus(
   c: LocalCustomer,
@@ -145,12 +146,12 @@ function computeReviewStatus(
   if (c.verification_verdict === "eligible") return "eligible";
   if (c.verification_verdict === "ineligible") return "ineligible";
 
-  const submitted = c.documents_submitted || {};
-  const hasSubmitted = Object.values(submitted).some(Boolean);
   const docFiles = c.document_files || {};
   const hasFile = Object.values(docFiles).some(
     (f: any) => f?.url || (Array.isArray(f?.pages) && f.pages.length > 0) || f?.page,
   );
+
+  if (!hasFile) return "missing";
 
   // 체크포인트 중 하나라도 pass/fail이면 검수 보류
   const hasReviewProgress = Object.values(docFiles).some((f: any) =>
@@ -162,8 +163,7 @@ function computeReviewStatus(
   );
 
   if (hasReviewProgress) return "in_review";
-  if (hasFile || hasSubmitted) return "uploaded";
-  return "missing";
+  return "uploaded";
 }
 
 export default function DocumentsStepPage() {
