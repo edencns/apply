@@ -93,8 +93,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         };
       },
       onUploadCompleted: async ({ blob, tokenPayload }) => {
-        // Blob CDN 업로드 완료 통지 — Vercel 서버에서 호출 (사용자 세션 없음)
+        // Blob CDN 업로드 완료 통지 — Vercel 서버에서 호출 (사용자 세션 없음).
         // tokenPayload는 onBeforeGenerateToken에서 우리가 서명·발급한 값이라 신뢰 가능.
+        // ★ INSERT는 즉시 실행, 부수효과(audit·broadcast)는 fire-and-forget으로 분리 →
+        //   클라이언트의 폴링이 INSERT 직후 바로 결과를 받을 수 있게 함.
         if (!tokenPayload) return;
         let payload: TokenPayload;
         try {
@@ -118,34 +120,39 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             ],
           });
           const id = Number(ins.rows[0]?.id);
-          // logAudit는 session을 요구하므로 합성 — 정상 사용자 활동 추적 목적이라 충분
-          await logAudit({
-            session: {
-              sub: String(payload.userId),
-              email: "",
-              name: "",
-              role: "manager" as any,
-            },
-            entity: "file",
-            entity_id: id,
-            action: "create",
-            after: {
-              filename: payload.origFilename,
-              kind: payload.kind,
-              announcement_id: payload.announcementId,
-              client_upload: true,
-            },
-            req,
-          });
-          await broadcast("file:uploaded", {
-            id,
-            announcement_id: payload.announcementId ?? undefined,
-            by: payload.userId,
-          });
+
+          // 부수효과는 INSERT 응답을 막지 않도록 비동기로 실행 (오류는 로그만)
+          (async () => {
+            try {
+              await logAudit({
+                session: {
+                  sub: String(payload.userId),
+                  email: "",
+                  name: "",
+                  role: "manager" as any,
+                },
+                entity: "file",
+                entity_id: id,
+                action: "create",
+                after: {
+                  filename: payload.origFilename,
+                  kind: payload.kind,
+                  announcement_id: payload.announcementId,
+                  client_upload: true,
+                },
+                req,
+              });
+            } catch (e) { console.error("[client-upload] audit 실패", e); }
+            try {
+              await broadcast("file:uploaded", {
+                id,
+                announcement_id: payload.announcementId ?? undefined,
+                by: payload.userId,
+              });
+            } catch (e) { console.error("[client-upload] broadcast 실패", e); }
+          })();
         } catch (err) {
           console.error("[client-upload] DB insert 실패", err);
-          // 콜백에서 throw하면 클라이언트가 파일을 보고 있는데 메타가 없는 상태가 됨.
-          // 로그만 남기고 진행 — GET 폴링이 504로 실패하면서 사용자가 재시도 가능.
         }
       },
     });
@@ -175,13 +182,16 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const url = req.nextUrl.searchParams.get("url");
     if (!url) return NextResponse.json({ error: "url 파라미터 필요" }, { status: 400 });
 
-    // 폴링: Blob → 우리 onUploadCompleted → DB INSERT까지 비동기 처리.
-    // 콜드 스타트 시 수 초 걸릴 수 있어 충분한 대기 시간(최대 ~20초) 확보.
+    // 폴링: 첫 번째는 즉시(0ms 대기), 이후 점진 증가 — 대부분 1초 내 발견.
+    // 최악(콜드스타트)에도 ~20초 안에 결과.
     const db = getDb();
     let found: { id: number; filename: string } | null = null;
-    const MAX_TRIES = 40;
-    const DELAY_MS = 500;
-    for (let i = 0; i < MAX_TRIES; i++) {
+    const delays = [0, 100, 150, 200, 300, 400, 500, 700, 1000, 1500, 2000];
+    let elapsed = 0;
+    for (let i = 0; elapsed < 25_000; i++) {
+      const wait = delays[Math.min(i, delays.length - 1)];
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      elapsed += wait;
       const r = await db.execute({
         sql: "SELECT id, filename FROM files WHERE url=? ORDER BY id DESC LIMIT 1",
         args: [url],
@@ -190,7 +200,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         found = { id: Number(r.rows[0].id), filename: String(r.rows[0].filename) };
         break;
       }
-      await new Promise((r) => setTimeout(r, DELAY_MS));
     }
     if (!found) {
       return NextResponse.json(

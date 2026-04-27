@@ -205,6 +205,12 @@ export default function DocumentsStepPage() {
   };
   const [pendingMatches, setPendingMatches] = useState<PendingMatch[]>([]);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  /** 배치 업로드 진행 상황 (UI 표시용) */
+  const [batchProgress, setBatchProgress] = useState<{
+    done: number;
+    total: number;
+    current?: string;
+  } | null>(null);
 
   const evaluate = (c: LocalCustomer, a: LocalAnnouncement) => {
     const docList = computeDocList(c, a);
@@ -323,22 +329,33 @@ export default function DocumentsStepPage() {
     setPendingMatches([]);
   };
 
-  /** 서류 스캔본 배치 업로드 — 파일명 "동-호수 이름.pdf" 매칭 후 각 당첨자의 "서류 묶음" 슬롯에 저장 */
+  /** 서류 스캔본 배치 업로드 — 파일명 "동-호수 이름.pdf" 매칭 후 각 당첨자의 "서류 묶음" 슬롯에 저장.
+   *
+   *  성능 전략:
+   *   1) 분류 단계: 모든 파일을 동기적으로 매칭 분석 (네트워크 무관, 즉시 종료)
+   *   2) 업로드 단계: 1순위 매칭만 동시에 N개씩 병렬로 Blob 업로드
+   *      (각 파일은 독립적인 Blob CDN PUT이라 동시 처리 안전)
+   */
   const handleBatchDocs = async (files: FileList | null) => {
     if (!selected) { alert("먼저 공고를 선택해주세요"); return; }
     if (!files || files.length === 0) return;
     setBatchBusy(true);
     setBatchResult(null);
+    setBatchProgress(null);
     try {
       const customers = localCustomers.listByAnnouncement(selected.id);
-      let attached = 0, unmatched = 0, pending = 0;
+      let unmatched = 0, pending = 0;
       const errors: string[] = [];
       const total = files.length;
+
+      // ── 단계 1: 분류 (동기) ────────────────────────────
+      type Tier1 = { file: File; target: LocalCustomer; dong: string; ho: string };
+      const tier1Queue: Tier1[] = [];
+      const newPendingMatches: PendingMatch[] = [];
 
       for (const file of Array.from(files)) {
         if (!file.name.toLowerCase().endsWith(".pdf")) continue;
         const base = file.name.replace(/\.pdf$/i, "").trim();
-        // "101-1401 김성진" 또는 "101-1401_김성진" 또는 "101-1401"
         const m = base.match(/^(\d{2,4})[-_\s]+(\d{1,5})(?:[\s_-]+(.*))?$/);
         if (!m) {
           unmatched++;
@@ -346,88 +363,105 @@ export default function DocumentsStepPage() {
           continue;
         }
         const [, dong, ho, nameHint] = m;
-
         const cleanNameHint = nameHint?.trim() || "";
-        // 동·호 필드가 채워진 후보군
         const byDongHo = customers.filter((c) => {
           const cd = String((c as any).unit_dong || "").trim();
           const ch = String((c as any).unit_ho || "").trim();
           return cd && ch && cd === dong && ch === ho;
         });
 
-        // 1순위: 동호수 + 이름 모두 일치 → 자동 첨부
+        // 1순위: 동호수+이름 모두 일치
         let target: typeof customers[number] | undefined;
         if (cleanNameHint) {
           target = byDongHo.find((c) => c.name === cleanNameHint);
         }
 
-        // 2순위/3순위는 자동 첨부하지 않고 보류 — 담당자가 어느 고객인지 직접 선택.
-        if (!target) {
-          // 후보군 추리기: 동호 일치 우선, 없으면 이름 일치
-          let candidates: typeof customers = [];
-          let tier: "dongHoOnly" | "nameOnly";
-          if (byDongHo.length > 0) {
-            candidates = byDongHo;
-            tier = "dongHoOnly";
-          } else if (cleanNameHint) {
-            candidates = customers.filter((c) => c.name === cleanNameHint);
-            tier = "nameOnly";
-          } else {
-            tier = "dongHoOnly";
-          }
-
-          if (candidates.length === 0) {
-            // 어떤 후보도 없으면 진짜 매칭 실패 — errors로
-            unmatched++;
-            const dongHoFuzzy = customers
-              .filter((c) => {
-                const cd = String((c as any).unit_dong || "").trim();
-                const ch = String((c as any).unit_ho || "").trim();
-                return cd === dong || ch === ho;
-              })
-              .slice(0, 3)
-              .map((c) => `${c.name}(${(c as any).unit_dong || "?"}-${(c as any).unit_ho || "?"})`)
-              .join(", ");
-            errors.push(
-              `${file.name}: ${dong}-${ho}${cleanNameHint ? ` "${cleanNameHint}"` : ""} 매칭 실패. ` +
-              `동호 유사: [${dongHoFuzzy || "없음"}]`,
-            );
-            continue;
-          }
-
-          // 보류 큐에 추가 — 담당자가 직접 선택
-          const pid = `${file.name}#${Date.now()}#${Math.random().toString(36).slice(2, 8)}`;
-          setPendingMatches((prev) => [
-            ...prev,
-            {
-              id: pid,
-              file,
-              parsedDong: dong,
-              parsedHo: ho,
-              parsedName: cleanNameHint,
-              tier,
-              candidates,
-            },
-          ]);
-          // 보류는 unmatched로 카운트하지 않고 별도 표시
-          pending++;
+        if (target) {
+          tier1Queue.push({ file, target, dong, ho });
           continue;
         }
 
-        // 1순위 매칭 — 자동 첨부
+        // 2순위/3순위 → 보류
+        let candidates: typeof customers = [];
+        let tier: "dongHoOnly" | "nameOnly" = "dongHoOnly";
+        if (byDongHo.length > 0) {
+          candidates = byDongHo;
+          tier = "dongHoOnly";
+        } else if (cleanNameHint) {
+          candidates = customers.filter((c) => c.name === cleanNameHint);
+          tier = "nameOnly";
+        }
+
+        if (candidates.length === 0) {
+          unmatched++;
+          const dongHoFuzzy = customers
+            .filter((c) => {
+              const cd = String((c as any).unit_dong || "").trim();
+              const ch = String((c as any).unit_ho || "").trim();
+              return cd === dong || ch === ho;
+            })
+            .slice(0, 3)
+            .map((c) => `${c.name}(${(c as any).unit_dong || "?"}-${(c as any).unit_ho || "?"})`)
+            .join(", ");
+          errors.push(
+            `${file.name}: ${dong}-${ho}${cleanNameHint ? ` "${cleanNameHint}"` : ""} 매칭 실패. ` +
+            `동호 유사: [${dongHoFuzzy || "없음"}]`,
+          );
+          continue;
+        }
+
+        const pid = `${file.name}#${Date.now()}#${Math.random().toString(36).slice(2, 8)}`;
+        newPendingMatches.push({
+          id: pid,
+          file,
+          parsedDong: dong,
+          parsedHo: ho,
+          parsedName: cleanNameHint,
+          tier,
+          candidates,
+        });
+        pending++;
+      }
+
+      if (newPendingMatches.length > 0) {
+        setPendingMatches((prev) => [...prev, ...newPendingMatches]);
+      }
+
+      // ── 단계 2: 1순위 병렬 업로드 ─────────────────────
+      const CONCURRENCY = 4; // Vercel/Blob에 부담 안 주면서 체감 속도 최대화
+      let attached = 0;
+      let done = 0;
+      setBatchProgress({ done: 0, total: tier1Queue.length });
+
+      const runOne = async (item: Tier1) => {
+        setBatchProgress((prev) => prev ? { ...prev, current: item.file.name } : prev);
         try {
-          await uploadAndAttach(file, target, dong, ho);
+          await uploadAndAttach(item.file, item.target, item.dong, item.ho);
           attached++;
         } catch (err: any) {
-          errors.push(`${file.name}: ${err?.message || "오류"}`);
+          errors.push(`${item.file.name}: ${err?.message || "오류"}`);
           unmatched++;
+        } finally {
+          done++;
+          setBatchProgress({ done, total: tier1Queue.length, current: item.file.name });
         }
-      }
+      };
+
+      // 워커풀 — CONCURRENCY개의 워커가 큐에서 작업을 꺼내 처리
+      let cursor = 0;
+      const workers = Array.from({ length: Math.min(CONCURRENCY, tier1Queue.length) }, async () => {
+        while (cursor < tier1Queue.length) {
+          const idx = cursor++;
+          await runOne(tier1Queue[idx]);
+        }
+      });
+      await Promise.all(workers);
 
       setBatchResult({ attached, unmatched, pending, total, errors });
       setReloadKey((k) => k + 1);
     } finally {
       setBatchBusy(false);
+      setBatchProgress(null);
       if (batchRef.current) batchRef.current.value = "";
     }
   };
@@ -517,10 +551,16 @@ export default function DocumentsStepPage() {
                 onClick={() => batchRef.current?.click()}
                 disabled={batchBusy}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm disabled:opacity-40"
-                title="파일명 '동-호수 이름.pdf' 형식의 PDF 여러 개 선택 → 당첨자 자동 매칭"
+                title="파일명 '동-호수 이름.pdf' 형식의 PDF 여러 개 선택 → 당첨자 자동 매칭 (병렬 업로드)"
               >
                 {batchBusy ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> 업로드 중…</>
+                  batchProgress && batchProgress.total > 0 ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" />
+                      업로드 중 {batchProgress.done}/{batchProgress.total}
+                    </>
+                  ) : (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
+                  )
                 ) : (
                   <><FolderUp className="w-4 h-4" /> ① 스캔본 배치 업로드</>
                 )}
@@ -553,6 +593,31 @@ export default function DocumentsStepPage() {
                 <Gavel className="w-4 h-4" /> 전체 자동 재판정
               </button>
             </div>
+
+            {/* 배치 업로드 진행 바 */}
+            {batchBusy && batchProgress && batchProgress.total > 0 && (
+              <div className="mt-3 p-2.5 rounded-md bg-indigo-50 border border-indigo-200">
+                <div className="flex items-center justify-between text-[11px] text-indigo-900 mb-1">
+                  <span className="font-medium">
+                    📤 병렬 업로드 진행 중 — {batchProgress.done} / {batchProgress.total}
+                  </span>
+                  <span className="text-indigo-700">
+                    {Math.round((batchProgress.done / batchProgress.total) * 100)}%
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-white rounded-full overflow-hidden border border-indigo-100">
+                  <div
+                    className="h-full bg-indigo-500 transition-all"
+                    style={{ width: `${(batchProgress.done / batchProgress.total) * 100}%` }}
+                  />
+                </div>
+                {batchProgress.current && (
+                  <div className="mt-1 text-[10px] text-indigo-700 truncate" title={batchProgress.current}>
+                    최근 처리: {batchProgress.current}
+                  </div>
+                )}
+              </div>
+            )}
 
             {batchResult && (
               <div className="mt-3 text-xs text-indigo-900 flex flex-wrap gap-1.5">
