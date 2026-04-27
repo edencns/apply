@@ -34,10 +34,34 @@ export async function uploadFileViaClient(
     .replace(/[\x00-\x1f\x7f]/g, "_")
     .slice(0, 200);
 
+  // file.type이 비어 있거나 octet-stream인 경우 확장자로 보정 — 서버의
+  // allowedContentTypes 검증을 통과시키기 위함.
+  const guessTypeByExt = (name: string): string | undefined => {
+    const m = name.toLowerCase().match(/\.(pdf|png|jpe?g|webp|xlsx|xls|csv|zip)$/);
+    if (!m) return undefined;
+    switch (m[1]) {
+      case "pdf": return "application/pdf";
+      case "png": return "image/png";
+      case "jpg":
+      case "jpeg": return "image/jpeg";
+      case "webp": return "image/webp";
+      case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      case "xls": return "application/vnd.ms-excel";
+      case "csv": return "text/csv";
+      case "zip": return "application/zip";
+    }
+    return undefined;
+  };
+  const explicitType = (() => {
+    const t = file.type;
+    if (t && t !== "application/octet-stream") return t;
+    return guessTypeByExt(file.name) || "application/octet-stream";
+  })();
+
   const blob = await upload(safeName, file, {
     access: "public",
     handleUploadUrl: "/api/files/client-upload",
-    contentType: file.type || undefined,
+    contentType: explicitType,
     clientPayload: JSON.stringify({
       kind,
       announcement_id: announcementId,

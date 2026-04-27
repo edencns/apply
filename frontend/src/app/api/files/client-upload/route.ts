@@ -30,6 +30,9 @@ const ALLOWED_CONTENT_TYPES = [
   "application/vnd.ms-excel",
   "text/csv",
   "application/zip",
+  // 일부 스캐너·OS는 PDF 파일에 application/octet-stream을 붙여 보냄 — 인증된 사용자의
+  // 업로드만 들어오므로 안전망으로 허용. 실제 형식은 클라 측에서 확장자로 검증.
+  "application/octet-stream",
 ];
 
 /**
@@ -46,20 +49,26 @@ type TokenPayload = {
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     await ensureSchema();
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
-    const userId = Number(session.sub);
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
       return NextResponse.json({ error: "BLOB_READ_WRITE_TOKEN 미설정" }, { status: 500 });
     }
 
+    // 두 가지 요청이 들어옴:
+    //  ① 토큰 발급 (블롭.generate-client-token)  ← 사용자 세션 보유
+    //  ② 업로드 완료 통지 (blob.upload-completed) ← Vercel Blob 인프라가 직접 호출 — 세션 없음
+    // 세션 체크는 onBeforeGenerateToken 안에서만 수행해야 ②가 401로 깨지지 않음.
     const body = (await req.json()) as HandleUploadBody;
 
     const json = await handleUpload({
       request: req,
       body,
       onBeforeGenerateToken: async (pathname: string, clientPayload?: string | null) => {
-        // clientPayload는 클라가 보낸 hint(JSON: { kind, announcement_id, filename })
+        // 인증·권한 검증 — 이 콜백 안에서만 사용자 세션 확인
+        const session = await getSession();
+        if (!session) throw new Error("로그인 필요");
+        const userId = Number(session.sub);
+
+        // clientPayload: { kind, announcement_id, filename }
         let kind = "other";
         let announcementId: number | null = null;
         let origFilename = pathname;
@@ -84,7 +93,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         };
       },
       onUploadCompleted: async ({ blob, tokenPayload }) => {
-        // Blob CDN 업로드 완료 시 호출 — DB에 메타 기록
+        // Blob CDN 업로드 완료 통지 — Vercel 서버에서 호출 (사용자 세션 없음)
+        // tokenPayload는 onBeforeGenerateToken에서 우리가 서명·발급한 값이라 신뢰 가능.
         if (!tokenPayload) return;
         let payload: TokenPayload;
         try {
@@ -103,13 +113,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               payload.kind,
               payload.origFilename,
               blob.contentType || null,
-              null, // 클라 업로드라 정확한 size를 모를 수 있음 — 다운로드 시 Blob에서 조회 가능
+              null,
               blob.url,
             ],
           });
           const id = Number(ins.rows[0]?.id);
+          // logAudit는 session을 요구하므로 합성 — 정상 사용자 활동 추적 목적이라 충분
           await logAudit({
-            session,
+            session: {
+              sub: String(payload.userId),
+              email: "",
+              name: "",
+              role: "manager" as any,
+            },
             entity: "file",
             entity_id: id,
             action: "create",
@@ -128,6 +144,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           });
         } catch (err) {
           console.error("[client-upload] DB insert 실패", err);
+          // 콜백에서 throw하면 클라이언트가 파일을 보고 있는데 메타가 없는 상태가 됨.
+          // 로그만 남기고 진행 — GET 폴링이 504로 실패하면서 사용자가 재시도 가능.
         }
       },
     });
@@ -157,10 +175,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const url = req.nextUrl.searchParams.get("url");
     if (!url) return NextResponse.json({ error: "url 파라미터 필요" }, { status: 400 });
 
-    // 짧은 폴링: onUploadCompleted가 비동기라 잠시 기다려야 할 수 있음
+    // 폴링: Blob → 우리 onUploadCompleted → DB INSERT까지 비동기 처리.
+    // 콜드 스타트 시 수 초 걸릴 수 있어 충분한 대기 시간(최대 ~20초) 확보.
     const db = getDb();
     let found: { id: number; filename: string } | null = null;
-    for (let i = 0; i < 12; i++) {
+    const MAX_TRIES = 40;
+    const DELAY_MS = 500;
+    for (let i = 0; i < MAX_TRIES; i++) {
       const r = await db.execute({
         sql: "SELECT id, filename FROM files WHERE url=? ORDER BY id DESC LIMIT 1",
         args: [url],
@@ -169,9 +190,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         found = { id: Number(r.rows[0].id), filename: String(r.rows[0].filename) };
         break;
       }
-      await new Promise((r) => setTimeout(r, 250));
+      await new Promise((r) => setTimeout(r, DELAY_MS));
     }
-    if (!found) return NextResponse.json({ error: "메타 기록 대기 시간 초과" }, { status: 504 });
+    if (!found) {
+      return NextResponse.json(
+        { error: "업로드 메타 기록 대기 시간 초과 — 다시 시도해 주세요" },
+        { status: 504 },
+      );
+    }
 
     return NextResponse.json({
       id: found.id,
