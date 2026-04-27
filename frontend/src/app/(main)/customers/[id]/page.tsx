@@ -1208,6 +1208,11 @@ function DocumentsStage({
           fileMap={docFiles}
           onAssignPage={handleAssignPage}
           initialPage={mapperInitialPage}
+          applyhomeAutoVerified={
+            customer.registration_source === "applyhome"
+              ? APPLYHOME_AUTO_VERIFIED_DOCUMENTS
+              : []
+          }
         />
       )}
     </>

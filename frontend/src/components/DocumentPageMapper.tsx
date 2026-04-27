@@ -17,7 +17,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  X, FileText, Target, CheckCircle2,
+  X, FileText, CheckCircle2,
   ChevronLeft, ChevronRight, AlertCircle, Plus, Image as ImageIcon,
 } from "lucide-react";
 
@@ -52,6 +52,12 @@ export interface DocumentMapperProps {
    */
   onAssignPage: (docName: string, page: number | undefined) => void;
   initialPage?: number;
+  /**
+   * 청약홈에서 이미 검증되어 별도 페이지 지정이 불필요한 서류 이름 목록.
+   * (예: 특별공급신청서·무주택 서약서, 청약통장 순위(가입)확인서)
+   * 매퍼에서 [+] 버튼 비활성화 + 녹색 「청약홈 자동확인」 배지로 구분.
+   */
+  applyhomeAutoVerified?: string[];
 }
 
 /* ─── 페이지 썸네일 캐시 ─── */
@@ -65,8 +71,9 @@ const thumbCacheRef: { current: ThumbCache | null } = { current: null };
 export default function DocumentPageMapper({
   isOpen, onClose, bundleUrl, bundleFilename, bundleFileId,
   totalPages: totalPagesProp, documents, fileMap, onAssignPage,
-  initialPage = 1,
+  initialPage = 1, applyhomeAutoVerified = [],
 }: DocumentMapperProps) {
+  const autoVerifiedSet = new Set(applyhomeAutoVerified);
   const [currentPage, setCurrentPage] = useState<number>(initialPage);
   const [iframeKey, setIframeKey] = useState(0);
   const [detectedTotal, setDetectedTotal] = useState<number | undefined>(undefined);
@@ -465,21 +472,26 @@ export default function DocumentPageMapper({
                     : (df?.page ? [df.page] : []);
                   const isOnCurrent = pages.includes(currentPage);
                   const display = d.shortName || d.name;
+                  const isAutoVerified = autoVerifiedSet.has(d.name);
                   return (
                     <div
                       key={d.name}
                       className={`p-2 rounded border ${
-                        isOnCurrent
-                          ? "border-indigo-400 bg-indigo-50 ring-1 ring-indigo-200"
-                          : pages.length > 0
-                            ? "border-emerald-200 bg-emerald-50/60"
-                            : "border-border"
+                        isAutoVerified
+                          ? "border-emerald-300 bg-emerald-50/80"
+                          : isOnCurrent
+                            ? "border-indigo-400 bg-indigo-50 ring-1 ring-indigo-200"
+                            : pages.length > 0
+                              ? "border-emerald-200 bg-emerald-50/60"
+                              : "border-border"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1 flex-wrap">
-                            <span className="text-xs font-medium text-ink-2 leading-tight">
+                            <span className={`text-xs font-medium leading-tight ${
+                              isAutoVerified ? "text-emerald-900" : "text-ink-2"
+                            }`}>
                               {display}
                             </span>
                             {d.conditional ? (
@@ -494,61 +506,86 @@ export default function DocumentPageMapper({
                                 필수
                               </span>
                             )}
+                            {isAutoVerified && (
+                              <span
+                                className="text-[9px] bg-emerald-600 text-white px-1 py-0.5 rounded font-semibold inline-flex items-center gap-0.5"
+                                title="청약홈에서 이미 검증 — 별도 페이지 지정 불필요"
+                              >
+                                ✓ 청약홈 자동확인
+                              </span>
+                            )}
                           </div>
-                          {d.condition && (
+                          {isAutoVerified ? (
+                            <div className="text-[9.5px] mt-0.5 text-emerald-700">
+                              ↳ 청약홈 신청 시 검증 완료. 별도 제출·페이지 지정 불필요.
+                            </div>
+                          ) : d.condition ? (
                             <div className={`text-[9.5px] mt-0.5 ${
                               d.conditional ? "text-amber-700" : "text-ink-4"
                             }`}>
                               {d.conditional ? "↳ 해당 시: " : "↳ "}{d.condition}
                             </div>
-                          )}
+                          ) : null}
                           {/* 지정된 페이지 목록 */}
-                          {pages.length > 0 ? (
-                            <div className="mt-1 flex flex-wrap gap-0.5 items-center">
-                              <span className="text-[9px] text-emerald-700">지정:</span>
-                              {pages.map((p) => (
-                                <button
-                                  key={p}
-                                  onClick={() => jumpTo(p)}
-                                  className={`px-1 py-0 rounded text-[10px] font-mono ${
-                                    p === currentPage
-                                      ? "bg-indigo-600 text-white"
-                                      : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                                  }`}
-                                  title={`${p}p 보기`}
-                                >
-                                  {p}p
-                                </button>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-[10px] text-ink-4 mt-0.5">미지정</div>
+                          {!isAutoVerified && (
+                            pages.length > 0 ? (
+                              <div className="mt-1 flex flex-wrap gap-0.5 items-center">
+                                <span className="text-[9px] text-emerald-700">지정:</span>
+                                {pages.map((p) => (
+                                  <button
+                                    key={p}
+                                    onClick={() => jumpTo(p)}
+                                    className={`px-1 py-0 rounded text-[10px] font-mono ${
+                                      p === currentPage
+                                        ? "bg-indigo-600 text-white"
+                                        : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                                    }`}
+                                    title={`${p}p 보기`}
+                                  >
+                                    {p}p
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-ink-4 mt-0.5">미지정</div>
+                            )
                           )}
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                          <button
-                            onClick={() => onAssignPage(d.name, currentPage)}
-                            className={`inline-flex items-center gap-0.5 px-2 py-1 rounded text-[10px] font-medium whitespace-nowrap ${
-                              isOnCurrent
-                                ? "bg-red-100 text-red-700 hover:bg-red-200"
-                                : "bg-indigo-600 text-white hover:bg-indigo-700"
-                            }`}
-                            title={isOnCurrent ? `${currentPage}p 제거` : `${currentPage}p 추가`}
-                          >
-                            {isOnCurrent ? (
-                              <>−{currentPage}p</>
-                            ) : (
-                              <><Plus className="w-2.5 h-2.5" />{currentPage}p</>
-                            )}
-                          </button>
-                          {pages.length > 0 && (
-                            <button
-                              onClick={() => onAssignPage(d.name, undefined)}
-                              className="text-[9px] text-red-500 hover:underline"
-                              title="이 서류의 모든 페이지 지정 해제"
+                          {isAutoVerified ? (
+                            <span
+                              className="inline-flex items-center gap-0.5 px-2 py-1 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 cursor-not-allowed"
+                              title="청약홈 자동확인 — 페이지 지정 불필요"
                             >
-                              전체 해제
-                            </button>
+                              <CheckCircle2 className="w-2.5 h-2.5" />완료
+                            </span>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => onAssignPage(d.name, currentPage)}
+                                className={`inline-flex items-center gap-0.5 px-2 py-1 rounded text-[10px] font-medium whitespace-nowrap ${
+                                  isOnCurrent
+                                    ? "bg-red-100 text-red-700 hover:bg-red-200"
+                                    : "bg-indigo-600 text-white hover:bg-indigo-700"
+                                }`}
+                                title={isOnCurrent ? `${currentPage}p 제거` : `${currentPage}p 추가`}
+                              >
+                                {isOnCurrent ? (
+                                  <>−{currentPage}p</>
+                                ) : (
+                                  <><Plus className="w-2.5 h-2.5" />{currentPage}p</>
+                                )}
+                              </button>
+                              {pages.length > 0 && (
+                                <button
+                                  onClick={() => onAssignPage(d.name, undefined)}
+                                  className="text-[9px] text-red-500 hover:underline"
+                                  title="이 서류의 모든 페이지 지정 해제"
+                                >
+                                  전체 해제
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
