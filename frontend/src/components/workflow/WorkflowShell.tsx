@@ -69,18 +69,18 @@ export const WORKFLOW_STEPS: WorkflowStep[] = [
   },
   {
     step: 5,
-    key: "transfers",
-    title: "명의변경",
-    description: "상속·증여·이혼·전매 등으로 명의자가 바뀐 세대의 서류 스캔본을 업로드하면 AI가 신·구 명의자와 사유를 자동 추출합니다. 다음 단계 서류·판정에서는 변경된 명의자 기준으로 검수가 진행됩니다.",
-    fileHint: "명의변경 서류 스캔본 PDF (파일명 예: 101-101)",
-    href: "/workflow/transfers",
+    key: "documents",
+    title: "서류·판정",
+    description: "공급유형별 필수 서류 체크리스트 + 1~4단계 종합으로 최종 적합·부적합 판정을 내립니다. 부적합일 경우 같은 주택형의 예비에서 승계 가능합니다.",
+    href: "/workflow/documents",
   },
   {
     step: 6,
-    key: "documents",
-    title: "서류·판정",
-    description: "공급유형별 필수 서류 체크리스트 + 이전 단계 종합으로 최종 적합·부적합 판정을 내립니다. 명의변경된 세대는 새 명의자 기준으로 검수합니다. 부적합일 경우 예비 승계가 가능합니다.",
-    href: "/workflow/documents",
+    key: "transfers",
+    title: "명의변경",
+    description: "계약 체결 이후 분양권을 상속·증여·이혼·전매 등으로 다른 명의자에게 넘긴 세대의 서류 스캔본을 업로드하면 AI가 신·구 명의자와 사유를 자동 추출합니다. 배치 처리.",
+    fileHint: "명의변경 서류 스캔본 PDF (파일명 예: 101-101)",
+    href: "/workflow/transfers",
   },
 ];
 

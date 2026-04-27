@@ -549,32 +549,6 @@ export default function DocumentsStepPage() {
             </span>
           </div>
 
-          {/* 명의변경 적용 세대 알림 */}
-          {(() => {
-            const transferCount = localCustomers
-              .listByAnnouncement(selected.id)
-              .filter((c) => !c.superseded && (c as any).title_transfer)
-              .length;
-            if (transferCount === 0) return null;
-            return (
-              <div className="mb-3 p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-900 flex items-start gap-2">
-                <span className="text-base leading-none flex-shrink-0">🔄</span>
-                <div className="flex-1">
-                  <div className="font-semibold">명의변경 적용된 세대 {transferCount}건</div>
-                  <div className="mt-0.5 text-rose-800">
-                    리스트의 동호수 옆에 <span className="inline-block px-1 py-0.5 rounded bg-rose-100 text-[9.5px] font-medium">🔄 명의변경 → 새이름</span> 배지가 표시됩니다.
-                    이들은 새 명의자 기준으로 서류 검수가 필요합니다.
-                  </div>
-                </div>
-                <a
-                  href="/workflow/transfers"
-                  className="text-[11px] text-rose-700 hover:underline whitespace-nowrap"
-                >
-                  ← 명의변경 단계로
-                </a>
-              </div>
-            );
-          })()}
 
           {/* Phase #5 — 면책 디스클레이머 */}
           <div className="mb-4 p-3 rounded-lg bg-red-50 border-2 border-red-300 text-xs text-red-900 flex items-start gap-2">

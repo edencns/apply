@@ -307,18 +307,17 @@ export default function TransfersStepPage() {
         <>
           {/* 안내 */}
           <div className="mb-4 p-3 rounded-lg bg-indigo-50 border border-indigo-100 text-xs text-indigo-900">
-            <div className="font-semibold mb-1">📋 명의변경 배치 처리 — 서류·판정 직전 단계</div>
+            <div className="font-semibold mb-1">📋 명의변경 배치 처리 — 계약 체결 이후 단계</div>
             <p className="text-indigo-800 mb-2">
-              상속·증여·이혼·전매 등으로 명의가 바뀐 세대의 서류 스캔본을 일괄 업로드하면
-              AI가 신·구 명의자와 사유를 추출합니다. 승인 후 다음 단계 「서류·판정」에서는
-              <strong> 변경된 명의자 기준</strong>으로 검수가 진행됩니다.
+              <strong>당첨·서류 판정·계약 체결까지 완료한 분양권</strong>이 상속·증여·이혼·전매 등으로
+              다른 명의자에게 넘어간 세대를 처리합니다. 서류 스캔본을 일괄 업로드하면 AI가
+              신·구 명의자와 사유를 자동 추출하고, 각 당첨자 레코드에 명의변경 이력으로 저장됩니다.
             </p>
             <ol className="list-decimal list-inside space-y-0.5 text-indigo-800">
               <li>파일명은 <strong>동-호수</strong> 형식이어야 자동 매칭됩니다 (예: <code>101-101.pdf</code>, <code>102-1204.pdf</code>).</li>
               <li>PDF들을 한 번에 선택해 업로드하면 AI(Gemini)가 각 파일에서 사유·신구 명의자·관계를 추출합니다.</li>
               <li>검토 후 [일괄 승인]으로 각 당첨자 레코드에 명의변경 이력이 저장되며, 감사 로그에도 기록됩니다.</li>
               <li>낮은 신뢰도(low)나 매칭 실패 건은 별도 검토 후 수동 처리 필요.</li>
-              <li>이 단계를 건너뛰어도 됩니다 — 명의변경이 없는 경우 바로 다음 단계로 이동.</li>
             </ol>
           </div>
 
