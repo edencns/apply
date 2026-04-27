@@ -214,12 +214,21 @@ export default function DocumentsStepPage() {
   const xlsxRef = useRef<HTMLInputElement>(null);
   const batchRef = useRef<HTMLInputElement>(null);
   const [batchBusy, setBatchBusy] = useState(false);
+  /** 매칭 실패 파일 — 사용자가 수동 매칭으로 보낼 수 있도록 File 객체 보존 */
+  type FailedFile = {
+    file: File;
+    parsedDong: string;
+    parsedHo: string;
+    parsedName: string;
+    reason: string;
+  };
   const [batchResult, setBatchResult] = useState<{
     attached: number;
     unmatched: number;
     pending: number;
     total: number;
     errors: string[];
+    failedFiles: FailedFile[];
   } | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ eligible: number } | null>(null);
@@ -366,6 +375,45 @@ export default function DocumentsStepPage() {
     setPendingMatches((prev) => prev.filter((x) => x.id !== pendingId));
   };
 
+  /**
+   * 매칭 실패 파일을 수동 매칭 큐로 이동 — 모든 active customer를
+   * 후보로 노출해 사용자가 직접 골라 첨부할 수 있게.
+   * 사용 사례: 파일명이 잘못됐거나, 1단계에 등록 누락된 경우.
+   */
+  const sendFailedToManual = (ff: FailedFile) => {
+    if (!selected) return;
+    const all = localCustomers
+      .listByAnnouncement(selected.id)
+      .filter((c) => !c.superseded);
+    if (all.length === 0) {
+      alert("이 공고에 등록된 당첨자가 없습니다. 1단계 당첨자 등록을 먼저 해주세요.");
+      return;
+    }
+    const pid = `failed-${ff.file.name}#${Date.now()}#${Math.random().toString(36).slice(2, 8)}`;
+    setPendingMatches((prev) => [
+      ...prev,
+      {
+        id: pid,
+        file: ff.file,
+        parsedDong: ff.parsedDong,
+        parsedHo: ff.parsedHo,
+        parsedName: ff.parsedName,
+        tier: "nameOnly",
+        candidates: all,
+      },
+    ]);
+    // 결과 카드의 실패 목록에서 해당 항목 제거
+    setBatchResult((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        failedFiles: prev.failedFiles.filter((x) => x.file.name !== ff.file.name),
+        unmatched: Math.max(0, prev.unmatched - 1),
+        pending: prev.pending + 1,
+      };
+    });
+  };
+
   const clearAllPending = () => {
     if (pendingMatches.length === 0) return;
     if (!confirm(`보류 중인 ${pendingMatches.length}개 파일을 모두 비울까요?`)) return;
@@ -452,6 +500,7 @@ export default function DocumentsStepPage() {
       const customers = localCustomers.listByAnnouncement(selected.id);
       let unmatched = 0, pending = 0;
       const errors: string[] = [];
+      const failedFiles: FailedFile[] = [];
       const total = files.length;
 
       // ── 단계 1: 분류 (동기) ────────────────────────────
@@ -505,17 +554,19 @@ export default function DocumentsStepPage() {
           unmatched++;
           const dongHoFuzzy = customers
             .filter((c) => {
-              const cd = String((c as any).unit_dong || "").trim();
-              const ch = String((c as any).unit_ho || "").trim();
+              const cd = String((c as any).unit_dong || c.winner_info?.building || "").trim();
+              const ch = String((c as any).unit_ho || c.winner_info?.unit_no || "").trim();
               return cd === dong || ch === ho;
             })
             .slice(0, 3)
-            .map((c) => `${c.name}(${(c as any).unit_dong || "?"}-${(c as any).unit_ho || "?"})`)
+            .map((c) => `${c.name}(${(c as any).unit_dong || c.winner_info?.building || "?"}-${(c as any).unit_ho || c.winner_info?.unit_no || "?"})`)
             .join(", ");
-          errors.push(
-            `${file.name}: ${dong}-${ho}${cleanNameHint ? ` "${cleanNameHint}"` : ""} 매칭 실패. ` +
-            `동호 유사: [${dongHoFuzzy || "없음"}]`,
-          );
+          const reason = `${dong}-${ho}${cleanNameHint ? ` "${cleanNameHint}"` : ""} 매칭 실패. 동호 유사: [${dongHoFuzzy || "없음"}]`;
+          errors.push(`${file.name}: ${reason}`);
+          // File 객체 보존 — 사용자가 [수동 매칭] 버튼으로 보내려면 필요
+          failedFiles.push({
+            file, parsedDong: dong, parsedHo: ho, parsedName: cleanNameHint, reason,
+          });
           continue;
         }
 
@@ -583,7 +634,7 @@ export default function DocumentsStepPage() {
       });
       await Promise.all(workers);
 
-      setBatchResult({ attached, unmatched, pending, total, errors });
+      setBatchResult({ attached, unmatched, pending, total, errors, failedFiles });
       setReloadKey((k) => k + 1);
     } finally {
       setBatchBusy(false);
@@ -765,12 +816,47 @@ export default function DocumentsStepPage() {
                   </span>
                 )}
                 {batchResult.errors.length > 0 && (
-                  <details className="w-full mt-1">
-                    <summary className="cursor-pointer text-red-700 text-xs">실패 목록 ▶</summary>
-                    <ul className="mt-1 pl-4 space-y-0.5 text-[11px] text-red-700 list-disc">
-                      {batchResult.errors.slice(0, 10).map((e, i) => <li key={i}>{e}</li>)}
-                      {batchResult.errors.length > 10 && <li>… 외 {batchResult.errors.length - 10}건</li>}
-                    </ul>
+                  <details className="w-full mt-1" open>
+                    <summary className="cursor-pointer text-red-700 text-xs font-medium">
+                      실패 목록 ▶ ({batchResult.errors.length}건)
+                    </summary>
+                    {/* 실패한 파일에 대해 [수동 매칭] 액션 제공 */}
+                    {batchResult.failedFiles.length > 0 ? (
+                      <ul className="mt-1.5 space-y-1">
+                        {batchResult.failedFiles.slice(0, 10).map((ff, i) => (
+                          <li
+                            key={i}
+                            className="flex items-start justify-between gap-2 p-2 rounded bg-white border border-red-200 text-[11px]"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="font-mono text-ink truncate" title={ff.file.name}>
+                                📄 {ff.file.name}
+                              </div>
+                              <div className="text-red-700 mt-0.5">{ff.reason}</div>
+                            </div>
+                            <button
+                              onClick={() => sendFailedToManual(ff)}
+                              className="flex-shrink-0 inline-flex items-center gap-0.5 px-2 py-1 rounded bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-semibold whitespace-nowrap"
+                              title="모든 등록 당첨자를 후보로 보고 직접 첨부할 사람 선택"
+                            >
+                              ⏸ 수동 매칭으로 보내기
+                            </button>
+                          </li>
+                        ))}
+                        {batchResult.failedFiles.length > 10 && (
+                          <li className="text-[10.5px] text-red-700">… 외 {batchResult.failedFiles.length - 10}건</li>
+                        )}
+                      </ul>
+                    ) : (
+                      <ul className="mt-1 pl-4 space-y-0.5 text-[11px] text-red-700 list-disc">
+                        {batchResult.errors.slice(0, 10).map((e, i) => <li key={i}>{e}</li>)}
+                        {batchResult.errors.length > 10 && <li>… 외 {batchResult.errors.length - 10}건</li>}
+                      </ul>
+                    )}
+                    <div className="mt-2 text-[10.5px] text-ink-3">
+                      💡 매칭 실패 원인: ① 1단계에 해당 동호수 당첨자가 등록 안 됨 / ② 파일명 오타 / ③ 다른 공고 파일.
+                      [수동 매칭으로 보내기]를 누르면 모든 당첨자를 후보로 보고 직접 첨부할 수 있습니다.
+                    </div>
                   </details>
                 )}
               </div>
