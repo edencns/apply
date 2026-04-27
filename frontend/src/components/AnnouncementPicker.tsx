@@ -8,7 +8,8 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, ChevronRight, Search, X } from "lucide-react";
+import Link from "next/link";
+import { BookOpen, ChevronRight, Search, X, Plus, FileUp } from "lucide-react";
 import { isAnnouncementDone } from "@/lib/local-store";
 
 export interface AnnouncementPickerItem {
@@ -68,7 +69,29 @@ export default function AnnouncementPicker({ announcements, selected, onSelect, 
           </div>
 
           {announcements.length === 0 ? (
-            <div className="text-sm text-ink-2">등록된 공고가 없습니다 — 먼저 모집공고를 등록해 주세요.</div>
+            <div className="space-y-2">
+              <div className="text-sm text-ink-2">
+                등록된 모집공고가 없습니다.
+                <br />
+                먼저 입주자모집공고 PDF를 업로드하거나 직접 공고 정보를 입력해 주세요.
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {/* PDF 자동 등록 — 빠른 등록 권장 경로 */}
+                <Link
+                  href="/announcements?action=new&pdf=1"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-accent hover:bg-accent/90 shadow-sm whitespace-nowrap"
+                >
+                  <FileUp className="w-3.5 h-3.5" /> PDF로 자동 등록
+                </Link>
+                {/* 직접 입력 */}
+                <Link
+                  href="/announcements?action=new"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-accent bg-white border border-blue-200 hover:bg-blue-50 whitespace-nowrap"
+                >
+                  <Plus className="w-3.5 h-3.5" /> 모집공고 등록
+                </Link>
+              </div>
+            </div>
           ) : (
             <div className="relative">
               <div className="flex items-center gap-2">

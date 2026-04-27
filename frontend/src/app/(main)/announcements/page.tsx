@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { sitesApi, api } from "@/lib/api";
 import { localSites, localAnnouncements, isNetworkError, isAnnouncementDone } from "@/lib/local-store";
 import { Plus, BookOpen, CalendarDays, ChevronRight, ChevronUp, ChevronDown, FileUp, Loader2, CheckCircle2, Trash2, FileText, PenTool } from "lucide-react";
@@ -61,6 +62,8 @@ const DEFAULT_RULES = {
 const isDone = (ann: Announcement): boolean => isAnnouncementDone(ann);
 
 export default function AnnouncementsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [sites, setSites] = useState<any[]>([]);
   const [siteId, setSiteId] = useState<number | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -119,6 +122,27 @@ export default function AnnouncementsPage() {
   }, []);
 
   useEffect(() => { reloadSites(); }, [reloadSites]);
+
+  // 쿼리 파라미터 처리 — 다른 페이지(예: AnnouncementPicker 빈 상태)에서
+  //   /announcements?action=new 로 진입하면 등록 모달 자동 오픈,
+  //   ?pdf=1 까지 있으면 PDF 파일 선택창도 즉시 오픈해 한 번 클릭으로 진입.
+  useEffect(() => {
+    const action = searchParams.get("action");
+    const wantPdf = searchParams.get("pdf");
+    if (action === "new") {
+      setShowForm(true);
+      // 쿼리스트링은 한 번만 사용 — 새로고침 시 다시 떠오르는 것 방지
+      const sp = new URLSearchParams(searchParams.toString());
+      sp.delete("action");
+      sp.delete("pdf");
+      router.replace(`/announcements${sp.toString() ? `?${sp.toString()}` : ""}`, { scroll: false });
+      if (wantPdf) {
+        // 모달 렌더링 후 PDF input 클릭 — 살짝 지연
+        setTimeout(() => pdfInputRef.current?.click(), 250);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** "YYYY.MM.DD~MM.DD" 또는 "YYYY.MM.DD ~ YYYY.MM.DD" 형식에서 끝 날짜를 ISO로 추출 */
   function extractEndDateISO(range?: string): string | null {
