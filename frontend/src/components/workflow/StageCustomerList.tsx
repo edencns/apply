@@ -37,11 +37,13 @@ interface Props {
   /** 각 고객의 해당 단계 verdict 계산 함수 */
   evaluate: (customer: LocalCustomer, announcement: LocalAnnouncement) => StageVerdict;
   columns: StageColumn[];
+  /** 성명 컬럼 앞에 추가할 컬럼들 (예: 5단계는 동호수를 가장 먼저 노출) */
+  prefixColumns?: StageColumn[];
   /** 이 단계에 해당하는 URL stage 숫자 (행 클릭 시 /customers/[id]?stage=N) */
   stageNumber: number;
 }
 
-export default function StageCustomerList({ announcement, evaluate, columns, stageNumber }: Props) {
+export default function StageCustomerList({ announcement, evaluate, columns, prefixColumns = [], stageNumber }: Props) {
   const router = useRouter();
   const [customers, setCustomers] = useState<LocalCustomer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -234,6 +236,11 @@ export default function StageCustomerList({ announcement, evaluate, columns, sta
         <table className="w-full">
           <thead className="bg-surface2 border-b border-border">
             <tr>
+              {prefixColumns.map((col) => (
+                <th key={`p-${col.key}`} className={`text-left px-3.5 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.3px] text-ink-3 ${col.cls || ""}`}>
+                  {col.header}
+                </th>
+              ))}
               <th className="text-left px-3.5 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.3px] text-ink-3">성명</th>
               {columns.map((col) => (
                 <th key={col.key} className={`text-left px-3.5 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.3px] text-ink-3 ${col.cls || ""}`}>
@@ -245,12 +252,12 @@ export default function StageCustomerList({ announcement, evaluate, columns, sta
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={columns.length + 2} className="text-center py-10 text-ink-4">
+              <tr><td colSpan={prefixColumns.length + columns.length + 2} className="text-center py-10 text-ink-4">
                 <Loader2 className="w-4 h-4 mx-auto mb-2 animate-spin opacity-60" />
                 <span className="text-xs">불러오는 중...</span>
               </td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={columns.length + 2} className="text-center py-10 text-ink-4 text-xs">
+              <tr><td colSpan={prefixColumns.length + columns.length + 2} className="text-center py-10 text-ink-4 text-xs">
                 조건에 맞는 고객이 없습니다
               </td></tr>
             ) : filtered.map(({ customer: c, verdict: v }) => {
@@ -262,6 +269,11 @@ export default function StageCustomerList({ announcement, evaluate, columns, sta
                     c.is_standby ? "bg-standby-soft/40" : ""
                   }`}
                 >
+                  {prefixColumns.map((col) => (
+                    <td key={`p-${col.key}`} className={`px-3.5 py-2.5 text-[12px] text-ink-2 ${col.cls || ""}`}>
+                      {col.render(c, v)}
+                    </td>
+                  ))}
                   <td className="px-3.5 py-2.5 text-[12px] font-semibold text-ink">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span>{c.name}</span>

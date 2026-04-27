@@ -39,6 +39,28 @@ function computeDocList(
   return items;
 }
 
+/** 동·호수 prefix 컬럼 — 동·호 매칭이 핵심인 5단계에서 가장 먼저 노출 */
+const prefixColumns: StageColumn[] = [
+  {
+    key: "unitNo",
+    header: "동호수",
+    render: (c) => {
+      const dong = (c as any).unit_dong
+        || c.winner_info?.building
+        || "";
+      const ho = (c as any).unit_ho
+        || c.winner_info?.unit_no
+        || "";
+      if (!dong && !ho) return <span className="text-xs text-ink-4">—</span>;
+      return (
+        <span className="text-[12px] text-ink font-mono whitespace-nowrap">
+          {dong || "?"}-{ho || "?"}
+        </span>
+      );
+    },
+  },
+];
+
 const columns: StageColumn[] = [
   {
     key: "supply",
@@ -47,28 +69,6 @@ const columns: StageColumn[] = [
       const supply = c.supply_type || "—";
       const cls = supply === "일반공급" ? "bg-indigo-50 text-indigo-700" : "bg-purple-50 text-purple-700";
       return <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${cls}`}>{supply}</span>;
-    },
-  },
-  {
-    key: "progress",
-    header: "서류 진행률",
-    render: (c) => {
-      const submitted = c.documents_submitted || {};
-      const count = Object.values(submitted).filter(Boolean).length;
-      const total = Object.keys(submitted).length;
-      if (total === 0) return <span className="text-xs text-ink-4">—</span>;
-      const pct = Math.round((count / total) * 100);
-      return (
-        <div className="flex items-center gap-2">
-          <div className="w-16 h-1.5 bg-border rounded-full overflow-hidden">
-            <div
-              className={`h-full ${pct === 100 ? "bg-green-500" : "bg-accent"}`}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          <span className="text-xs text-ink-2 whitespace-nowrap">{count}/{total}</span>
-        </div>
-      );
     },
   },
   {
@@ -262,26 +262,55 @@ export default function DocumentsStepPage() {
         }
         const [, dong, ho, nameHint] = m;
 
-        // 1차: 동·호 기준 매칭
-        let target = customers.find((c) => {
+        const cleanNameHint = nameHint?.trim() || "";
+        // 동·호 필드가 채워진 후보군
+        const byDongHo = customers.filter((c) => {
           const cd = String((c as any).unit_dong || "").trim();
           const ch = String((c as any).unit_ho || "").trim();
           return cd && ch && cd === dong && ch === ho;
         });
 
-        // 2차 fallback: 이름만으로 매칭 (동·호 필드가 없는 기존 데이터용)
-        if (!target && nameHint) {
-          const cleanName = nameHint.trim();
-          const byName = customers.filter((c) => c.name === cleanName);
+        // 1순위: 동호수 + 이름 모두 일치
+        let target: typeof customers[number] | undefined;
+        let matchTier: "dongHoName" | "dongHoOnly" | "nameOnly" | undefined;
+        if (cleanNameHint) {
+          target = byDongHo.find((c) => c.name === cleanNameHint);
+          if (target) matchTier = "dongHoName";
+        }
+
+        // 2순위: 동호수만 일치 (이름이 없거나 일치하지 않는 경우)
+        if (!target) {
+          if (byDongHo.length === 1) {
+            target = byDongHo[0];
+            matchTier = "dongHoOnly";
+          } else if (byDongHo.length > 1) {
+            // 같은 동호에 여러 후보 — 이름 일치 없으면 모호
+            unmatched++;
+            errors.push(
+              `${file.name}: 동호수 ${dong}-${ho}에 ${byDongHo.length}명 매칭` +
+              ` (${byDongHo.slice(0, 3).map((c) => c.name).join(", ")}) — 파일명에 이름 추가 필요`,
+            );
+            continue;
+          }
+        }
+
+        // 3순위 (legacy): 동호수 데이터가 없는 고객 대상으로 이름만 매칭
+        if (!target && cleanNameHint) {
+          const byName = customers.filter((c) => {
+            const cd = String((c as any).unit_dong || "").trim();
+            const ch = String((c as any).unit_ho || "").trim();
+            return c.name === cleanNameHint && (!cd || !ch);
+          });
           if (byName.length === 1) {
             target = byName[0];
+            matchTier = "nameOnly";
           } else if (byName.length > 1) {
-            // 동명이인 — 공급유형이나 주민번호 등 추가 힌트로 좁히기 (현재는 unmatched)
             unmatched++;
             errors.push(`${file.name}: 동명이인 ${byName.length}명 — dong/ho 필드 필요`);
             continue;
           }
         }
+        void matchTier;
 
         if (!target) {
           unmatched++;
@@ -590,6 +619,7 @@ export default function DocumentsStepPage() {
             key={reloadKey}
             announcement={selected}
             evaluate={evaluate}
+            prefixColumns={prefixColumns}
             columns={columns}
             stageNumber={5}
           />
