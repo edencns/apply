@@ -41,11 +41,21 @@ function computeDocList(
   return items;
 }
 
+/** 동호수를 정렬 가능한 단일 숫자로 변환 (예: 101-1401 → 1011401) */
+function dongHoSortKey(c: LocalCustomer): number {
+  const dong = String((c as any).unit_dong || c.winner_info?.building || "").replace(/\D/g, "");
+  const ho = String((c as any).unit_ho || c.winner_info?.unit_no || "").replace(/\D/g, "");
+  if (!dong && !ho) return Number.MAX_SAFE_INTEGER; // 미입력은 항상 뒤
+  // 동(최대 4자리) * 100000 + 호 → 정렬 안정성
+  return Number(dong || 0) * 100000 + Number(ho || 0);
+}
+
 /** 동·호수 prefix 컬럼 — 동·호 매칭이 핵심인 단계에서 가장 먼저 노출 */
 const prefixColumns: StageColumn[] = [
   {
     key: "unitNo",
     header: "동호수",
+    sortValue: (c) => dongHoSortKey(c),
     render: (c) => {
       const dong = (c as any).unit_dong
         || c.winner_info?.building
@@ -75,10 +85,20 @@ const prefixColumns: StageColumn[] = [
   },
 ];
 
+/** 최종 판정 상태별 정렬 가중치 — 적합/부적합/검수보류/미검수/미등록 순 */
+const VERDICT_ORDER: Record<string, number> = {
+  eligible: 0,
+  ineligible: 1,
+  in_review: 2,
+  uploaded: 3,
+  missing: 4,
+};
+
 const columns: StageColumn[] = [
   {
     key: "supply",
     header: "공급유형",
+    sortValue: (c) => c.supply_type || "",
     render: (c) => {
       const supply = c.supply_type || "—";
       const cls = supply === "일반공급" ? "bg-indigo-50 text-indigo-700" : "bg-purple-50 text-purple-700";
@@ -88,6 +108,7 @@ const columns: StageColumn[] = [
   {
     key: "score",
     header: "가점",
+    sortValue: (c) => c.total_score ?? -1,
     render: (c) => {
       if (!c.total_score) return <span className="text-xs text-ink-4">—</span>;
       return (
@@ -101,6 +122,7 @@ const columns: StageColumn[] = [
   {
     key: "verdict",
     header: "최종 판정",
+    sortValue: (c) => VERDICT_ORDER[computeReviewStatus(c)] ?? 99,
     render: (c) => {
       const status = computeReviewStatus(c);
       switch (status) {

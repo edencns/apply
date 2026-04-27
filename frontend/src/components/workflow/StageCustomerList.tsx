@@ -25,7 +25,7 @@ import {
 } from "@/lib/verification-rules";
 import { formatHousingCode } from "@/lib/housing-code";
 import {
-  ChevronRight, Loader2, Search,
+  ChevronRight, Loader2, Search, ArrowUpDown, ArrowUp, ArrowDown,
 } from "lucide-react";
 
 export interface StageColumn {
@@ -33,6 +33,11 @@ export interface StageColumn {
   header: string;
   render: (customer: LocalCustomer, verdict: StageVerdict) => React.ReactNode;
   cls?: string;
+  /**
+   * 정렬 키 추출 함수. 지정하면 헤더가 클릭 가능한 정렬 토글이 됨.
+   * 반환값은 string | number — 같은 컬럼은 일관된 타입을 반환해야 함.
+   */
+  sortValue?: (customer: LocalCustomer, verdict: StageVerdict) => string | number | null | undefined;
 }
 
 /** 이전 단계 부적합자 캐스케이드 필터링용 */
@@ -90,6 +95,28 @@ export default function StageCustomerList({
   const [supplyFilter, setSupplyFilter] = useState<string>("all");
   /** 이전 단계 부적합자를 가려둘지 여부 (기본 true — excludeFailedStages가 있으면 자동 활성) */
   const [hidePriorFailed, setHidePriorFailed] = useState<boolean>(true);
+  /** 정렬 상태 — null이면 기본 순서(서버 응답) */
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  /** 헤더 클릭 → 정렬 토글: 같은 컬럼이면 방향 반전, 다른 컬럼이면 새 컬럼+오름차순 */
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      // 오름 → 내림 → 해제 순환
+      if (sortDir === "asc") setSortDir("desc");
+      else { setSortKey(null); setSortDir("asc"); }
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const SortIcon = ({ active }: { active: boolean }) => {
+    if (!active) return <ArrowUpDown className="w-3 h-3 text-ink-4 opacity-50" />;
+    return sortDir === "asc"
+      ? <ArrowUp className="w-3 h-3 text-accent" />
+      : <ArrowDown className="w-3 h-3 text-accent" />;
+  };
 
   const loadCustomers = useCallback(async () => {
     setLoading(true);
@@ -182,6 +209,41 @@ export default function StageCustomerList({
     if (!q) return true;
     return c.name.includes(q) || (c.phone || "").includes(q);
   });
+
+  // 정렬 적용 — 모든 컬럼(prefix + 성명 + columns) 중 sortKey와 매칭되는 sortValue 사용
+  const allColumns = [...prefixColumns, ...columns];
+  const sortFn = useMemo(() => {
+    if (!sortKey) return null;
+    if (sortKey === "name") {
+      // 성명은 하드코딩 컬럼이라 별도 처리
+      return (a: LocalCustomer, b: LocalCustomer) =>
+        (a.name || "").localeCompare(b.name || "", "ko");
+    }
+    const col = allColumns.find((c) => c.key === sortKey);
+    if (!col?.sortValue) return null;
+    return (a: LocalCustomer, b: LocalCustomer, va: StageVerdict, vb: StageVerdict) => {
+      const ra = col.sortValue!(a, va);
+      const rb = col.sortValue!(b, vb);
+      // null/undefined는 항상 뒤로
+      if (ra == null && rb == null) return 0;
+      if (ra == null) return 1;
+      if (rb == null) return -1;
+      if (typeof ra === "number" && typeof rb === "number") return ra - rb;
+      return String(ra).localeCompare(String(rb), "ko");
+    };
+  }, [sortKey, allColumns]);
+
+  const sorted = useMemo(() => {
+    if (!sortFn) return filtered;
+    const dir = sortDir === "asc" ? 1 : -1;
+    const out = [...filtered].sort((x, y) => {
+      const r = sortKey === "name"
+        ? (sortFn as (a: LocalCustomer, b: LocalCustomer) => number)(x.customer, y.customer)
+        : (sortFn as (a: LocalCustomer, b: LocalCustomer, va: StageVerdict, vb: StageVerdict) => number)(x.customer, y.customer, x.verdict, y.verdict);
+      return r * dir;
+    });
+    return out;
+  }, [filtered, sortFn, sortDir, sortKey]);
 
   // 상태별 카운트 (필터 UI에 표시)
   const counts = {
@@ -313,17 +375,53 @@ export default function StageCustomerList({
         <table className="w-full">
           <thead className="bg-surface2 border-b border-border">
             <tr>
-              {prefixColumns.map((col) => (
-                <th key={`p-${col.key}`} className={`text-left px-3.5 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.3px] text-ink-3 ${col.cls || ""}`}>
-                  {col.header}
-                </th>
-              ))}
-              <th className="text-left px-3.5 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.3px] text-ink-3">성명</th>
-              {columns.map((col) => (
-                <th key={col.key} className={`text-left px-3.5 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.3px] text-ink-3 ${col.cls || ""}`}>
-                  {col.header}
-                </th>
-              ))}
+              {prefixColumns.map((col) => {
+                const sortable = !!col.sortValue;
+                const active = sortKey === col.key;
+                return (
+                  <th
+                    key={`p-${col.key}`}
+                    onClick={sortable ? () => handleSort(col.key) : undefined}
+                    className={`text-left px-3.5 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.3px] text-ink-3 ${col.cls || ""} ${
+                      sortable ? "cursor-pointer select-none hover:text-ink" : ""
+                    } ${active ? "text-accent" : ""}`}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {col.header}
+                      {sortable && <SortIcon active={active} />}
+                    </span>
+                  </th>
+                );
+              })}
+              <th
+                onClick={() => handleSort("name")}
+                className={`text-left px-3.5 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.3px] text-ink-3 cursor-pointer select-none hover:text-ink ${
+                  sortKey === "name" ? "text-accent" : ""
+                }`}
+              >
+                <span className="inline-flex items-center gap-1">
+                  성명
+                  <SortIcon active={sortKey === "name"} />
+                </span>
+              </th>
+              {columns.map((col) => {
+                const sortable = !!col.sortValue;
+                const active = sortKey === col.key;
+                return (
+                  <th
+                    key={col.key}
+                    onClick={sortable ? () => handleSort(col.key) : undefined}
+                    className={`text-left px-3.5 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.3px] text-ink-3 ${col.cls || ""} ${
+                      sortable ? "cursor-pointer select-none hover:text-ink" : ""
+                    } ${active ? "text-accent" : ""}`}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {col.header}
+                      {sortable && <SortIcon active={active} />}
+                    </span>
+                  </th>
+                );
+              })}
               <th className="px-3 py-2.5 w-8" />
             </tr>
           </thead>
@@ -333,11 +431,11 @@ export default function StageCustomerList({
                 <Loader2 className="w-4 h-4 mx-auto mb-2 animate-spin opacity-60" />
                 <span className="text-xs">불러오는 중...</span>
               </td></tr>
-            ) : filtered.length === 0 ? (
+            ) : sorted.length === 0 ? (
               <tr><td colSpan={prefixColumns.length + columns.length + 2} className="text-center py-10 text-ink-4 text-xs">
                 조건에 맞는 고객이 없습니다
               </td></tr>
-            ) : filtered.map(({ customer: c, verdict: v }) => {
+            ) : sorted.map(({ customer: c, verdict: v }) => {
               return (
                 <tr
                   key={c.id}
@@ -379,10 +477,10 @@ export default function StageCustomerList({
             })}
           </tbody>
         </table>
-        {filtered.length > 0 && (
+        {sorted.length > 0 && (
           <div className="px-3.5 py-2 border-t border-border-soft text-[10.5px] text-ink-4 text-right">
-            총 {filtered.length}명 표시됨
-            {filtered.length < rows.length && (
+            총 {sorted.length}명 표시됨
+            {sorted.length < rows.length && (
               <> · <span className="text-accent font-medium">전체 {rows.length}명 중</span></>
             )}
           </div>
