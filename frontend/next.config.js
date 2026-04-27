@@ -13,7 +13,11 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
-      "connect-src 'self' https://*.pusher.com wss://*.pusher.com https://realtime.ably.io wss://realtime.ably.io https://*.ably-realtime.com wss://*.ably-realtime.com https://*.blob.vercel-storage.com",
+      // Vercel Blob 클라이언트 직접 업로드:
+      //   - https://vercel.com (API endpoint that returns presigned upload URL)
+      //   - https://*.public.blob.vercel-storage.com (스토리지 CDN — public 데이터)
+      //   - https://*.blob.vercel-storage.com (스토리지 CDN — 일반)
+      "connect-src 'self' https://*.pusher.com wss://*.pusher.com https://realtime.ably.io wss://realtime.ably.io https://*.ably-realtime.com wss://*.ably-realtime.com https://vercel.com https://*.blob.vercel-storage.com https://*.public.blob.vercel-storage.com",
       // 우리 앱 내부의 PDF 미리보기 iframe 허용 (same-origin) + blob (로컬 업로드 미리보기)
       "frame-src 'self' blob:",
       "object-src 'none'",
