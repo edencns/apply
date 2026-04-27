@@ -32,6 +32,7 @@ import { evaluateFinal } from "@/lib/verification-rules";
 import { getCheckpointsForDocument } from "@/lib/document-checkpoints";
 import { findStandbyCandidates, buildPromotionUpdates, PromotionCandidate } from "@/lib/standby-promotion";
 import { pullAll } from "@/lib/cloud-sync";
+import { uploadFileViaClient } from "@/lib/client-upload";
 import { useRealtimeSync } from "@/lib/realtime/useRealtimeSync";
 import StageSidebar from "@/components/verification/StageSidebar";
 import { parseStageParam, STAGE_NUMBER, StageKey } from "@/components/verification/stage-utils";
@@ -595,17 +596,15 @@ function DocumentsStage({
     if (updated) onUpdate(updated);
   };
 
-  /** 특정 서류에 PDF/이미지 업로드 → Blob → customer.document_files에 저장 */
+  /** 특정 서류에 PDF/이미지 업로드 → Blob → customer.document_files에 저장
+   *  Vercel 함수 본문 제한(~4.5MB) 우회를 위해 클라이언트 직접 업로드 사용. */
   const handleUploadDoc = async (docName: string, file: File) => {
     setUploadingDoc(docName);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("kind", "other");
-      if (customer.announcement_id) fd.append("announcement_id", String(customer.announcement_id));
-      const res = await fetch("/api/files/upload", { method: "POST", body: fd });
-      if (!res.ok) throw new Error(`업로드 실패 (${res.status})`);
-      const json = await res.json();
+      const json = await uploadFileViaClient(file, {
+        kind: "other",
+        announcement_id: customer.announcement_id || null,
+      });
 
       const nextFiles = { ...(customer.document_files || {}) };
       nextFiles[docName] = {

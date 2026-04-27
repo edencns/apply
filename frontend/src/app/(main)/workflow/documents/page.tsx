@@ -7,6 +7,7 @@ import { evaluateFinal } from "@/lib/verification-rules";
 import { COMMON_DOCUMENTS, SUPPLY_TYPE_DOCUMENTS } from "@/lib/document-checklist";
 import { localCustomers, type LocalAnnouncement, type LocalCustomer } from "@/lib/local-store";
 import { ingestAutoStage, stageLabel, type WorkflowIngestResult } from "@/lib/workflow-ingest";
+import { uploadFileViaClient } from "@/lib/client-upload";
 import {
   CheckCircle2, XCircle, Clock, FileText, FileSpreadsheet, Loader2, Gavel,
   FolderUp, ShieldCheck, FileQuestion, PauseCircle,
@@ -267,13 +268,12 @@ export default function DocumentsStepPage() {
     parsedHo?: string,
   ): Promise<void> => {
     if (!selected) throw new Error("공고 미선택");
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("kind", "other");
-    fd.append("announcement_id", String(selected.id));
-    const res = await fetch("/api/files/upload", { method: "POST", body: fd });
-    if (!res.ok) throw new Error(`업로드 실패 ${res.status}`);
-    const json = await res.json();
+    // 클라이언트 직접 업로드 — Vercel 함수 본문 제한(~4.5MB) 우회.
+    // 23~30페이지 묶음 PDF는 보통 5~30MB라 기존 /api/files/upload로는 413 발생.
+    const json = await uploadFileViaClient(file, {
+      kind: "other",
+      announcement_id: selected.id,
+    });
 
     const existing = target.document_files || {};
     const nextFiles = {
