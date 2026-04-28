@@ -91,19 +91,30 @@ export function evaluateProperty(
   );
 
   /**
-   * 단독주택 합산 규칙 — 도메인 정책:
-   *   같은 소유자의 단독주택은 주소가 여러 개여도 1주택으로 카운트.
-   *   (다가구주택의 호별 등기, 아파트 등 다른 유형은 행 단위 그대로 카운트)
-   *
-   * 반환: 합산된 effective count.
+   * 단독주택·다가구주택 합산 규칙 — 도메인 정책:
+   *   - 단독주택: 같은 소유자의 단독주택은 주소가 여러 개여도 1주택.
+   *   - 다가구주택: 호별 등기·여러 건물 모두 1주택으로 합산.
+   *     (다가구주택은 건축법상 단독주택의 한 종류로, 청약 규칙에서도 호별로
+   *     쪼개지 않고 한 채로 산정)
+   *   - 다세대주택·아파트·연립 등 공동주택은 행(호) 단위로 그대로 카운트.
+   *   - '다가구주택창고'는 isResidentialUse에서 이미 비주거용으로 필터됨.
    */
   const collapseDetachedHouses = (props: typeof current): number => {
     const detached = props.filter((p) => /단독주택/.test(p.usage || ""));
-    const others = props.filter((p) => !/단독주택/.test(p.usage || ""));
-    return (detached.length > 0 ? 1 : 0) + others.length;
+    // '다가구주택' (단, '다가구주택창고'는 위에서 이미 필터됨)
+    const dagagu   = props.filter((p) => /다가구주택/.test(p.usage || ""));
+    // 그 외 — 다세대주택·아파트·연립·도시형생활주택 등 공동주택
+    const others   = props.filter((p) =>
+      !/단독주택/.test(p.usage || "") &&
+      !/다가구주택/.test(p.usage || ""),
+    );
+    return (detached.length > 0 ? 1 : 0)
+         + (dagagu.length   > 0 ? 1 : 0)
+         + others.length;
   };
   const currentEffective = collapseDetachedHouses(current);
   const detachedCollapsed = current.filter((p) => /단독주택/.test(p.usage || "")).length;
+  const dagaguCollapsed   = current.filter((p) => /다가구주택/.test(p.usage || "")).length;
 
   // ── 분리세대 주택 합산 ──
   // 배우자 분리세대 = 법적 같은 세대 → 본인 판정에 합산
@@ -138,9 +149,12 @@ export function evaluateProperty(
   const warnings: string[] = [];
   const reasons: string[] = [];
 
-  // 단독주택 합산 안내 — 행 수와 effective count가 다르면 사용자에게 명시
-  const detachedNote = detachedCollapsed >= 2
-    ? ` (단독주택 ${detachedCollapsed}행을 1주택으로 합산)`
+  // 합산 안내 — 행 수와 effective count가 다르면 사용자에게 명시
+  const collapseNotes: string[] = [];
+  if (detachedCollapsed >= 2) collapseNotes.push(`단독주택 ${detachedCollapsed}행을 1주택`);
+  if (dagaguCollapsed >= 2)   collapseNotes.push(`다가구주택 ${dagaguCollapsed}호(행)을 1주택`);
+  const detachedNote = collapseNotes.length > 0
+    ? ` (${collapseNotes.join(", ")}으로 합산)`
     : "";
 
   if (regulation === "투기과열" || regulation === "청약과열") {
@@ -190,6 +204,7 @@ export function evaluateProperty(
         combinedCount,
         regulation,
         detachedCollapsed,
+        dagaguCollapsed,
       },
       warnings,
     });
@@ -207,6 +222,7 @@ export function evaluateProperty(
       combinedCount,
       regulation: regulation || "비규제",
       detachedCollapsed,
+      dagaguCollapsed,
     },
   };
 }
