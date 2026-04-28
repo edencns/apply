@@ -692,14 +692,59 @@ export function parsePropertyOwnership(wb: XLSXWorkBook, fileName: string): File
     }
   }
 
+  // ─── 매수·매도 netting ─────────────────────────────
+  // 같은 (소유자 + 주소) 그룹 안에 '매도' 행이 있으면 동일 주소의 '매수' 행을
+  // transferredDate를 채워 양도된 것으로 처리하고, '매도' 행 자체는 제외.
+  // (매도 행은 거래 이벤트지 보유 자산이 아님. 분양권 전매·일반 매매 모두 동일.)
+  // evaluateProperty가 transferredDate 있는 레코드를 자동 제외하므로
+  // 결과적으로 매수 → 매도 페어는 보유 0건으로 카운트됨.
+  const groups = new Map<string, PropertyOwnershipRecord[]>();
+  for (const p of properties) {
+    const key = `${p.ownerRrn}|${p.address}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(p);
+  }
+  const netted: PropertyOwnershipRecord[] = [];
+  let nettedCount = 0;
+  const dateOf = (r: PropertyOwnershipRecord) =>
+    r.contractDate || r.acquiredDate || r.changeDate || r.transferredDate || "";
+  Array.from(groups.values()).forEach((rows: PropertyOwnershipRecord[]) => {
+    const buys = rows.filter((r) => r.buySell !== "매도");
+    const sells = rows.filter((r) => r.buySell === "매도");
+    if (sells.length === 0) {
+      netted.push(...buys);
+      return;
+    }
+    // 매수·매도 모두 있는 경우 — 날짜 순 정렬 후 페어링
+    const sortedBuys = [...buys].sort((a, b) => dateOf(a).localeCompare(dateOf(b)));
+    const sortedSells = [...sells].sort((a, b) => dateOf(a).localeCompare(dateOf(b)));
+    for (const sell of sortedSells) {
+      const buyIdx = sortedBuys.findIndex((b) => !b.transferredDate);
+      if (buyIdx >= 0) {
+        sortedBuys[buyIdx] = {
+          ...sortedBuys[buyIdx],
+          transferredDate: dateOf(sell) || "transferred",
+          // 매도 사유(전매·매매 등)도 보존
+          changeReason: sell.changeReason || sortedBuys[buyIdx].changeReason,
+        };
+        nettedCount++;
+      }
+    }
+    netted.push(...sortedBuys);
+    // 매도 행은 별도 소유 레코드로 추가하지 않음
+  });
+  if (nettedCount > 0) {
+    notes.push(`매수·매도 페어 ${nettedCount}건 netting (양도된 주택은 보유 0으로 처리)`);
+  }
+
   return {
     fileName,
     kind: "property-ownership",
     winners: [],
     householdMembers: [],
-    properties,
+    properties: netted,
     savings: [],
-    label: `주택소유 전산검색 (${properties.length}건)`,
+    label: `주택소유 전산검색 (${netted.length}건)`,
     notes,
   };
 }
