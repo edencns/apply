@@ -90,6 +90,21 @@ export function evaluateProperty(
     (p) => !p.transferredDate && isResidentialUse(p.usage),
   );
 
+  /**
+   * 단독주택 합산 규칙 — 도메인 정책:
+   *   같은 소유자의 단독주택은 주소가 여러 개여도 1주택으로 카운트.
+   *   (다가구주택의 호별 등기, 아파트 등 다른 유형은 행 단위 그대로 카운트)
+   *
+   * 반환: 합산된 effective count.
+   */
+  const collapseDetachedHouses = (props: typeof current): number => {
+    const detached = props.filter((p) => /단독주택/.test(p.usage || ""));
+    const others = props.filter((p) => !/단독주택/.test(p.usage || ""));
+    return (detached.length > 0 ? 1 : 0) + others.length;
+  };
+  const currentEffective = collapseDetachedHouses(current);
+  const detachedCollapsed = current.filter((p) => /단독주택/.test(p.usage || "")).length;
+
   // ── 분리세대 주택 합산 ──
   // 배우자 분리세대 = 법적 같은 세대 → 본인 판정에 합산
   // 그 외(자녀·부모 등) 분리세대 = 원칙적으로 본인 판정에 영향 없음, 단 경고 표시
@@ -115,29 +130,36 @@ export function evaluateProperty(
     (p) => !spouseProps.includes(p) && !p.transferredDate && isResidentialUse(p.usage),
   );
 
-  const combinedCount = current.length + spouseProps.length;
+  // 본인 + 배우자 합산 — 단독주택 합산 규칙은 본인·배우자 각각 적용 후 더함
+  const spouseEffective = collapseDetachedHouses(spouseProps);
+  const combinedCount = currentEffective + spouseEffective;
   const regulation = (announcement?.eligibility_rules?.regulation as string) || "";
 
   const warnings: string[] = [];
   const reasons: string[] = [];
 
+  // 단독주택 합산 안내 — 행 수와 effective count가 다르면 사용자에게 명시
+  const detachedNote = detachedCollapsed >= 2
+    ? ` (단독주택 ${detachedCollapsed}행을 1주택으로 합산)`
+    : "";
+
   if (regulation === "투기과열" || regulation === "청약과열") {
     // 강화 규제: 1건이라도 보유 시 부적합
     if (combinedCount > 0) {
       const sources: string[] = [];
-      if (current.length > 0) sources.push(`본인 세대 ${current.length}건`);
-      if (spouseProps.length > 0) sources.push(`배우자 분리세대 ${spouseProps.length}건`);
+      if (currentEffective > 0) sources.push(`본인 세대 ${currentEffective}건${detachedNote}`);
+      if (spouseEffective > 0) sources.push(`배우자 분리세대 ${spouseEffective}건`);
       reasons.push(`${regulation}지구 — 주택 보유 ${combinedCount}건 (${sources.join(" + ")})`);
     }
   } else {
     // 비규제 / 미지정: 2주택 이상 부적격, 1주택은 경고
     if (combinedCount >= 2) {
       const sources: string[] = [];
-      if (current.length > 0) sources.push(`본인 세대 ${current.length}건`);
-      if (spouseProps.length > 0) sources.push(`배우자 분리세대 ${spouseProps.length}건`);
+      if (currentEffective > 0) sources.push(`본인 세대 ${currentEffective}건${detachedNote}`);
+      if (spouseEffective > 0) sources.push(`배우자 분리세대 ${spouseEffective}건`);
       reasons.push(`주택 보유 ${combinedCount}건 (${sources.join(" + ")}) — 2주택 이상 부적격`);
     } else if (combinedCount === 1) {
-      warnings.push("1주택 보유 — 일반공급 가점제에서 감점");
+      warnings.push(`1주택 보유 — 일반공급 가점제에서 감점${detachedNote}`);
     }
   }
 
@@ -162,10 +184,12 @@ export function evaluateProperty(
   if (reasons.length > 0) {
     return fail(reasons, {
       context: {
-        count: current.length,
-        spouseCount: spouseProps.length,
+        count: currentEffective,
+        rawCount: current.length,
+        spouseCount: spouseEffective,
         combinedCount,
         regulation,
+        detachedCollapsed,
       },
       warnings,
     });
@@ -177,10 +201,12 @@ export function evaluateProperty(
     warnings,
     missing: false,
     context: {
-      count: current.length,
-      spouseCount: spouseProps.length,
+      count: currentEffective,
+      rawCount: current.length,
+      spouseCount: spouseEffective,
       combinedCount,
       regulation: regulation || "비규제",
+      detachedCollapsed,
     },
   };
 }
