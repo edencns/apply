@@ -698,43 +698,73 @@ export function parsePropertyOwnership(wb: XLSXWorkBook, fileName: string): File
   // (매도 행은 거래 이벤트지 보유 자산이 아님. 분양권 전매·일반 매매 모두 동일.)
   // evaluateProperty가 transferredDate 있는 레코드를 자동 제외하므로
   // 결과적으로 매수 → 매도 페어는 보유 0건으로 카운트됨.
+  // 주소 정규화 — leading zero / 공백 차이를 흡수해 같은 호로 인식.
+  // 예: '...101 1105' 와 '...0101 01105' 는 같은 호.
+  const normAddress = (addr: string): string =>
+    (addr || "")
+      .replace(/\b0+(\d+)/g, "$1")
+      .replace(/\s+/g, " ")
+      .trim();
+
   const groups = new Map<string, PropertyOwnershipRecord[]>();
   for (const p of properties) {
-    const key = `${p.ownerRrn}|${p.address}`;
+    const key = `${p.ownerRrn}|${normAddress(p.address)}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(p);
   }
   const netted: PropertyOwnershipRecord[] = [];
   let nettedCount = 0;
+  let dedupedDuplicates = 0;
   const dateOf = (r: PropertyOwnershipRecord) =>
     r.contractDate || r.acquiredDate || r.changeDate || r.transferredDate || "";
   Array.from(groups.values()).forEach((rows: PropertyOwnershipRecord[]) => {
     const buys = rows.filter((r) => r.buySell !== "매도");
     const sells = rows.filter((r) => r.buySell === "매도");
-    if (sells.length === 0) {
-      netted.push(...buys);
-      return;
-    }
-    // 매수·매도 모두 있는 경우 — 날짜 순 정렬 후 페어링
-    const sortedBuys = [...buys].sort((a, b) => dateOf(a).localeCompare(dateOf(b)));
-    const sortedSells = [...sells].sort((a, b) => dateOf(a).localeCompare(dateOf(b)));
-    for (const sell of sortedSells) {
-      const buyIdx = sortedBuys.findIndex((b) => !b.transferredDate);
-      if (buyIdx >= 0) {
-        sortedBuys[buyIdx] = {
-          ...sortedBuys[buyIdx],
-          transferredDate: dateOf(sell) || "transferred",
-          // 매도 사유(전매·매매 등)도 보존
-          changeReason: sell.changeReason || sortedBuys[buyIdx].changeReason,
-        };
-        nettedCount++;
+    // 매수·매도 페어링
+    let sortedBuys = [...buys].sort((a, b) => dateOf(a).localeCompare(dateOf(b)));
+    if (sells.length > 0) {
+      const sortedSells = [...sells].sort((a, b) => dateOf(a).localeCompare(dateOf(b)));
+      for (const sell of sortedSells) {
+        const buyIdx = sortedBuys.findIndex((b) => !b.transferredDate);
+        if (buyIdx >= 0) {
+          sortedBuys[buyIdx] = {
+            ...sortedBuys[buyIdx],
+            transferredDate: dateOf(sell) || "transferred",
+            changeReason: sell.changeReason || sortedBuys[buyIdx].changeReason,
+          };
+          nettedCount++;
+        }
       }
     }
-    netted.push(...sortedBuys);
-    // 매도 행은 별도 소유 레코드로 추가하지 않음
+
+    // 동일 주소 중복 등기 통합 — 살아있는(non-transferred) 행이 2개 이상이면
+    // 같은 호의 다른 등기 형식(전용면적 부분 + 일반 등)이라 1건으로 합산.
+    // 우선순위: ① '전용면적 부분' 표기 아닌 일반 등기 우선
+    //          ② 면적 큰 행 우선 (보통 일반 등기가 큼)
+    //          ③ 최근 취득일 우선
+    const active = sortedBuys.filter((b) => !b.transferredDate);
+    const transferredOnly = sortedBuys.filter((b) => b.transferredDate);
+    if (active.length > 1) {
+      const sortedActive = [...active].sort((a, b) => {
+        const aPartial = /전용면적\s*부분/.test(a.usage || "");
+        const bPartial = /전용면적\s*부분/.test(b.usage || "");
+        if (aPartial !== bPartial) return aPartial ? 1 : -1;
+        const areaDiff = (b.areaM2 ?? 0) - (a.areaM2 ?? 0);
+        if (areaDiff !== 0) return areaDiff;
+        return dateOf(b).localeCompare(dateOf(a));
+      });
+      netted.push(sortedActive[0]);
+      dedupedDuplicates += sortedActive.length - 1;
+    } else {
+      netted.push(...active);
+    }
+    netted.push(...transferredOnly);
   });
   if (nettedCount > 0) {
     notes.push(`매수·매도 페어 ${nettedCount}건 netting (양도된 주택은 보유 0으로 처리)`);
+  }
+  if (dedupedDuplicates > 0) {
+    notes.push(`동일 주소 중복 등기 ${dedupedDuplicates}건 통합 (전용면적 부분 등기 등)`);
   }
 
   return {
