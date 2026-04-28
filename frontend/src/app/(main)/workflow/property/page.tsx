@@ -148,6 +148,8 @@ export default function PropertyStepPage() {
       });
 
       localCustomers.update(c.id, {
+        // 무주택 예외 룰(소형·저가, 상속, 일시적 2주택, 매수·매도 netting)에
+        // 필요한 모든 메타를 통째로 저장 — verification-rules가 활용
         properties: uniq.map((p) => ({
           ownerRrn: p.ownerRrn,
           ownerName: p.ownerName,
@@ -156,6 +158,16 @@ export default function PropertyStepPage() {
           acquiredDate: p.acquiredDate,
           transferredDate: p.transferredDate,
           usage: p.usage,
+          changeReason: p.changeReason,
+          changeDate: p.changeDate,
+          contractDate: p.contractDate,
+          paymentDate: p.paymentDate,
+          saleReportDate: p.saleReportDate,
+          rightsType: p.rightsType,
+          buySell: p.buySell,
+          officialPrice: p.officialPrice,
+          identifier: p.identifier,
+          zipCode: p.zipCode,
         })),
         property_checked_at: new Date().toISOString(),
       });

@@ -165,6 +165,8 @@ export interface PropertyOwnershipRecord {
   paymentDate?: string;
   rightsType?: string;
   buySell?: string;
+  /** 공시가격 (원) — 소형·저가주택 무주택 예외 적용에 사용 (있으면) */
+  officialPrice?: number;
 }
 
 /** 청약통장 순위확인 레코드 */
@@ -685,6 +687,8 @@ export function parsePropertyOwnership(wb: XLSXWorkBook, fileName: string): File
         paymentDate: String(pick(row, map, "잔금지급일") ?? "").trim() || undefined,
         rightsType: String(pick(row, map, "권리구분") ?? "").trim() || undefined,
         buySell: String(pick(row, map, "매수매도구분") ?? "").trim() || undefined,
+        // 공시가격 — 보통 표준 검색결과엔 없지만, 주택공시가격이 추가 컬럼으로 들어온 경우 활용
+        officialPrice: toNum(pick(row, map, "공시가격", "주택공시가격", "개별주택가격", "공동주택가격")),
       });
     }
     if (skippedPreservation > 0) {

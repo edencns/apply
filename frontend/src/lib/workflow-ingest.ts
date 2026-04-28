@@ -165,6 +165,8 @@ export async function ingestForStage(
           return true;
         });
         localCustomers.update(id, {
+          // 무주택 예외 룰(소형·저가, 상속, 일시적 2주택, 매수·매도 netting)에
+          // 필요한 모든 메타를 통째로 저장
           properties: uniq.map((x) => ({
             ownerRrn: x.ownerRrn,
             ownerName: x.ownerName,
@@ -173,6 +175,16 @@ export async function ingestForStage(
             acquiredDate: x.acquiredDate,
             transferredDate: x.transferredDate,
             usage: x.usage,
+            changeReason: x.changeReason,
+            changeDate: x.changeDate,
+            contractDate: x.contractDate,
+            paymentDate: x.paymentDate,
+            saleReportDate: x.saleReportDate,
+            rightsType: x.rightsType,
+            buySell: x.buySell,
+            officialPrice: x.officialPrice,
+            identifier: x.identifier,
+            zipCode: x.zipCode,
           })),
         });
         attached++;

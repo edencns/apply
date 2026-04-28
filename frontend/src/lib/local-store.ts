@@ -222,6 +222,8 @@ export interface LocalCustomer {
   special_types?: string[];
   total_score?: number;
   status?: string;
+  /** 혼인일 (YYYY-MM-DD) — 무주택 기간 자동 계산에 사용 (만 30세 vs 혼인일 중 빠른 쪽) */
+  marriage_date?: string;
   // ── 공급 유형 및 평형 ──
   supply_type?: string;      // "일반공급" 또는 특별공급 유형명
   unit_type?: string;        // 주택형 코드 (예: "84A", "059.9660")
@@ -327,6 +329,17 @@ export interface LocalCustomer {
     acquiredDate?: string;
     transferredDate?: string;
     usage?: string;
+    // ── 무주택 예외 룰 (소형·저가, 상속, 일시적 2주택, 매수·매도 netting)에 사용
+    changeReason?: string;       // 매매·상속·증여·전매·소유권보존 등
+    changeDate?: string;         // 변동일
+    contractDate?: string;       // 계약일
+    paymentDate?: string;        // 잔금지급일
+    saleReportDate?: string;     // 매매신고일
+    rightsType?: string;         // 권리구분
+    buySell?: string;            // 매수·매도
+    officialPrice?: number;      // 공시가격 (원)
+    identifier?: string;         // 식별번호
+    zipCode?: string;            // 우편번호
   }>;
   /** 주택소유 전산검색 파일 업로드 시각 — 파일에 레코드 없으면 무주택으로 간주 */
   property_checked_at?: string;
@@ -483,6 +496,7 @@ export const localCustomers = {
       supersede_reason: input.supersede_reason,
       supersede_at: input.supersede_at,
       registration_source: input.registration_source,
+      marriage_date: input.marriage_date,
       documents_submitted: input.documents_submitted,
       verification_verdict: input.verification_verdict,
       verification_score: input.verification_score,
