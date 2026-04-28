@@ -222,8 +222,21 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     console.error("[parse-title-transfer]", err?.message);
+    // Gemini 비용 한도 초과(429 RESOURCE_EXHAUSTED)는 명확히 분리해 클라이언트가
+    // 배치 진행을 즉시 중단할 수 있게 함.
+    const msg = String(err?.message || err || "");
+    if (/429|RESOURCE_EXHAUSTED|spending cap|quota/i.test(msg)) {
+      return NextResponse.json(
+        {
+          error: "Gemini API 월 지출 한도 초과 — https://ai.studio/spend 에서 한도를 늘리거나 다음 결제 주기 대기 필요",
+          code: "QUOTA_EXCEEDED",
+          rawMessage: msg.slice(0, 400),
+        },
+        { status: 429 },
+      );
+    }
     return NextResponse.json(
-      { error: err?.message || "파싱 실패" },
+      { error: msg || "파싱 실패" },
       { status: 500 },
     );
   }

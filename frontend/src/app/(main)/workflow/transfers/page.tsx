@@ -154,20 +154,32 @@ export default function TransfersStepPage() {
   };
 
   // ── 배치 AI 파싱 ──
+  // 'queued'(미처리) + 'error'(이전 실패) 모두 재시도 — 한도 풀고 다시 누르면 이어서 처리됨.
   const handleParseAll = async () => {
     if (!selected) return;
-    const queued = rows.filter((r) => r.status === "queued");
+    const queued = rows.filter((r) => r.status === "queued" || r.status === "error");
     if (queued.length === 0) return;
 
     setParsing(true);
+    let quotaHit = false;
     try {
-      // 순차 처리 (Gemini rate limit + 안정성)
       for (const row of queued) {
+        if (quotaHit) {
+          // 한도 초과 이후 남은 파일은 모두 'error' 상태로 표시 — 사용자가
+          // 한도 풀고 다시 시도하면 'queued' 또는 'error' 모두 재처리 가능.
+          setRows((prev) =>
+            prev.map((r) =>
+              r.filename === row.filename
+                ? { ...r, status: "error", error: "Gemini 월 한도 초과로 미처리 — 한도 풀고 재시도" }
+                : r,
+            ),
+          );
+          continue;
+        }
         setRows((prev) =>
           prev.map((r) => (r.filename === row.filename ? { ...r, status: "parsing" } : r)),
         );
         try {
-          // 1) 원본 PDF를 Vercel Blob에 업로드 (프록시 URL 확보)
           let originalFileUrl: string | undefined;
           try {
             const upFd = new FormData();
@@ -179,15 +191,36 @@ export default function TransfersStepPage() {
               const upJson = await upRes.json();
               originalFileUrl = upJson?.url;
             }
-          } catch {
-            /* 업로드 실패해도 파싱은 계속 */
-          }
+          } catch { /* 업로드 실패해도 파싱은 계속 */ }
 
-          // 2) Gemini Vision으로 파싱
           const fd = new FormData();
           fd.append("file", row.file);
           const res = await fetch("/api/parse-title-transfer", { method: "POST", body: fd });
           const json = await res.json();
+
+          // ★ Gemini 월 지출 한도 초과 — 즉시 배치 중단
+          if (res.status === 429 || json?.code === "QUOTA_EXCEEDED") {
+            quotaHit = true;
+            setRows((prev) =>
+              prev.map((r) =>
+                r.filename === row.filename
+                  ? {
+                      ...r,
+                      status: "error",
+                      error: "🚫 Gemini API 월 지출 한도 초과 — https://ai.studio/spend 에서 한도 변경 후 재시도",
+                    }
+                  : r,
+              ),
+            );
+            alert(
+              "🚫 Gemini API 월 지출 한도에 도달했습니다.\n\n" +
+              "https://ai.studio/spend 에서 한도를 늘리거나 제거한 후\n" +
+              "[다시 파싱] 버튼으로 미처리 파일만 이어서 처리할 수 있습니다.\n\n" +
+              "이미 파싱된 파일은 그대로 검토·승인 가능합니다.",
+            );
+            continue;
+          }
+
           if (!res.ok || !json?.success) {
             throw new Error(json?.error || `파싱 실패 (${res.status})`);
           }
