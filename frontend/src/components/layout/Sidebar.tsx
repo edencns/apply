@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Building2, LayoutDashboard, Users, FileText,
-  BookOpen, LogOut, PenLine, GitCompareArrows,
+  BookOpen, LogOut, PenLine, Scale,
   UserCheck, Home, Banknote, Settings, RefreshCw,
 } from "lucide-react";
 
@@ -15,9 +15,9 @@ interface NavItem {
 }
 
 const topItems: NavItem[] = [
-  { href: "/dashboard",             icon: LayoutDashboard,   label: "대시보드" },
-  { href: "/announcements",         icon: BookOpen,          label: "모집공고" },
-  { href: "/announcements/compare", icon: GitCompareArrows,  label: "공고 비교" },
+  { href: "/dashboard",            icon: LayoutDashboard, label: "대시보드" },
+  { href: "/announcements",        icon: BookOpen,        label: "모집공고" },
+  { href: "/verification-criteria", icon: Scale,          label: "서류 검증 기준" },
 ];
 
 const workflowItems: NavItem[] = [
