@@ -115,7 +115,7 @@ function SubBlock({ title, children }: { title: string; children: React.ReactNod
 }
 
 /** 서류 카드 목록 — 필수/추가 색 구분 + 자동검증 배지. */
-function DocList({ docs }: { docs: { name: string; required: boolean; purpose: string; auto?: boolean }[] }) {
+function DocList({ docs }: { docs: { name: string; required: boolean; purpose: string; auto?: boolean; examples?: string[] }[] }) {
   return (
     <div className="space-y-1.5">
       {docs.map((d, i) => (
@@ -140,6 +140,18 @@ function DocList({ docs }: { docs: { name: string; required: boolean; purpose: s
             )}
           </div>
           <div className="text-[10.5px] text-ink-4 mt-0.5 ml-4">↳ {d.purpose}</div>
+          {d.examples && d.examples.length > 0 && (
+            <div className="mt-1 ml-4 p-1.5 rounded bg-white/70 border border-blue-100">
+              <div className="text-[9.5px] font-semibold text-blue-900 mb-0.5">
+                ▶ 해당 서류 종류 (상황에 따라 택일·복수 제출)
+              </div>
+              <ul className="space-y-0.5 list-disc list-outside ml-3.5 text-[10.5px] text-ink-2 leading-snug">
+                {d.examples.map((ex, j) => (
+                  <li key={j}>{ex}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -292,6 +304,8 @@ interface DocSpec {
   required: boolean;
   purpose: string;
   auto?: boolean;
+  /** 이 항목에 해당하는 구체적인 서류 종류 — 신청자 상황에 따라 택일·복수 제출 */
+  examples?: string[];
 }
 
 type RowSpec = {
@@ -595,7 +609,21 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
       { name: "가족관계증명서 (상세, 자녀 확인)", required: true, purpose: "자녀 수·관계 확인" },
       { name: "건강보험자격득실확인서 (부부 각각)", required: true, purpose: "근로 현황·맞벌이 여부 확인" },
       { name: "건강보험료 납부확인서 (최근 6개월)", required: true, purpose: "소득 추정·맞벌이 검증" },
-      { name: "소득증빙서류 (근로소득원천징수영수증 등)", required: true, purpose: "외벌이/맞벌이 소득 합산" },
+      {
+        name: "소득증빙서류 (근로소득원천징수영수증 등)",
+        required: true,
+        purpose: "외벌이/맞벌이 소득 합산",
+        examples: [
+          "근로소득원천징수영수증 (전년도) — 직장 근로자",
+          "근로소득자용 소득금액증명원 (홈택스 발급)",
+          "종합소득세 과세표준확정신고 및 납부계산서 — 사업자·자영업자",
+          "사업소득자용 소득금액증명원 (홈택스 발급)",
+          "기타소득 원천징수영수증 — 프리랜서·일용직",
+          "이자·배당소득 원천징수영수증 — 금융소득 있는 경우",
+          "연금소득 원천징수영수증 — 공무원연금·국민연금 수령자",
+          "(소득 없음 신고 시) 사실증명원(신고사실없음)",
+        ],
+      },
       // 추가(해당자)
       { name: "임신진단서", required: false, purpose: "임신 중인 경우 — 태아 자녀 인정 (의료기관·임신주차 확인)" },
       { name: "출생증명서", required: false, purpose: "2세 이내 자녀 — 신생아 우선순위 추가" },
@@ -733,8 +761,33 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
       // 필수
       { name: "혼인관계증명서 (상세, 본인)", required: true, purpose: "혼인·이혼 이력 확인 — 미혼·기혼 무관 발급" },
       { name: "건강보험자격득실확인서 (본인 + 만19세 이상 세대원)", required: true, purpose: "근로 현황·세대원 직업 확인" },
-      { name: "소득세 납부 입증서류 (5개년도, 본인)", required: true, purpose: "5년 이상 납부 확인 — 핵심" },
-      { name: "소득증빙서류 (입주자모집공고일 이후 발행)", required: true, purpose: "현재 소득 — 우선·일반·추첨 분류" },
+      {
+        name: "소득세 납부 입증서류 (5개년도, 본인)",
+        required: true,
+        purpose: "5년 이상 납부 확인 — 핵심",
+        examples: [
+          "근로소득원천징수영수증 (5개년도 각각) — 근로자",
+          "소득금액증명원 (5개년도 각각, 홈택스) — 근로·사업·복합소득",
+          "종합소득세 과세표준확정신고 및 납부계산서 (5개년도) — 자영업자",
+          "사업자등록증명원 + 사업소득 원천징수영수증 (5개년도) — 사업소득자",
+          "(휴·폐업 기간) 휴업·폐업 사실증명원 — 누락 연도 사유 보강",
+          "납부세액 0원 연도는 인정 안 됨. 5년 누적 60개월 「실제 납부」 필요",
+        ],
+      },
+      {
+        name: "소득증빙서류 (입주자모집공고일 이후 발행)",
+        required: true,
+        purpose: "현재 소득 — 우선·일반·추첨 분류",
+        examples: [
+          "근로소득원천징수영수증 (전년도) — 직장 근로자",
+          "근로소득자용 소득금액증명원 (홈택스 발급)",
+          "재직증명서 + 최근 3개월 급여명세표 — 입사 1년 미만",
+          "종합소득세 과세표준확정신고 및 납부계산서 — 자영업자",
+          "사업소득자용 소득금액증명원 (홈택스 발급)",
+          "기타·연금·이자·배당소득 원천징수영수증 — 해당 시",
+          "(소득 없음) 사실증명원(신고사실없음) — 「소득 없음」 자체가 자격요건일 때",
+        ],
+      },
       { name: "부동산소유현황 (본인 + 세대원)", required: true, purpose: "생애 무소유 입증 — 등기 열람", auto: true },
       { name: "비사업자 확인각서 (본인 + 만19세 이상 세대원)", required: true, purpose: "근로자·자영업자 아닌 경우" },
       // 추가(해당자)
@@ -800,7 +853,20 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
       { name: "출생증명서 또는 자녀 기본증명서", required: true, purpose: "출생일 확인 — 핵심 서류" },
       { name: "건강보험자격득실확인서", required: true, purpose: "근로 현황 확인" },
       { name: "건강보험료 납부확인서 (최근 6개월)", required: true, purpose: "소득 추정" },
-      { name: "소득증빙서류", required: true, purpose: "우선/일반/추첨 분류" },
+      {
+        name: "소득증빙서류",
+        required: true,
+        purpose: "우선/일반/추첨 분류 — 외벌이/맞벌이 합산",
+        examples: [
+          "근로소득원천징수영수증 (전년도) — 부부 각각",
+          "근로소득자용 소득금액증명원 (홈택스 발급)",
+          "재직증명서 + 최근 3개월 급여명세표 — 입사 1년 미만",
+          "종합소득세 과세표준확정신고 및 납부계산서 — 자영업자",
+          "사업소득자용 소득금액증명원 (홈택스 발급)",
+          "기타·연금·이자·배당소득 원천징수영수증 — 해당 시",
+          "(소득 없음) 사실증명원(신고사실없음)",
+        ],
+      },
       // 추가(해당자)
       { name: "임신진단서", required: false, purpose: "출산 전 — 임신주차·예정일 확인 (의료기관명 명시)" },
       { name: "입양관계증명서", required: false, purpose: "입양 자녀 인정 시" },
@@ -861,7 +927,20 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
     documents: [
       // 필수
       { name: "혼인관계증명서 (상세, 본인)", required: true, purpose: "미혼 입증 (혼인 이력 없음) — 핵심 서류" },
-      { name: "본인 소득증빙서류", required: true, purpose: "월평균소득 산정" },
+      {
+        name: "본인 소득증빙서류",
+        required: true,
+        purpose: "월평균소득 산정 (1인 가구 기준)",
+        examples: [
+          "근로소득원천징수영수증 (전년도) — 직장 청년",
+          "근로소득자용 소득금액증명원 (홈택스 발급)",
+          "재직증명서 + 최근 3개월 급여명세표 — 입사 1년 미만",
+          "종합소득세 과세표준확정신고 및 납부계산서 — 자영업·프리랜서",
+          "사업소득자용 소득금액증명원 (홈택스 발급)",
+          "기타소득 원천징수영수증 — 부정기 수입",
+          "(무직·소득 없음) 사실증명원(신고사실없음)",
+        ],
+      },
       { name: "건강보험자격득실확인서 (본인)", required: true, purpose: "직장가입자 vs 지역가입자 구분" },
       { name: "부모 주민등록표등본", required: true, purpose: "부모 무주택 확인용 (부모 등본 별도)", auto: true },
       { name: "부모 부동산소유 확인 동의서 또는 결과", required: true, purpose: "부모 무주택 입증", auto: true },

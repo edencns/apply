@@ -30,6 +30,7 @@ import { calculateSubscriptionScore } from "@/lib/score-calculator";
 import { formatPhoneInput, formatPhone } from "@/lib/housing-code";
 import { evaluateFinal } from "@/lib/verification-rules";
 import { getCheckpointsForDocument } from "@/lib/document-checkpoints";
+import { getDocumentGuide } from "@/lib/document-guides";
 import { findStandbyCandidates, buildPromotionUpdates, PromotionCandidate } from "@/lib/standby-promotion";
 import { pullAll } from "@/lib/cloud-sync";
 import { uploadFileViaClient } from "@/lib/client-upload";
@@ -966,6 +967,61 @@ function DocumentsStage({
                           {" "}{d.condition}
                         </div>
                       )}
+
+                      {/* 검토 가이드 — 서류별 법령·규칙 설명 (담당자가 처음 봐도 검토 가능) */}
+                      {(() => {
+                        const guide = getDocumentGuide(d.shortName || d.name);
+                        if (!guide) return null;
+                        return (
+                          <details
+                            className="mt-1.5 rounded border border-indigo-100 bg-indigo-50/40 text-[11px]"
+                            open={!isSubmitted}
+                          >
+                            <summary className="cursor-pointer px-2 py-1 text-[10.5px] font-semibold text-indigo-900 select-none flex items-center gap-1">
+                              <span>📖 검토 가이드 — {d.shortName || d.name}</span>
+                              <span className="text-[9.5px] font-normal text-indigo-700">
+                                (이 서류로 무엇을 어떻게 확인하는지)
+                              </span>
+                            </summary>
+                            <div className="px-2.5 pb-2 pt-0.5 space-y-1.5 text-ink-2">
+                              <div>
+                                <span className="text-[9.5px] font-semibold text-indigo-800 uppercase tracking-wide">
+                                  목적
+                                </span>
+                                <div className="mt-0.5 leading-snug">{guide.purpose}</div>
+                              </div>
+                              <div>
+                                <span className="text-[9.5px] font-semibold text-indigo-800 uppercase tracking-wide">
+                                  검토 기준 (법령·공고)
+                                </span>
+                                <ul className="mt-0.5 space-y-0.5 list-disc list-outside ml-3.5 leading-snug">
+                                  {guide.rules.map((r, i) => (
+                                    <li key={i}>{r}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                              {guide.pitfalls && guide.pitfalls.length > 0 && (
+                                <div>
+                                  <span className="text-[9.5px] font-semibold text-amber-800 uppercase tracking-wide">
+                                    ⚠ 자주 놓치는 함정
+                                  </span>
+                                  <ul className="mt-0.5 space-y-0.5 list-disc list-outside ml-3.5 leading-snug text-amber-900">
+                                    {guide.pitfalls.map((p, i) => (
+                                      <li key={i}>{p}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {guide.validity && (
+                                <div className="text-[10.5px] text-ink-3">
+                                  <span className="font-semibold">유효기간·발급:</span>{" "}
+                                  {guide.validity}
+                                </div>
+                              )}
+                            </div>
+                          </details>
+                        );
+                      })()}
 
                       {/* 체크포인트 */}
                       {checkpoints.length > 0 && (
