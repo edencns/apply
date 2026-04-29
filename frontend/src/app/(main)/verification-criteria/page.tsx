@@ -28,16 +28,20 @@ function Section({ title, children, defaultOpen = false }: {
   title: string; children: React.ReactNode; defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  // overflow-hidden 제거 — InfoPopover가 섹션 경계 밖으로 나가도 잘리지 않게 함.
+  // 대신 button과 내부 div에 적절한 rounded를 직접 적용.
   return (
-    <div className="border border-border rounded-lg overflow-hidden">
+    <div className="border border-border rounded-lg">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-4 py-2.5 bg-surface2 hover:bg-surface2 transition-colors"
+        className={`w-full flex items-center justify-between px-4 py-2.5 bg-surface2 hover:bg-surface2 transition-colors ${
+          open ? "rounded-t-lg" : "rounded-lg"
+        }`}
       >
         <span className="font-semibold text-ink text-[13px]">{title}</span>
         {open ? <ChevronUp className="w-4 h-4 text-ink-4" /> : <ChevronDown className="w-4 h-4 text-ink-4" />}
       </button>
-      {open && <div className="p-4">{children}</div>}
+      {open && <div className="p-4 rounded-b-lg">{children}</div>}
     </div>
   );
 }
@@ -48,20 +52,21 @@ function Section({ title, children, defaultOpen = false }: {
  */
 function InfoPopover({ label, children }: { label?: string; children: React.ReactNode }) {
   return (
-    <span className="relative inline-block group">
+    <span className="relative inline-block group align-middle">
       <button
         type="button"
-        className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-blue-100 text-blue-700 text-[9px] font-bold ml-1 hover:bg-blue-200 focus:outline-none focus:ring-1 focus:ring-blue-400 align-middle"
+        className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold ml-1 hover:bg-blue-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
         aria-label={label || "자세히 보기"}
         title={label || ""}
       >
         i
       </button>
+      {/* 우측이 잘리지 않도록 right-0 으로 우측 정렬. z-50 으로 다른 모든 컨텐츠 위에 노출 */}
       <div
-        className="invisible group-hover:visible group-focus-within:visible opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity absolute z-20 left-0 top-5 w-80 max-w-[90vw] p-3 bg-white border border-border rounded-md shadow-lg text-[10.5px] text-ink-2 leading-relaxed pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto"
+        className="invisible group-hover:visible group-focus-within:visible opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity absolute z-50 right-0 top-6 w-[360px] max-w-[90vw] p-3 bg-white border border-border rounded-md shadow-xl text-[11px] text-ink-2 leading-relaxed pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto"
         role="tooltip"
       >
-        {label && <div className="font-semibold text-ink mb-1.5 text-[11px]">{label}</div>}
+        {label && <div className="font-semibold text-ink mb-1.5 text-[11.5px]">{label}</div>}
         {children}
       </div>
     </span>
@@ -105,6 +110,38 @@ function SubBlock({ title, children }: { title: string; children: React.ReactNod
         {title}
       </div>
       <div className="space-y-0">{children}</div>
+    </div>
+  );
+}
+
+/** 서류 카드 목록 — 필수/추가 색 구분 + 자동검증 배지. */
+function DocList({ docs }: { docs: { name: string; required: boolean; purpose: string; auto?: boolean }[] }) {
+  return (
+    <div className="space-y-1.5">
+      {docs.map((d, i) => (
+        <div
+          key={i}
+          className={`p-2 rounded border ${
+            d.required ? "border-blue-200 bg-blue-50/40" : "border-amber-200 bg-amber-50/40"
+          }`}
+        >
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <FileText className="w-3 h-3 text-ink-4 flex-shrink-0" />
+            <span className="text-[11.5px] font-semibold text-ink">{d.name}</span>
+            {d.required ? (
+              <span className="text-[9.5px] bg-blue-100 text-blue-800 px-1 py-0.5 rounded font-semibold">필수</span>
+            ) : (
+              <span className="text-[9.5px] bg-amber-200 text-amber-800 px-1 py-0.5 rounded font-semibold">추가(해당자)</span>
+            )}
+            {d.auto && (
+              <span className="text-[9.5px] bg-emerald-100 text-emerald-700 border border-emerald-200 px-1 py-0.5 rounded font-medium">
+                ✓ 자동검증
+              </span>
+            )}
+          </div>
+          <div className="text-[10.5px] text-ink-4 mt-0.5 ml-4">↳ {d.purpose}</div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -225,6 +262,25 @@ const GAJEOM_RATIO_DETAIL = (
   </div>
 );
 
+/* ─── 공통 서류 (모든 청약 신청자 공통) ───────────────── */
+
+const COMMON_DOCS: DocSpec[] = [
+  // 필수 9종
+  { name: "특별공급신청서·무주택 서약서", required: true, purpose: "신청 의사 + 무주택 본인 확인", auto: true },
+  { name: "인감증명서 또는 본인서명사실확인서", required: true, purpose: "본인 인증" },
+  { name: "신분증 (주민등록증·운전면허증·여권)", required: true, purpose: "본인 확인" },
+  { name: "청약통장 순위(가입)확인서", required: true, purpose: "1·2순위 자격 + 가입기간·예치금 확인", auto: true },
+  { name: "개인정보 수집·이용 동의서", required: true, purpose: "심사·검증 동의" },
+  { name: "주민등록표등본 (상세, 본인)", required: true, purpose: "세대 구성·주소·동일등재 확인", auto: true },
+  { name: "주민등록표초본 (상세, 본인)", required: true, purpose: "주소 변동 이력·거주기간 확인" },
+  { name: "가족관계증명서 (상세, 본인)", required: true, purpose: "직계존속·직계비속·배우자 관계 확인" },
+  { name: "출입국사실증명원 (본인)", required: true, purpose: "해외 90일 초과 체류 검증", auto: true },
+  // 추가(해당자) 3종
+  { name: "혼인관계증명서", required: false, purpose: "단독세대 또는 만30세 이전 혼인 인정 시" },
+  { name: "배우자 주민등록표등본", required: false, purpose: "배우자 분리세대인 경우" },
+  { name: "배우자·직계존비속 출입국사실증명원", required: false, purpose: "해외체류로 부양가족 인정 시" },
+];
+
 /* ─── 데이터 — 신청 유형별 자격·서류·검증 ────────────────── */
 
 type SupplyType =
@@ -317,22 +373,14 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
       },
     ],
     documents: [
-      { name: "특별공급신청서·무주택 서약서", required: true, purpose: "신청 의사 + 무주택 본인 확인", auto: true },
-      { name: "인감증명서 또는 본인서명사실확인서", required: true, purpose: "본인 인증" },
-      { name: "신분증", required: true, purpose: "본인 확인" },
-      { name: "청약통장 순위(가입)확인서", required: true, purpose: "1순위 자격 확인", auto: true },
-      { name: "개인정보 수집·이용 동의서", required: true, purpose: "심사 동의" },
-      { name: "주민등록등본 (상세, 본인)", required: true, purpose: "세대 구성·거주 기간 확인", auto: true },
-      { name: "주민등록초본 (상세, 본인)", required: true, purpose: "주소 변동 이력 확인" },
-      { name: "가족관계증명서 (상세, 본인)", required: true, purpose: "부양가족 확인" },
-      { name: "출입국사실증명서 (본인)", required: true, purpose: "해외 90일 초과 체류 검증", auto: true },
-      { name: "혼인관계증명서", required: false, purpose: "단독세대 또는 만30세 이전 혼인 인정 시" },
-      { name: "배우자 주민등록등본", required: false, purpose: "배우자 분리세대인 경우" },
-      { name: "배우자·직계존비속 출입국사실증명서", required: false, purpose: "해외체류로 부양가족 인정 시" },
+      // 일반공급은 공통 서류 외 추가 자료가 거의 없음. 가점제 신청자만 일부 추가.
+      { name: "무주택기간 확인 보조 자료", required: false, purpose: "가점제 무주택기간 산정 시 — 등본·초본·과거 등기 등으로 자동 계산되지만 다툼 시 입증 자료" },
+      { name: "분양권 보유 미신고 확인", required: false, purpose: "2018.12.11 이후 분양권 매수·신규 계약자 — 주택 보유로 간주" },
+      { name: "1주택자 처분 약정서", required: false, purpose: "추첨제 25%(1주택자) 신청 시 — 입주자모집공고일까지 처분 약속" },
     ],
     checkpoints: [
-      "청약통장 가입기간 + 예치금 충족",
-      "무주택세대구성원 또는 1주택자 (규제지역별)",
+      "청약통장 가입기간 + 예치금 충족 (지역·면적별)",
+      "무주택세대구성원 또는 1주택자 (규제지역별 기준)",
       "해당지역 거주 1년 이상 (해외 90일 초과 체류 없을 것)",
       "무주택 기간 자동계산 vs 신고값 검증",
       "부양가족수 — 직계존속 3년 이상 등본 동일등재 + 무주택",
@@ -395,15 +443,14 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
       },
     ],
     documents: [
+      // 필수
       { name: "기관추천서 (해당 기관 발급)", required: true, purpose: "기관 추천 자격 증명 — 핵심 서류" },
       { name: "자격확인서 (해당 기관)", required: true, purpose: "장애 등급·복무 기간 등 자격 상세" },
-      { name: "특별공급신청서·무주택 서약서", required: true, purpose: "신청 + 무주택 본인 확인", auto: true },
-      { name: "인감증명서 또는 본인서명사실확인서", required: true, purpose: "본인 인증" },
-      { name: "신분증", required: true, purpose: "본인 확인" },
-      { name: "청약통장 순위(가입)확인서", required: false, purpose: "통장 면제 대상이 아니면 필수", auto: true },
-      { name: "주민등록등본·초본 (상세, 본인)", required: true, purpose: "세대 구성·거주 기간 확인", auto: true },
-      { name: "가족관계증명서 (상세, 본인)", required: true, purpose: "세대원 관계 확인" },
-      { name: "출입국사실증명서 (본인)", required: true, purpose: "해외 90일 초과 체류 검증", auto: true },
+      // 추가(해당자)
+      { name: "장애인 등록증·복지카드", required: false, purpose: "장애인 추천 시 — 장애 정도 확인" },
+      { name: "국가유공자증·보훈대상자증", required: false, purpose: "보훈 추천 시" },
+      { name: "재직증명서·근로계약서", required: false, purpose: "중소기업 근로자 추천 시" },
+      { name: "철거확인서·도시재생사업 부지제공 증빙", required: false, purpose: "철거민·부지제공자 추천 시 (통장 면제)" },
     ],
     checkpoints: [
       "기관추천서 진위·발급일 (3개월 이내 발급 권장)",
@@ -459,20 +506,20 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
       },
     ],
     documents: [
-      { name: "다자녀 우선순위 배점 기준표", required: true, purpose: "가점 산정 자료" },
+      // 필수
+      { name: "다자녀 우선순위 배점 기준표", required: true, purpose: "가점 산정 자료 (기관 양식)" },
       { name: "가족관계증명서 (상세, 자녀 확인)", required: true, purpose: "자녀 관계·생년월일 확인" },
-      { name: "주민등록등본 (상세, 본인)", required: true, purpose: "세대 구성·자녀 등재", auto: true },
+      // 추가(해당자)
       { name: "임신증명서류 (임신진단서·유산낙태진단서 등)", required: false, purpose: "태아 자녀 인정 시 — 입주자모집공고일 현재 의료기관·임신주차 확인 필수" },
       { name: "출산증명서", required: false, purpose: "최근 출생 자녀 — 자녀수 합산" },
       { name: "입양관계증명서", required: false, purpose: "입양 자녀 인정 시" },
       { name: "친양자 입양관계증명서", required: false, purpose: "친양자 입양 시" },
       { name: "임신증명·출산이행 확인각서", required: false, purpose: "임신 제증명서류와 함께 제출 — 허위·낙태 방지" },
       { name: "자녀 가족관계증명서 (재혼 자녀)", required: false, purpose: "재혼 배우자 자녀 인정 시" },
-      { name: "자녀 주민등록등본", required: false, purpose: "자녀 일부가 본인 등본에 미등재 시" },
+      { name: "자녀 주민등록표등본", required: false, purpose: "자녀 일부가 본인 등본에 미등재 시" },
       { name: "미성년자녀 혼인관계증명서", required: false, purpose: "만 18세 직계비속 미성년 인정 시" },
       { name: "한부모가족증명서", required: false, purpose: "한부모 5년 경과 가점 시" },
-      { name: "피부양 직계존속 주민등록초본", required: false, purpose: "3세대 이상 세대구성 가점 시 — 3년 이상 동일등재" },
-      { name: "공통 서류", required: true, purpose: "신분증·인감·청약통장·등본·초본·가족관계·출입국·동의서" },
+      { name: "피부양 직계존속 주민등록표초본", required: false, purpose: "3세대 이상 세대구성 가점 시 — 3년 이상 동일등재" },
     ],
     checkpoints: [
       "자녀수 (만 19세 미만 — 입주자모집공고일 현재 기준)",
@@ -543,17 +590,18 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
       },
     ],
     documents: [
+      // 필수
       { name: "혼인관계증명서 (상세, 본인)", required: true, purpose: "혼인일·혼인 상태 확인 — 핵심 서류" },
       { name: "가족관계증명서 (상세, 자녀 확인)", required: true, purpose: "자녀 수·관계 확인" },
       { name: "건강보험자격득실확인서 (부부 각각)", required: true, purpose: "근로 현황·맞벌이 여부 확인" },
       { name: "건강보험료 납부확인서 (최근 6개월)", required: true, purpose: "소득 추정·맞벌이 검증" },
       { name: "소득증빙서류 (근로소득원천징수영수증 등)", required: true, purpose: "외벌이/맞벌이 소득 합산" },
-      { name: "임신진단서", required: false, purpose: "임신 중인 경우 — 태아 자녀 인정 (입주자모집공고일 현재 임신주차 확인)" },
+      // 추가(해당자)
+      { name: "임신진단서", required: false, purpose: "임신 중인 경우 — 태아 자녀 인정 (의료기관·임신주차 확인)" },
       { name: "출생증명서", required: false, purpose: "2세 이내 자녀 — 신생아 우선순위 추가" },
       { name: "입양관계증명서", required: false, purpose: "입양 자녀 인정 시" },
       { name: "한부모가족증명서", required: false, purpose: "한부모 5년 경과 시" },
       { name: "비사업자 확인각서", required: false, purpose: "근로자·자영업자 아닌 경우" },
-      { name: "공통 서류", required: true, purpose: "신분증·인감·통장·등본·초본·출입국·동의서" },
     ],
     checkpoints: [
       "혼인일 7년 이내 (혼인관계증명서 — 신고일 기준)",
@@ -608,13 +656,11 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
       { label: "자산 기준", value: "공공주택 부동산 2.15억 / 자동차 3,683만원 이하" },
     ],
     documents: [
-      { name: "직계존속 주민등록초본 (3년 이상 계속 거주)", required: true, purpose: "부양 기간 입증 — 핵심 서류" },
+      // 필수
+      { name: "직계존속 주민등록표초본 (3년 이상 계속 거주)", required: true, purpose: "부양 기간 입증 — 핵심 서류" },
       { name: "직계존속 가족관계증명서", required: true, purpose: "직계존속 관계 확인" },
-      { name: "직계존속 출입국사실증명서", required: true, purpose: "직계존속 해외 90일 초과 체류 검증", auto: true },
+      { name: "직계존속 출입국사실증명원", required: true, purpose: "직계존속 해외 90일 초과 체류 검증", auto: true },
       { name: "건강보험 피부양자 확인서 또는 요양급여내역", required: true, purpose: "실질 부양 사실 입증" },
-      { name: "주민등록등본 (상세, 본인)", required: true, purpose: "세대주 + 직계존속 동일등재 확인", auto: true },
-      { name: "가족관계증명서 (상세, 본인)", required: true, purpose: "직계존속과의 관계 확인" },
-      { name: "공통 서류", required: true, purpose: "신분증·인감·통장·초본·출입국·동의서" },
     ],
     checkpoints: [
       "본인이 세대주인지 (세대원이면 부적격)",
@@ -684,15 +730,16 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
       },
     ],
     documents: [
+      // 필수
       { name: "혼인관계증명서 (상세, 본인)", required: true, purpose: "혼인·이혼 이력 확인 — 미혼·기혼 무관 발급" },
       { name: "건강보험자격득실확인서 (본인 + 만19세 이상 세대원)", required: true, purpose: "근로 현황·세대원 직업 확인" },
       { name: "소득세 납부 입증서류 (5개년도, 본인)", required: true, purpose: "5년 이상 납부 확인 — 핵심" },
       { name: "소득증빙서류 (입주자모집공고일 이후 발행)", required: true, purpose: "현재 소득 — 우선·일반·추첨 분류" },
       { name: "부동산소유현황 (본인 + 세대원)", required: true, purpose: "생애 무소유 입증 — 등기 열람", auto: true },
       { name: "비사업자 확인각서 (본인 + 만19세 이상 세대원)", required: true, purpose: "근로자·자영업자 아닌 경우" },
+      // 추가(해당자)
       { name: "자녀 혼인관계증명서", required: false, purpose: "만 18세 이상 자녀를 미혼으로 인정 시" },
-      { name: "피부양 직계존속 주민등록초본", required: false, purpose: "직계존속을 가구원수에 포함 인정 시 (소득 산정)" },
-      { name: "공통 서류", required: true, purpose: "신분증·인감·통장·등본·초본·가족관계·출입국·동의서" },
+      { name: "피부양 직계존속 주민등록표초본", required: false, purpose: "직계존속을 가구원수에 포함 인정 시 (소득 산정)" },
     ],
     checkpoints: [
       "본인·배우자·세대원 전원 무주택 + 생애 최초 (과거 주택 취득 이력 전무)",
@@ -749,16 +796,15 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
       { label: "자산 기준", value: "공공주택만 — 부동산 2.15억 / 자동차 3,683만원 이하" },
     ],
     documents: [
+      // 필수
       { name: "출생증명서 또는 자녀 기본증명서", required: true, purpose: "출생일 확인 — 핵심 서류" },
-      { name: "임신진단서", required: false, purpose: "출산 전 — 임신주차·예정일 확인" },
-      { name: "입양관계증명서", required: false, purpose: "입양 자녀 인정 시" },
-      { name: "가족관계증명서 (상세, 본인)", required: true, purpose: "자녀 등록 확인" },
-      { name: "혼인관계증명서", required: false, purpose: "기혼인 경우 (단, 미혼이어도 신청 가능)" },
       { name: "건강보험자격득실확인서", required: true, purpose: "근로 현황 확인" },
       { name: "건강보험료 납부확인서 (최근 6개월)", required: true, purpose: "소득 추정" },
       { name: "소득증빙서류", required: true, purpose: "우선/일반/추첨 분류" },
-      { name: "주민등록등본 (상세, 본인)", required: true, purpose: "자녀 등재 + 세대 구성", auto: true },
-      { name: "공통 서류", required: true, purpose: "신분증·인감·통장·초본·출입국·동의서" },
+      // 추가(해당자)
+      { name: "임신진단서", required: false, purpose: "출산 전 — 임신주차·예정일 확인 (의료기관명 명시)" },
+      { name: "입양관계증명서", required: false, purpose: "입양 자녀 인정 시" },
+      { name: "혼인관계증명서", required: false, purpose: "기혼인 경우 (미혼이어도 신청 가능)" },
     ],
     checkpoints: [
       "출생일·예정일 — 입주자모집공고일 기준 2년 이내",
@@ -813,15 +859,13 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
       { label: "부모 자산", value: "공고에 따라 부모 자산 기준도 적용 가능 — 보통 가구 자산 7.06억 이하" },
     ],
     documents: [
-      { name: "신분증", required: true, purpose: "연령 확인" },
-      { name: "가족관계증명서 (상세, 본인)", required: true, purpose: "혼인·자녀 없음 확인" },
-      { name: "혼인관계증명서", required: true, purpose: "미혼 입증 (혼인 이력 없음)" },
+      // 필수
+      { name: "혼인관계증명서 (상세, 본인)", required: true, purpose: "미혼 입증 (혼인 이력 없음) — 핵심 서류" },
       { name: "본인 소득증빙서류", required: true, purpose: "월평균소득 산정" },
-      { name: "건강보험자격득실확인서 (본인)", required: true, purpose: "직장가입자 vs 지역가입자" },
-      { name: "본인·부모 주민등록표등본", required: true, purpose: "부모 무주택 + 등본 분리 확인", auto: true },
+      { name: "건강보험자격득실확인서 (본인)", required: true, purpose: "직장가입자 vs 지역가입자 구분" },
+      { name: "부모 주민등록표등본", required: true, purpose: "부모 무주택 확인용 (부모 등본 별도)", auto: true },
       { name: "부모 부동산소유 확인 동의서 또는 결과", required: true, purpose: "부모 무주택 입증", auto: true },
       { name: "본인 자산 증빙서류", required: true, purpose: "금융자산·부동산·자동차 합산 — 2.83억 이하" },
-      { name: "공통 서류", required: true, purpose: "인감·통장·초본·출입국·동의서" },
     ],
     checkpoints: [
       "만 19세 ~ 39세 (생년월일)",
@@ -985,35 +1029,35 @@ export default function VerificationCriteriaPage() {
                 {cfg.incomeAsset.map((r, i) => <RuleRow key={i} {...r} autoVerified={r.auto} />)}
               </Section>
 
-              {/* 필요 서류 */}
-              <Section title={`📄 필요 서류 (${cfg.documents.filter((d) => d.required).length}종 필수 + ${cfg.documents.filter((d) => !d.required).length}종 추가)`} defaultOpen>
-                <div className="space-y-1.5">
-                  {cfg.documents.map((d, i) => (
-                    <div
-                      key={i}
-                      className={`p-2 rounded border ${
-                        d.required
-                          ? "border-blue-200 bg-blue-50/40"
-                          : "border-amber-200 bg-amber-50/40"
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <FileText className="w-3 h-3 text-ink-4 flex-shrink-0" />
-                        <span className="text-[11.5px] font-semibold text-ink">{d.name}</span>
-                        {d.required ? (
-                          <span className="text-[9.5px] bg-blue-100 text-blue-800 px-1 py-0.5 rounded font-semibold">필수</span>
-                        ) : (
-                          <span className="text-[9.5px] bg-amber-200 text-amber-800 px-1 py-0.5 rounded font-semibold">추가(해당자)</span>
-                        )}
-                        {d.auto && (
-                          <span className="text-[9.5px] bg-emerald-100 text-emerald-700 border border-emerald-200 px-1 py-0.5 rounded font-medium">
-                            ✓ 자동검증
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[10.5px] text-ink-4 mt-0.5 ml-4">↳ {d.purpose}</div>
+              {/* 필요 서류 — 공통 + 해당 유형 전용 (각 별도 섹션, 해당 유형은 필수 → 추가 순) */}
+              <Section
+                title={`📄 필요 서류 (공통 ${COMMON_DOCS.length}종 + ${cfg.label} 전용 ${cfg.documents.length}종)`}
+                defaultOpen
+              >
+                <div className="space-y-3">
+                  {/* 공통 서류 — 항상 펼쳐진 상태로 노출 */}
+                  <div>
+                    <div className="text-[12.5px] font-bold text-ink mb-2 flex items-center gap-1.5">
+                      <span className="text-[14px]">📁</span>
+                      <span>공통 서류 (모든 청약 신청자)</span>
+                      <span className="text-[10px] text-ink-4 font-normal">
+                        — 필수 {COMMON_DOCS.filter((d) => d.required).length}종 + 추가 {COMMON_DOCS.filter((d) => !d.required).length}종
+                      </span>
                     </div>
-                  ))}
+                    <DocList docs={COMMON_DOCS} />
+                  </div>
+
+                  {/* 해당 유형 서류 — 별도 collapsible Section, 필수 → 추가 순 */}
+                  {cfg.documents.length > 0 && (
+                    <Section title={`📁 ${cfg.label} 전용 서류 (필수 ${cfg.documents.filter((d) => d.required).length}종 + 추가 ${cfg.documents.filter((d) => !d.required).length}종)`} defaultOpen>
+                      <DocList
+                        docs={[
+                          ...cfg.documents.filter((d) => d.required),
+                          ...cfg.documents.filter((d) => !d.required),
+                        ]}
+                      />
+                    </Section>
+                  )}
                 </div>
               </Section>
 
