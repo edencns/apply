@@ -128,32 +128,47 @@ const columns: StageColumn[] = [
       switch (status) {
         case "eligible":
           return (
-            <span className="inline-flex items-center gap-1 text-sm text-green-700 font-semibold">
+            <span
+              className="inline-flex items-center gap-1 text-sm text-green-700 font-semibold cursor-help"
+              title="적합 — 1~5단계 모든 검증 통과. 계약 진행 가능"
+            >
               <CheckCircle2 className="w-3.5 h-3.5" /> 적합
             </span>
           );
         case "ineligible":
           return (
-            <span className="inline-flex items-center gap-1 text-sm text-red-700 font-semibold">
+            <span
+              className="inline-flex items-center gap-1 text-sm text-red-700 font-semibold cursor-help"
+              title="부적합 — 한 가지 이상 자격 미달. 계약 불가, 같은 주택형 예비에서 승계 처리 대상"
+            >
               <XCircle className="w-3.5 h-3.5" /> 부적합
             </span>
           );
         case "in_review":
           return (
-            <span className="inline-flex items-center gap-1 text-xs text-amber-700 font-medium">
+            <span
+              className="inline-flex items-center gap-1 text-xs text-amber-700 font-medium cursor-help"
+              title="검수 보류 — 자동 판정만으로 결정 어려움. 담당자가 추가 서류·확인 후 수동 판정 필요"
+            >
               <PauseCircle className="w-3.5 h-3.5" /> 검수 보류
             </span>
           );
         case "uploaded":
           return (
-            <span className="inline-flex items-center gap-1 text-xs text-blue-700 font-medium">
+            <span
+              className="inline-flex items-center gap-1 text-xs text-blue-700 font-medium cursor-help"
+              title="미검수 — 서류 파일은 업로드됐지만 아직 검토 시작 안 됨. 체크리스트 확인 또는 일괄 적합 판정 필요"
+            >
               <Clock className="w-3.5 h-3.5" /> 미검수
             </span>
           );
         case "missing":
         default:
           return (
-            <span className="inline-flex items-center gap-1 text-xs text-ink-4">
+            <span
+              className="inline-flex items-center gap-1 text-xs text-ink-4 cursor-help"
+              title="미등록 — 서류 파일이 하나도 업로드되지 않음. 5단계 배치 업로드 또는 개별 업로드 필요"
+            >
               <FileQuestion className="w-3.5 h-3.5" /> 미등록
             </span>
           );

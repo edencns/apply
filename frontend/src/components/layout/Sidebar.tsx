@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Building2, LayoutDashboard, Users, FileText,
   BookOpen, LogOut, PenLine, Scale,
-  UserCheck, Home, Banknote, Settings, RefreshCw,
+  UserCheck, Home, Banknote, Settings, RefreshCw, GraduationCap,
 } from "lucide-react";
 
 interface NavItem {
@@ -15,9 +15,8 @@ interface NavItem {
 }
 
 const topItems: NavItem[] = [
-  { href: "/dashboard",            icon: LayoutDashboard, label: "대시보드" },
-  { href: "/announcements",        icon: BookOpen,        label: "모집공고" },
-  { href: "/verification-criteria", icon: Scale,          label: "서류 검증 기준" },
+  { href: "/dashboard",     icon: LayoutDashboard, label: "대시보드" },
+  { href: "/announcements", icon: BookOpen,        label: "모집공고" },
 ];
 
 const workflowItems: NavItem[] = [
@@ -27,6 +26,11 @@ const workflowItems: NavItem[] = [
   { href: "/workflow/savings",      icon: Banknote,  label: "청약통장 검증" },
   { href: "/workflow/documents",    icon: FileText,  label: "서류검토·판정" },
   { href: "/workflow/transfers",    icon: RefreshCw, label: "명의변경 관리" },
+];
+
+const supportItems: NavItem[] = [
+  { href: "/glossary",              icon: GraduationCap, label: "용어사전" },
+  { href: "/verification-criteria", icon: Scale,         label: "서류 검증 기준" },
 ];
 
 const bottomItems: NavItem[] = [
@@ -124,6 +128,13 @@ export default function Sidebar() {
             isActive={isActive(item.href)}
             stepNumber={i + 1}
           />
+        ))}
+
+        <div className="text-[9.5px] uppercase tracking-[1.2px] font-semibold text-ink-4 px-2.5 pt-3.5 pb-1">
+          지원 (신입 도움말)
+        </div>
+        {supportItems.map((item) => (
+          <NavLink key={item.href} item={item} isActive={isActive(item.href)} />
         ))}
 
         <div className="text-[9.5px] uppercase tracking-[1.2px] font-semibold text-ink-4 px-2.5 pt-3.5 pb-1">

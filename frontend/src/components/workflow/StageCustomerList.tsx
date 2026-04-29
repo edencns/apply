@@ -305,19 +305,20 @@ export default function StageCustomerList({
           </button>
         )}
 
-        {/* 검증 상태 필터 */}
+        {/* 검증 상태 필터 — 신입을 위해 호버 시 정의 표시 */}
         <div className="inline-flex rounded-md bg-surface2 p-0.5 border border-border">
           {[
-            { key: "all" as const,     label: "전체",     count: counts.all,     tone: null },
-            { key: "ok" as const,      label: "통과",     count: counts.ok,      tone: "bg-ok" },
-            { key: "fail" as const,    label: "부적합",   count: counts.fail,    tone: "bg-fail" },
-            { key: "missing" as const, label: "검증 필요", count: counts.missing, tone: "bg-ink-4" },
+            { key: "all" as const,     label: "전체",     count: counts.all,     tone: null,        tip: "이 단계의 모든 당첨자" },
+            { key: "ok" as const,      label: "통과",     count: counts.ok,      tone: "bg-ok",     tip: "이 단계 자동 검증을 통과한 당첨자 — 다음 단계로 이동 가능" },
+            { key: "fail" as const,    label: "부적합",   count: counts.fail,    tone: "bg-fail",   tip: "이 단계에서 명확히 자격 미달로 판정된 당첨자 — 같은 주택형 예비에서 승계 처리 대상" },
+            { key: "missing" as const, label: "검증 필요", count: counts.missing, tone: "bg-ink-4",  tip: "데이터·서류가 부족해 자동 판정 보류 — 추가 자료 입력 또는 수동 검토 필요" },
           ].map((t) => {
             const active = statusFilter === t.key;
             return (
               <button
                 key={t.key}
                 onClick={() => setStatusFilter(t.key)}
+                title={t.tip}
                 className={`px-2.5 py-1 rounded text-[11.5px] transition-colors inline-flex items-center gap-1.5 ${
                   active
                     ? "bg-surface text-ink font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
