@@ -42,15 +42,47 @@ function Section({ title, children, defaultOpen = false }: {
   );
 }
 
-function RuleRow({
-  label, value, autoVerified, hint,
-}: { label: string; value: string; autoVerified?: boolean; hint?: string }) {
+/**
+ * 마우스오버하면 자세한 표·금액 등을 보여주는 ⓘ 아이콘.
+ * 모바일은 클릭으로도 동작 (focus 토글).
+ */
+function InfoPopover({ label, children }: { label?: string; children: React.ReactNode }) {
+  return (
+    <span className="relative inline-block group">
+      <button
+        type="button"
+        className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-blue-100 text-blue-700 text-[9px] font-bold ml-1 hover:bg-blue-200 focus:outline-none focus:ring-1 focus:ring-blue-400 align-middle"
+        aria-label={label || "자세히 보기"}
+        title={label || ""}
+      >
+        i
+      </button>
+      <div
+        className="invisible group-hover:visible group-focus-within:visible opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity absolute z-20 left-0 top-5 w-80 max-w-[90vw] p-3 bg-white border border-border rounded-md shadow-lg text-[10.5px] text-ink-2 leading-relaxed pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto"
+        role="tooltip"
+      >
+        {label && <div className="font-semibold text-ink mb-1.5 text-[11px]">{label}</div>}
+        {children}
+      </div>
+    </span>
+  );
+}
+
+interface RuleRowProps {
+  label: string;
+  value: React.ReactNode;
+  autoVerified?: boolean;
+  hint?: string;
+  details?: { label?: string; content: React.ReactNode };
+}
+function RuleRow({ label, value, autoVerified, hint, details }: RuleRowProps) {
   return (
     <div className="flex items-start gap-3 py-1.5 border-b border-border-soft last:border-0">
       <div className="flex-shrink-0 w-1/3 text-[11.5px] font-semibold text-ink-2">{label}</div>
       <div className="flex-1 text-[11.5px] text-ink-2">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span>{value}</span>
+          {details && <InfoPopover label={details.label}>{details.content}</InfoPopover>}
           {autoVerified && (
             <span
               className="text-[9.5px] bg-emerald-100 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-medium"
@@ -77,6 +109,122 @@ function SubBlock({ title, children }: { title: string; children: React.ReactNod
   );
 }
 
+/* ─── 재사용 상세 컨텐츠 (popover에 들어가는 표·금액) ─── */
+
+/** 청약예금 예치금 표 — 지역·면적별 */
+const DEPOSIT_DETAIL = (
+  <div>
+    <table className="w-full text-[10px] border border-border rounded">
+      <thead className="bg-surface2">
+        <tr>
+          <th className="text-left px-1.5 py-1 font-medium border-b border-border">전용면적</th>
+          <th className="text-right px-1.5 py-1 font-medium border-b border-border">강원도</th>
+          <th className="text-right px-1.5 py-1 font-medium border-b border-border">서울·부산</th>
+          <th className="text-right px-1.5 py-1 font-medium border-b border-border">기타 광역시</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1">85㎡ 이하</td><td className="px-1.5 py-1 text-right font-mono">200만원</td><td className="px-1.5 py-1 text-right font-mono">300만원</td><td className="px-1.5 py-1 text-right font-mono">250만원</td></tr>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1">102㎡ 이하</td><td className="px-1.5 py-1 text-right font-mono">300만원</td><td className="px-1.5 py-1 text-right font-mono">600만원</td><td className="px-1.5 py-1 text-right font-mono">400만원</td></tr>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1">135㎡ 이하</td><td className="px-1.5 py-1 text-right font-mono">400만원</td><td className="px-1.5 py-1 text-right font-mono">1,000만원</td><td className="px-1.5 py-1 text-right font-mono">700만원</td></tr>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1">모든 면적</td><td className="px-1.5 py-1 text-right font-mono">500만원</td><td className="px-1.5 py-1 text-right font-mono">1,500만원</td><td className="px-1.5 py-1 text-right font-mono">1,000만원</td></tr>
+      </tbody>
+    </table>
+    <div className="mt-1.5 text-[9.5px] text-ink-4">청약통장 가입 + 위 금액 이상 납입 시 1순위 자격 (지역·면적 기준은 청약 신청 주택 기준)</div>
+  </div>
+);
+
+/** 도시근로자 월평균소득 — 가구원수·비율별 (2024 기준) */
+const INCOME_DETAIL_2024 = (
+  <div>
+    <table className="w-full text-[10px] border border-border rounded">
+      <thead className="bg-surface2">
+        <tr>
+          <th className="text-left px-1.5 py-1 font-medium border-b border-border">가구원수</th>
+          <th className="text-right px-1.5 py-1 font-medium border-b border-border">100%</th>
+          <th className="text-right px-1.5 py-1 font-medium border-b border-border">120%</th>
+          <th className="text-right px-1.5 py-1 font-medium border-b border-border">140%</th>
+          <th className="text-right px-1.5 py-1 font-medium border-b border-border">160%</th>
+        </tr>
+      </thead>
+      <tbody className="font-mono">
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1">3인 이하</td><td className="px-1.5 py-1 text-right">7,198,000</td><td className="px-1.5 py-1 text-right">8,638,000</td><td className="px-1.5 py-1 text-right">10,077,000</td><td className="px-1.5 py-1 text-right">11,517,000</td></tr>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1">4인</td><td className="px-1.5 py-1 text-right">8,248,000</td><td className="px-1.5 py-1 text-right">9,898,000</td><td className="px-1.5 py-1 text-right">11,547,000</td><td className="px-1.5 py-1 text-right">13,197,000</td></tr>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1">5인</td><td className="px-1.5 py-1 text-right">8,775,000</td><td className="px-1.5 py-1 text-right">10,530,000</td><td className="px-1.5 py-1 text-right">12,285,000</td><td className="px-1.5 py-1 text-right">14,040,000</td></tr>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1">6인</td><td className="px-1.5 py-1 text-right">9,563,000</td><td className="px-1.5 py-1 text-right">11,476,000</td><td className="px-1.5 py-1 text-right">13,388,000</td><td className="px-1.5 py-1 text-right">15,301,000</td></tr>
+      </tbody>
+    </table>
+    <div className="mt-1.5 text-[9.5px] text-ink-4">2024년 기준 (단위: 원). 매년 1월 갱신 — 청약홈에서 최신값 확인 필수.</div>
+  </div>
+);
+
+/** 일반공급 가점제 84점 만점 표 */
+const GAJEOM_DETAIL = (
+  <div className="space-y-2">
+    <div>
+      <div className="font-semibold text-ink mb-0.5">무주택기간 (32점)</div>
+      <div className="text-[10px]">1년 미만 2점 → 1년당 +2점 → <strong>15년 이상 32점</strong></div>
+    </div>
+    <div>
+      <div className="font-semibold text-ink mb-0.5">부양가족수 (35점)</div>
+      <div className="text-[10px]">0명(본인) 5점 / 1명 10점 / 2명 15 / 3명 20 / 4명 25 / 5명 30 / <strong>6명 이상 35점</strong></div>
+    </div>
+    <div>
+      <div className="font-semibold text-ink mb-0.5">청약통장 가입기간 (17점)</div>
+      <div className="text-[10px]">6개월 미만 1점 → 6개월~1년 2점 → 2년당 +1점 → <strong>15년 이상 17점</strong></div>
+    </div>
+    <div className="text-[9.5px] text-ink-4 pt-1 border-t border-border-soft">
+      총점 = 32 + 35 + 17 = <strong>최대 84점</strong>
+    </div>
+  </div>
+);
+
+/** 다자녀 가점표 (100점 만점) */
+const MULTI_CHILD_GAJEOM_DETAIL = (
+  <div className="space-y-1.5">
+    <table className="w-full text-[10px] border border-border rounded">
+      <thead className="bg-surface2">
+        <tr>
+          <th className="text-left px-1.5 py-1 font-medium border-b border-border">평점요소</th>
+          <th className="text-left px-1.5 py-1 font-medium border-b border-border">기준</th>
+          <th className="text-right px-1.5 py-1 font-medium border-b border-border">점수</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1">미성년 자녀수</td><td className="px-1.5 py-1">5명+ / 4명 / 3명</td><td className="px-1.5 py-1 text-right font-mono">40 / 35 / 30</td></tr>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1">영유아 자녀수</td><td className="px-1.5 py-1">3명+ / 2명 / 1명</td><td className="px-1.5 py-1 text-right font-mono">15 / 10 / 5</td></tr>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1">세대구성</td><td className="px-1.5 py-1">3세대 이상 / 한부모</td><td className="px-1.5 py-1 text-right font-mono">5 / 5</td></tr>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1">무주택기간</td><td className="px-1.5 py-1">10년+ / 5~10년 / 1~5년</td><td className="px-1.5 py-1 text-right font-mono">20 / 15 / 10</td></tr>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1">시·도 거주</td><td className="px-1.5 py-1">10년+ / 5~10년 / 1~5년</td><td className="px-1.5 py-1 text-right font-mono">15 / 10 / 5</td></tr>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1">통장 가입기간</td><td className="px-1.5 py-1">10년 이상</td><td className="px-1.5 py-1 text-right font-mono">5</td></tr>
+      </tbody>
+    </table>
+    <div className="text-[9.5px] text-ink-4">총 100점. 동점자: ① 미성년 자녀수 → ② 신청자 연령</div>
+  </div>
+);
+
+/** 가점·추첨 비율 표 */
+const GAJEOM_RATIO_DETAIL = (
+  <div>
+    <table className="w-full text-[10px] border border-border rounded">
+      <thead className="bg-surface2">
+        <tr>
+          <th className="text-left px-1.5 py-1 font-medium border-b border-border">규제</th>
+          <th className="text-left px-1.5 py-1 font-medium border-b border-border">85㎡ 이하</th>
+          <th className="text-left px-1.5 py-1 font-medium border-b border-border">85㎡ 초과</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1 font-semibold">투기과열</td><td className="px-1.5 py-1">가점 40% + 추첨 60%</td><td className="px-1.5 py-1">가점 70% + 추첨 30%</td></tr>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1 font-semibold">청약과열</td><td className="px-1.5 py-1">가점 40% + 추첨 60%</td><td className="px-1.5 py-1">가점 30% + 추첨 70%</td></tr>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1 font-semibold">수도권 비규제</td><td className="px-1.5 py-1">가점 40% + 추첨 60%</td><td className="px-1.5 py-1">추첨 100%</td></tr>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1 font-semibold">지방 광역시</td><td className="px-1.5 py-1">가점 40% + 추첨 60%</td><td className="px-1.5 py-1">추첨 100%</td></tr>
+        <tr className="border-t border-border-soft"><td className="px-1.5 py-1 font-semibold">지방 그 외 (강원)</td><td className="px-1.5 py-1">추첨 100% (사업주체 선택)</td><td className="px-1.5 py-1">추첨 100%</td></tr>
+      </tbody>
+    </table>
+  </div>
+);
+
 /* ─── 데이터 — 신청 유형별 자격·서류·검증 ────────────────── */
 
 type SupplyType =
@@ -90,14 +238,22 @@ interface DocSpec {
   auto?: boolean;
 }
 
+type RowSpec = {
+  label: string;
+  value: React.ReactNode;
+  auto?: boolean;
+  hint?: string;
+  details?: { label?: string; content: React.ReactNode };
+};
+
 interface SupplyTypeConfig {
   label: string;
   icon: any;
   color: string;
   intro: string;
-  eligibility: Array<{ label: string; value: string; auto?: boolean; hint?: string }>;
-  selection: Array<{ label: string; value: string; auto?: boolean; hint?: string }>;
-  incomeAsset: Array<{ label: string; value: string; auto?: boolean; hint?: string }>;
+  eligibility: RowSpec[];
+  selection: RowSpec[];
+  incomeAsset: RowSpec[];
   documents: DocSpec[];
   checkpoints: string[];
 }
@@ -109,19 +265,56 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
     color: "indigo",
     intro: "청약통장 1순위 자격을 충족한 일반 신청자. 가점제와 추첨제 비율이 전용면적·규제지역에 따라 달라짐.",
     eligibility: [
-      { label: "청약통장", value: "1순위 — 가입기간 + 지역·면적별 예치금 충족", auto: true },
-      { label: "주택소유", value: "규제지역(투기과열·청약과열): 무주택세대구성원 / 비규제: 무주택 또는 1주택자", auto: true },
-      { label: "거주 요건", value: "해당지역 우선공급 1순위는 입주자모집공고일 기준 최근 1년 이상 계속 거주", auto: true, hint: "해외 90일 초과 체류 시 거주기간 인정 안 됨" },
-      { label: "재당첨 제한", value: "투기과열 당첨자 10년/7년, 일반 5년 — 위반 시 부적격" },
+      {
+        label: "청약통장",
+        value: "1순위 — 가입 6개월(비규제)/24개월(규제) 이상 + 지역·면적별 예치금 (200만~1,500만원)",
+        auto: true,
+        details: { label: "지역·면적별 예치금", content: DEPOSIT_DETAIL },
+      },
+      {
+        label: "주택소유",
+        value: "규제지역(투기과열·청약과열): 무주택세대구성원 / 비규제: 무주택 또는 1주택자",
+        auto: true,
+      },
+      {
+        label: "거주 요건",
+        value: "해당지역 1년 이상 계속 거주 — 입주자모집공고일 기준",
+        auto: true,
+        hint: "해외 90일 초과 체류 시 거주기간 인정 안 됨",
+      },
+      {
+        label: "재당첨 제한",
+        value: "투기과열 당첨자 10년(85㎡↓) / 7년(85㎡↑), 일반 5년 — 위반 시 부적격",
+      },
     ],
     selection: [
-      { label: "가점제 vs 추첨제", value: "전용 85㎡ 이하: 가점 40%/추첨 60% / 85㎡ 초과: 규제지역은 가점 70%, 비규제 추첨 100%" },
-      { label: "가점제 항목", value: "무주택기간 32 + 부양가족수 35 + 통장가입기간 17 = 84점 만점", auto: true },
-      { label: "추첨제 우선", value: "추첨제 75% → 무주택 세대주 / 25% → 1주택자(처분 약정자) + 미당첨 무주택자" },
+      {
+        label: "가점제 vs 추첨제",
+        value: "면적·규제지역별 차등 (40~100% 추첨)",
+        details: { label: "비율 매트릭스 (전용면적 × 규제)", content: GAJEOM_RATIO_DETAIL },
+      },
+      {
+        label: "가점제 항목",
+        value: "무주택기간 32 + 부양가족 35 + 통장 17 = 84점 만점",
+        auto: true,
+        details: { label: "84점 만점 상세", content: GAJEOM_DETAIL },
+      },
+      {
+        label: "추첨제 우선",
+        value: "추첨제 75% → 무주택 세대주 우선 / 25% → 1주택자(처분 약정자) + 미당첨 무주택자",
+      },
     ],
     incomeAsset: [
-      { label: "소득 기준", value: "민영주택 일반공급은 없음 (공공주택 한정)", hint: "추첨제 25%(1주택자) 한정 자산 기준 적용 — 가구 자산 약 3.31억 이하 (규제지역)" },
-      { label: "자산 기준", value: "비규제 지구는 없음 / 투기과열·청약과열 지구 추첨제 25%만 적용" },
+      {
+        label: "소득 기준",
+        value: "민영주택 일반공급은 없음",
+        hint: "공공주택은 도시근로자 월평균소득 100~140% 등 별도 적용",
+        details: { label: "도시근로자 월평균소득 (2024)", content: INCOME_DETAIL_2024 },
+      },
+      {
+        label: "자산 기준",
+        value: "비규제: 없음 / 투기과열·청약과열 추첨제 25%(1주택자)만 — 가구 자산 약 3.31억 이하",
+      },
     ],
     documents: [
       { name: "특별공급신청서·무주택 서약서", required: true, purpose: "신청 의사 + 무주택 본인 확인", auto: true },
@@ -154,10 +347,35 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
     color: "purple",
     intro: "국가유공자·장애인·중소기업 근로자·철거민 등 정부·지자체 기관이 추천한 자. 별도 우선순위 적용.",
     eligibility: [
-      { label: "추천 기관", value: "국군복지단, 시·도 경로장애인과, 보훈지청, 중소기업 지방청, 도시재생 부지제공 등" },
+      {
+        label: "추천 기관",
+        value: "국군복지단, 시·도 경로장애인과, 보훈지청, 중소기업 지방청, 도시재생 부지제공 등",
+        details: {
+          label: "추천 기관 + 자격 (예시)",
+          content: (
+            <ul className="space-y-1 list-disc list-inside text-[10px]">
+              <li>10년 이상 장기복무 군인 → 국군복지단 복지사업운용과</li>
+              <li>장애인 → 강원도청 경로장애인과</li>
+              <li>국가유공자·장기복무 제대군인·국가보훈대상자 → 강원동부보훈지청 복지팀</li>
+              <li>중소기업 근로자 → 강원지방중소벤처기업부 강원영동사무소</li>
+              <li>철거민·도시재생 부지제공자 → 해당 지자체 주택과</li>
+            </ul>
+          ),
+        },
+      },
       { label: "주택소유", value: "무주택세대구성원", auto: true },
-      { label: "청약통장", value: "6개월 이상 + 예치금 (단, 철거민·도시재생 부지제공자·장애인·국가유공자는 통장 면제)" },
-      { label: "1세대 1회 한정", value: "특별공급 평생 1세대 1회만 신청 가능", auto: true },
+      {
+        label: "청약통장",
+        value: "6개월 이상 + 지역·면적별 예치금 (200만~1,500만원)",
+        hint: "철거민·도시재생 부지제공자·장애인·국가유공자는 통장 면제",
+        details: { label: "지역·면적별 예치금", content: DEPOSIT_DETAIL },
+      },
+      {
+        label: "1세대 1회 한정",
+        value: "특별공급 평생 1세대 1회만 신청 가능",
+        auto: true,
+        hint: "과거 특별공급 당첨 이력자는 신청 불가 (예외: 미분양 등)",
+      },
     ],
     selection: [
       { label: "공급 비율", value: "전용 85㎡ 이하 공급세대수의 10% 범위" },
@@ -165,8 +383,16 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
       { label: "예비입주자", value: "예비대상자도 청약 신청 필수. 잔여 시 추첨으로 입주자/예비입주자 결정" },
     ],
     incomeAsset: [
-      { label: "소득 기준", value: "기관별로 상이 — 보훈·장애인 별도, 중소기업 근로자는 도시근로자 월평균소득 100% 이하 등" },
-      { label: "자산 기준", value: "공공주택 적용 (부동산 2.15억 / 자동차 3,683만원 이하)" },
+      {
+        label: "소득 기준",
+        value: "기관별 상이 — 보훈·장애인 별도, 중소기업 근로자 100% 이하 등",
+        details: { label: "도시근로자 월평균소득 (2024)", content: INCOME_DETAIL_2024 },
+      },
+      {
+        label: "자산 기준",
+        value: "공공주택만 — 부동산 2.15억 / 자동차 3,683만원 이하",
+        hint: "부동산 = 토지·건물 공시지가 합산 (신청자·배우자·세대원 합산)",
+      },
     ],
     documents: [
       { name: "기관추천서 (해당 기관 발급)", required: true, purpose: "기관 추천 자격 증명 — 핵심 서류" },
@@ -194,19 +420,43 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
     color: "pink",
     intro: "만 19세 미만 자녀 3명 이상 보유. 100점 만점 가점표로 우선순위 결정.",
     eligibility: [
-      { label: "자녀 수", value: "만 19세 미만 자녀 3명 이상 (태아·입양 포함)", auto: true },
-      { label: "주택소유", value: "무주택세대구성원", auto: true },
-      { label: "청약통장", value: "6개월 이상 + 예치금" },
-      { label: "거주 요건", value: "강원도 6개월 이상 거주 시 우선" },
+      {
+        label: "자녀 수",
+        value: "만 19세 미만 자녀 3명 이상 (태아·입양 포함)",
+        auto: true,
+        hint: "입주자모집공고일 현재 미성년자녀. 태아는 임신진단서, 입양자녀는 입양관계증명서로 입증",
+      },
+      { label: "주택소유", value: "무주택세대구성원 (3명 이상 미성년자녀 + 무주택)", auto: true },
+      {
+        label: "청약통장",
+        value: "6개월 이상 + 지역·면적별 예치금 (200만~1,500만원)",
+        details: { label: "지역·면적별 예치금", content: DEPOSIT_DETAIL },
+      },
+      {
+        label: "거주 요건",
+        value: "강원도 6개월 이상 거주 시 우선공급 — 경쟁 시 가점표로 우선",
+      },
     ],
     selection: [
       { label: "공급 비율", value: "공급세대수의 10% 범위" },
-      { label: "가점표", value: "100점 만점 — 미성년자녀40 + 영유아15 + 세대구성5 + 무주택기간20 + 거주기간15 + 통장기간5", auto: true },
-      { label: "동점자 처리", value: "① 미성년 자녀수 많은 자 → ② 신청자 연령 많은 자" },
+      {
+        label: "가점표",
+        value: "100점 만점 — 미성년자녀(40) + 영유아(15) + 세대구성(5) + 무주택기간(20) + 거주기간(15) + 통장(5)",
+        auto: true,
+        details: { label: "다자녀가구 가점표 (100점)", content: MULTI_CHILD_GAJEOM_DETAIL },
+      },
+      { label: "동점자 처리", value: "① 미성년 자녀수 많은 자 → ② 신청자 연령(연월일) 많은 자" },
     ],
     incomeAsset: [
-      { label: "소득 기준", value: "공공주택 도시근로자 월평균소득 120% 이하 / 민영은 없음 (공고 확인)" },
-      { label: "자산 기준", value: "공공주택만 적용" },
+      {
+        label: "소득 기준",
+        value: "공공주택 — 도시근로자 월평균소득 120% 이하 / 민영주택 — 없음 (공고 확인)",
+        details: { label: "도시근로자 월평균소득 (2024) — 가구원수별", content: INCOME_DETAIL_2024 },
+      },
+      {
+        label: "자산 기준",
+        value: "공공주택만 — 부동산 2.15억 / 자동차 3,683만원 이하",
+      },
     ],
     documents: [
       { name: "다자녀 우선순위 배점 기준표", required: true, purpose: "가점 산정 자료" },
@@ -242,10 +492,23 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
     color: "red",
     intro: "혼인 7년 이내 부부 + 무주택. 자녀 수가 우선순위 핵심.",
     eligibility: [
-      { label: "혼인 기간", value: "혼인 7년 이내 (예비신혼 포함, 입주 전까지 혼인신고 필요)", auto: true },
+      {
+        label: "혼인 기간",
+        value: "혼인 7년 이내 (예비신혼 포함)",
+        auto: true,
+        hint: "예비신혼은 입주 전까지 혼인신고 필요. 혼인신고일 = 가족관계등록부상 신고일 기준",
+      },
       { label: "주택소유", value: "무주택세대구성원", auto: true },
-      { label: "청약통장", value: "6개월 이상 + 예치금" },
-      { label: "재혼", value: "재혼 시 재혼일 기준 7년 이내" },
+      {
+        label: "청약통장",
+        value: "6개월 이상 + 지역·면적별 예치금 (200만~1,500만원)",
+        details: { label: "지역·면적별 예치금", content: DEPOSIT_DETAIL },
+      },
+      {
+        label: "재혼",
+        value: "재혼 시 재혼일 기준 7년 이내",
+        hint: "이혼 이력이 있으면 그 후 재혼한 날짜로 다시 7년 산정",
+      },
     ],
     selection: [
       { label: "공급 비율", value: "공급세대수의 18% 범위" },
@@ -254,9 +517,30 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
       { label: "동순위 경쟁 시", value: "① 자녀수 → ② 강원도 거주기간 → ③ 통장가입기간 → ④ 추첨" },
     ],
     incomeAsset: [
-      { label: "공공주택 소득", value: "우선 70% / 일반 100% / 추첨 140% (외벌이 — 맞벌이 +20%p)" },
-      { label: "민영주택 소득", value: "일반 130% / 추첨 200% (외벌이) / 맞벌이 +20%p" },
-      { label: "자산 기준", value: "공공주택만 적용 (부동산 2.15억 / 자동차 3,683만원)" },
+      {
+        label: "공공주택 소득",
+        value: "우선 70% / 일반 100% / 추첨 140% (외벌이 — 맞벌이 +20%p)",
+        details: {
+          label: "신혼부부 공공주택 소득 한도 (3인가구·외벌이 기준 2024)",
+          content: (
+            <ul className="space-y-0.5 list-disc list-inside text-[10px]">
+              <li>우선 70%: <span className="font-mono">5,038,600원</span> / 맞벌이 80%: 5,758,400원</li>
+              <li>일반 100%: <span className="font-mono">7,198,000원</span> / 맞벌이 120%: 8,637,600원</li>
+              <li>추첨 140%: <span className="font-mono">10,077,200원</span> / 맞벌이 160%: 11,516,800원</li>
+              <li className="mt-1 text-ink-4">3인 이하 기준. 가구원 늘면 한도 ↑</li>
+            </ul>
+          ),
+        },
+      },
+      {
+        label: "민영주택 소득",
+        value: "일반 130% / 추첨 200% (외벌이) — 맞벌이 +20%p",
+        details: { label: "도시근로자 월평균소득 (2024)", content: INCOME_DETAIL_2024 },
+      },
+      {
+        label: "자산 기준",
+        value: "공공주택만 — 부동산 2.15억 / 자동차 3,683만원 이하",
+      },
     ],
     documents: [
       { name: "혼인관계증명서 (상세, 본인)", required: true, purpose: "혼인일·혼인 상태 확인 — 핵심 서류" },
@@ -287,19 +571,41 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
     color: "amber",
     intro: "만 65세 이상 직계존속을 3년 이상 부양한 무주택세대주. 일반공급 가점제 적용.",
     eligibility: [
-      { label: "세대주 요건", value: "무주택세대주 (세대원 X)", auto: true, hint: "필수 — 세대원으로 등록되어 있으면 신청 불가" },
+      {
+        label: "세대주 요건",
+        value: "무주택세대주 (세대원 X)",
+        auto: true,
+        hint: "필수 — 세대원으로 등록돼 있으면 신청 불가. 등본상 세대주 표기 확인 필수",
+      },
       { label: "부양 대상", value: "만 65세 이상 직계존속 (배우자 직계존속 포함)" },
-      { label: "부양 기간", value: "3년 이상 등본 동일등재", auto: true },
+      {
+        label: "부양 기간",
+        value: "3년 이상 등본 동일등재",
+        auto: true,
+        hint: "주민등록초본 발급사항란의 전입일·전출일 이력으로 검증",
+      },
       { label: "주택소유", value: "신청자·배우자·직계존속 모두 무주택", auto: true },
-      { label: "청약통장", value: "1순위 + 6개월 이상 + 예치금" },
+      {
+        label: "청약통장",
+        value: "1순위 + 6개월 이상 + 지역·면적별 예치금 (200만~1,500만원)",
+        details: { label: "지역·면적별 예치금", content: DEPOSIT_DETAIL },
+      },
     ],
     selection: [
       { label: "공급 비율", value: "공급세대수의 3% 범위" },
-      { label: "선정 방식", value: "일반공급 가점제(84점) 적용 + 거주기간·소득 등 종합" },
+      {
+        label: "선정 방식",
+        value: "일반공급 가점제(84점) + 거주기간·소득 등 종합",
+        details: { label: "84점 만점 가점 항목", content: GAJEOM_DETAIL },
+      },
     ],
     incomeAsset: [
-      { label: "소득 기준", value: "공공주택만 적용 (도시근로자 월평균소득 100% 이하 등 공고 확인)" },
-      { label: "자산 기준", value: "공공주택 부동산 2.15억 / 자동차 3,683만원" },
+      {
+        label: "소득 기준",
+        value: "공공주택만 — 도시근로자 월평균소득 100% 이하 등 (공고 확인)",
+        details: { label: "도시근로자 월평균소득 (2024)", content: INCOME_DETAIL_2024 },
+      },
+      { label: "자산 기준", value: "공공주택 부동산 2.15억 / 자동차 3,683만원 이하" },
     ],
     documents: [
       { name: "직계존속 주민등록초본 (3년 이상 계속 거주)", required: true, purpose: "부양 기간 입증 — 핵심 서류" },
@@ -326,11 +632,24 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
     color: "emerald",
     intro: "생애 처음 주택 구입 + 5년 이상 소득세 납부 + 혼인 또는 자녀 있는 자.",
     eligibility: [
-      { label: "주택 구입 이력", value: "본인·배우자 모두 생애 최초 주택 구입 (과거 무소유)", auto: true },
+      {
+        label: "주택 구입 이력",
+        value: "본인·배우자 모두 생애 최초 주택 구입 (과거 무소유)",
+        auto: true,
+        hint: "분양권·입주권 포함. 등기부등본·주택소유 전산검색으로 검증",
+      },
       { label: "주택소유", value: "현재 무주택세대구성원", auto: true },
-      { label: "소득세 납부", value: "5년 이상 (근로소득세·종합소득세·사업소득세 누적)" },
-      { label: "혼인·자녀", value: "혼인 또는 미혼 자녀 있는 자만 신청 가능 (단독세대 X)" },
-      { label: "청약통장", value: "1순위 + 6개월 이상 + 예치금" },
+      {
+        label: "소득세 납부",
+        value: "5년 이상 누적 (60개월)",
+        hint: "근로소득세·종합소득세·사업소득세 합산. 5개년도 소득세 납세증명서로 입증",
+      },
+      { label: "혼인·자녀", value: "혼인 또는 미혼 자녀 있는 자만 (단독세대 X)" },
+      {
+        label: "청약통장",
+        value: "1순위 + 6개월 이상 + 지역·면적별 예치금 (200만~1,500만원)",
+        details: { label: "지역·면적별 예치금", content: DEPOSIT_DETAIL },
+      },
     ],
     selection: [
       { label: "공급 비율", value: "공공주택 25% / 민영주택 9% (전용 85㎡ 이하)" },
@@ -338,9 +657,31 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
       { label: "우선·일반·추첨", value: "소득 기준에 따라 우선 70% / 일반 20% / 추첨 10% 배분" },
     ],
     incomeAsset: [
-      { label: "공공주택 소득", value: "우선 100% / 일반 130% / 추첨 160%" },
-      { label: "민영주택 소득", value: "일반 130% / 추첨 200% (공고 확인)" },
-      { label: "자산 기준", value: "공공주택 부동산 2.15억 / 자동차 3,683만원" },
+      {
+        label: "공공주택 소득",
+        value: "우선 100% / 일반 130% / 추첨 160%",
+        details: {
+          label: "생애최초 공공주택 소득 한도 (3인가구 기준 2024)",
+          content: (
+            <ul className="space-y-0.5 list-disc list-inside text-[10px]">
+              <li>우선 100%: <span className="font-mono">7,198,000원</span></li>
+              <li>일반 130%: <span className="font-mono">9,357,400원</span></li>
+              <li>추첨 160%: <span className="font-mono">11,516,800원</span></li>
+              <li className="mt-1 text-ink-4">3인 이하 기준. 가구원 늘면 한도 ↑</li>
+            </ul>
+          ),
+        },
+      },
+      {
+        label: "민영주택 소득",
+        value: "일반 130% / 추첨 200% (공고 확인)",
+        details: { label: "도시근로자 월평균소득 (2024)", content: INCOME_DETAIL_2024 },
+      },
+      {
+        label: "자산 기준",
+        value: "공공주택 — 부동산 2.15억 / 자동차 3,683만원 이하",
+        hint: "신청자·배우자·세대원 합산",
+      },
     ],
     documents: [
       { name: "혼인관계증명서 (상세, 본인)", required: true, purpose: "혼인·이혼 이력 확인 — 미혼·기혼 무관 발급" },
@@ -369,19 +710,43 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
     color: "sky",
     intro: "2년 이내 임신·출산·입양한 가구. 혼인 무관, 출산 장려책으로 소득 한도 완화.",
     eligibility: [
-      { label: "출생일·예정일", value: "입주자모집공고일 기준 2년 이내 임신·출산·입양", auto: true },
+      {
+        label: "출생일·예정일",
+        value: "입주자모집공고일 기준 2년 이내 임신·출산·입양",
+        auto: true,
+        hint: "예: 공고일 2024.06.01 → 2022.06.01 이후 출생 또는 임신 인정",
+      },
       { label: "주택소유", value: "무주택세대구성원", auto: true },
       { label: "혼인 여부", value: "무관 (미혼·이혼·재혼 모두 가능)" },
-      { label: "청약통장", value: "6개월 이상 + 예치금" },
+      {
+        label: "청약통장",
+        value: "6개월 이상 + 지역·면적별 예치금 (200만~1,500만원)",
+        details: { label: "지역·면적별 예치금", content: DEPOSIT_DETAIL },
+      },
     ],
     selection: [
-      { label: "공급 비율", value: "민영주택 신혼부부 특별공급 물량의 20% / 공공주택 별도 비율" },
+      { label: "공급 비율", value: "민영주택 신혼부부 특별공급 물량의 20% / 공공주택 별도" },
       { label: "선정 방식", value: "신혼부부 특별공급 우선순위 적용 — 자녀 있음 1순위" },
       { label: "우선공급", value: "소득 100% 이하 우선 / 일반 150% / 추첨 200%" },
     ],
     incomeAsset: [
-      { label: "소득 기준 (공공)", value: "우선 100% / 일반 150% / 추첨 200% (외벌이 — 맞벌이 +20%p)", hint: "신혼부부보다 완화 — 출산 장려" },
-      { label: "자산 기준", value: "공공주택만 적용" },
+      {
+        label: "소득 기준 (공공)",
+        value: "우선 100% / 일반 150% / 추첨 200% (외벌이 — 맞벌이 +20%p)",
+        hint: "신혼부부보다 완화 — 출산 장려",
+        details: {
+          label: "신생아 공공주택 소득 한도 (3인가구·외벌이 기준 2024)",
+          content: (
+            <ul className="space-y-0.5 list-disc list-inside text-[10px]">
+              <li>우선 100%: <span className="font-mono">7,198,000원</span> / 맞벌이 120%: 8,637,600원</li>
+              <li>일반 150%: <span className="font-mono">10,797,000원</span> / 맞벌이 170%: 12,236,600원</li>
+              <li>추첨 200%: <span className="font-mono">14,396,000원</span> / 맞벌이 220%: 15,835,600원</li>
+              <li className="mt-1 text-ink-4">3인 이하 기준. 가구원 늘면 한도 ↑</li>
+            </ul>
+          ),
+        },
+      },
+      { label: "자산 기준", value: "공공주택만 — 부동산 2.15억 / 자동차 3,683만원 이하" },
     ],
     documents: [
       { name: "출생증명서 또는 자녀 기본증명서", required: true, purpose: "출생일 확인 — 핵심 서류" },
@@ -410,19 +775,42 @@ const TYPES: Record<SupplyType, SupplyTypeConfig> = {
     color: "blue",
     intro: "만 19~39세 미혼 청년. 본인·부모 모두 무주택 + 본인 소득·자산 기준.",
     eligibility: [
-      { label: "연령", value: "만 19세 이상 39세 이하", auto: true },
+      {
+        label: "연령",
+        value: "만 19세 이상 39세 이하",
+        auto: true,
+        hint: "주민등록상 생년월일 기준. 입주자모집공고일 현재 만 39세 0일까지 인정",
+      },
       { label: "혼인 상태", value: "미혼 (혼인 이력 없음)", auto: true },
       { label: "주택소유", value: "본인 + 부모(직계존속) 모두 무주택", auto: true },
-      { label: "청약통장", value: "6개월 이상" },
+      { label: "청약통장", value: "6개월 이상", hint: "공공주택은 예치금 요건 별도 기준 (공고 확인)" },
     ],
     selection: [
       { label: "공급 대상", value: "공공주택 (민영주택 청년 특별공급은 일부 시범사업)" },
       { label: "선정", value: "추첨제 (자격 충족자 중)" },
     ],
     incomeAsset: [
-      { label: "본인 소득", value: "월평균소득 140% 이하 (1인 가구 기준)" },
-      { label: "본인 자산", value: "2.83억원 이하 (2024 기준 — 부동산·자동차·금융자산 합산)" },
-      { label: "부모 자산 별도", value: "공고에 따라 부모 자산 기준도 적용 가능 (가구 자산 합산)" },
+      {
+        label: "본인 소득",
+        value: "월평균소득 140% 이하 — 1인 가구 약 4,860,000원 (2024)",
+        details: {
+          label: "1인 가구 청년 소득 한도 (2024)",
+          content: (
+            <ul className="space-y-0.5 list-disc list-inside text-[10px]">
+              <li>1인 가구 100%: <span className="font-mono">3,471,000원</span></li>
+              <li>1인 가구 120%: <span className="font-mono">4,165,200원</span></li>
+              <li>1인 가구 140%: <span className="font-mono">4,859,400원</span></li>
+              <li className="mt-1 text-ink-4">매년 1월 갱신 — 청약홈 최신값 확인</li>
+            </ul>
+          ),
+        },
+      },
+      {
+        label: "본인 자산",
+        value: "2.83억원 이하 — 부동산·자동차·금융자산 합산 (2024)",
+        hint: "본인 명의 자산만 (부모 자산은 별도 기준)",
+      },
+      { label: "부모 자산", value: "공고에 따라 부모 자산 기준도 적용 가능 — 보통 가구 자산 7.06억 이하" },
     ],
     documents: [
       { name: "신분증", required: true, purpose: "연령 확인" },
