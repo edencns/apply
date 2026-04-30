@@ -30,6 +30,7 @@ import {
   makePriceCacheKey,
 } from "@/lib/official-price-cache";
 import { classifyAddress, type RegionType } from "@/lib/region-classifier";
+import { addressToPnu } from "@/lib/juso-pnu";
 
 export const runtime = "nodejs";
 
@@ -46,7 +47,10 @@ interface LookupResult {
   /** 디버그용 — 매칭한 PNU */
   matchedIdentifier?: string;
   error?: string;
-  errorCode?: "NO_API_KEY" | "NOT_FOUND" | "RATE_LIMITED" | "NETWORK" | "INVALID_INPUT" | "PNU_REQUIRED";
+  errorCode?: "NO_API_KEY" | "NOT_FOUND" | "RATE_LIMITED" | "NETWORK" | "INVALID_INPUT" | "PNU_REQUIRED" | "ADDRESS_LOOKUP_FAILED" | "NO_JUSO_API_KEY";
+  /** 주소→PNU 변환 단계가 사용됐는지, 그 결과 매칭된 주소 (디버그용) */
+  resolvedFromAddress?: boolean;
+  resolvedAddress?: string;
 }
 
 const APT_URL    = "https://api.vworld.kr/ned/data/getApartHousingPriceAttr";
@@ -131,16 +135,51 @@ export async function POST(req: NextRequest) {
       return NextResponse.json<LookupResult>(result);
     }
 
-    // PNU 없으면 V-World 호출 불가 — 명확히 안내해 클라이언트가 알리미 fallback
-    if (!identifier) {
+    // PNU(19자리)가 없거나 짧으면 주소 → PNU 변환 시도 (juso.go.kr)
+    let pnu = "";
+    let dongNm: string | undefined;
+    let hoNm: string | undefined;
+    let resolvedFromAddress = false;
+    let resolvedAddress: string | undefined;
+
+    if (identifier && /^\d{8,}$/.test(identifier)) {
+      pnu = identifier;
+    } else if (address) {
+      try {
+        const lookup = await addressToPnu(address);
+        pnu = lookup.pnu;
+        dongNm = lookup.dongNm;
+        hoNm = lookup.hoNm;
+        resolvedFromAddress = true;
+        resolvedAddress = lookup.matchedAddress;
+      } catch (err: any) {
+        const msg = String(err?.message || "");
+        if (/NO_JUSO_API_KEY/.test(msg)) {
+          return NextResponse.json<LookupResult>(
+            {
+              source: "api",
+              confidence: "low",
+              regionType,
+              error: "JUSO_GO_KR_API_KEY 미설정. juso.go.kr 도로명주소 API 키를 Vercel에 추가해주세요.",
+              errorCode: "NO_JUSO_API_KEY",
+            },
+            { status: 503 },
+          );
+        }
+        return NextResponse.json<LookupResult>(
+          {
+            source: "api",
+            confidence: "low",
+            regionType,
+            error: `주소 → PNU 변환 실패: ${msg.slice(0, 200)}. 「공시가격 알리미」 새 탭으로 직접 확인 권장.`,
+            errorCode: "ADDRESS_LOOKUP_FAILED",
+          },
+          { status: 404 },
+        );
+      }
+    } else {
       return NextResponse.json<LookupResult>(
-        {
-          source: "api",
-          confidence: "low",
-          regionType,
-          error: "공시가격 자동 조회는 식별번호(PNU)가 필요합니다. 주소만으로는 「공시가격 알리미」를 새 탭으로 열어 확인하세요.",
-          errorCode: "PNU_REQUIRED",
-        },
+        { source: "api", confidence: "low", regionType, error: "주소 또는 PNU 필요", errorCode: "INVALID_INPUT" },
         { status: 400 },
       );
     }
@@ -152,20 +191,24 @@ export async function POST(req: NextRequest) {
       let result: LookupResult | null = null;
 
       if (kind === "apt") {
-        result = await callVworld({ url: APT_URL, keyEnv: "DATA_GO_KR_API_KEY", priceField: "pblntfPc", pnu: identifier, year, kindLabel: "apt" });
+        result = await callVworld({ url: APT_URL, keyEnv: "DATA_GO_KR_API_KEY", priceField: "pblntfPc", pnu, dongNm, hoNm, year, kindLabel: "apt" });
       } else if (kind === "indvd") {
-        result = await callVworld({ url: INDVD_URL, keyEnv: "DATA_GO_KR_API_KEY_INDVD", priceField: "housePc", pnu: identifier, year, kindLabel: "indvd" });
+        result = await callVworld({ url: INDVD_URL, keyEnv: "DATA_GO_KR_API_KEY_INDVD", priceField: "housePc", pnu, year, kindLabel: "indvd" });
       } else {
-        // unknown — 공동주택 먼저 시도, 실패 시 개별주택
+        // unknown — 공동주택 먼저 시도(아파트 가능성 높음), 실패 시 개별주택
         try {
-          result = await callVworld({ url: APT_URL, keyEnv: "DATA_GO_KR_API_KEY", priceField: "pblntfPc", pnu: identifier, year, kindLabel: "apt" });
+          result = await callVworld({ url: APT_URL, keyEnv: "DATA_GO_KR_API_KEY", priceField: "pblntfPc", pnu, dongNm, hoNm, year, kindLabel: "apt" });
         } catch (e: any) {
           if (/NOT_FOUND/.test(String(e?.message))) {
-            result = await callVworld({ url: INDVD_URL, keyEnv: "DATA_GO_KR_API_KEY_INDVD", priceField: "housePc", pnu: identifier, year, kindLabel: "indvd" });
+            result = await callVworld({ url: INDVD_URL, keyEnv: "DATA_GO_KR_API_KEY_INDVD", priceField: "housePc", pnu, year, kindLabel: "indvd" });
           } else {
             throw e;
           }
         }
+      }
+      if (result) {
+        result.resolvedFromAddress = resolvedFromAddress;
+        result.resolvedAddress = resolvedAddress;
       }
 
       if (result && result.price != null && cacheKey) {
@@ -229,6 +272,8 @@ async function callVworld(opts: {
   keyEnv: "DATA_GO_KR_API_KEY" | "DATA_GO_KR_API_KEY_INDVD";
   priceField: "pblntfPc" | "housePc";
   pnu: string;
+  dongNm?: string;
+  hoNm?: string;
   year: number;
   kindLabel: "apt" | "indvd";
 }): Promise<LookupResult> {
@@ -240,6 +285,9 @@ async function callVworld(opts: {
   url.searchParams.set("pnu", opts.pnu);
   url.searchParams.set("format", "json");
   url.searchParams.set("numOfRows", "1");
+  // 공동주택은 같은 PNU 안에 여러 동·호가 있어 정확 매칭 위해 동·호도 같이 전달
+  if (opts.dongNm) url.searchParams.set("dongNm", opts.dongNm);
+  if (opts.hoNm) url.searchParams.set("hoNm", opts.hoNm);
   // stdrYear는 옵션. 없으면 가장 최근 발표분 반환.
   // 명시하면 그 해 기준 가격을 받지만 미발표 연도면 빈 응답이라 기본은 미지정.
 
