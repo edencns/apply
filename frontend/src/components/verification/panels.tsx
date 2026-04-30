@@ -136,7 +136,7 @@ export function HouseholdPanel({
 async function lookupAndAttach(
   customerId: number,
   propertyIdx: number,
-  prop: { address: string; identifier?: string },
+  prop: { address: string; identifier?: string; usage?: string },
   setBusy: (busy: boolean) => void,
   onAfter: () => void,
 ): Promise<void> {
@@ -148,6 +148,7 @@ async function lookupAndAttach(
       body: JSON.stringify({
         address: prop.address,
         identifier: prop.identifier,
+        usage: prop.usage,
       }),
     });
     const json = await res.json().catch(() => ({}));
@@ -251,7 +252,7 @@ export function PropertyPanel({
           const res = await fetch("/api/lookup-official-price", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ address: p.address, identifier: p.identifier }),
+            body: JSON.stringify({ address: p.address, identifier: p.identifier, usage: p.usage }),
           });
           const json = await res.json().catch(() => ({}));
           if (res.ok && json.price) {
@@ -396,7 +397,7 @@ export function PropertyPanel({
                               <button
                                 type="button"
                                 onClick={() => lookupAndAttach(
-                                  customer.id, idx, { address: p.address, identifier: p.identifier },
+                                  customer.id, idx, { address: p.address, identifier: p.identifier, usage: p.usage },
                                   (b) => setBusyIdx(b ? idx : null),
                                   () => {
                                     const updated = localCustomers.get(customer.id);

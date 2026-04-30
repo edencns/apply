@@ -120,7 +120,7 @@ export default function PropertyStepPage() {
     const customers = localCustomers
       .listByAnnouncement(selected.id)
       .filter((c) => !c.superseded);
-    type Job = { cid: number; idx: number; address: string; identifier?: string };
+    type Job = { cid: number; idx: number; address: string; identifier?: string; usage?: string };
     const jobs: Job[] = [];
     for (const c of customers) {
       (c.properties || []).forEach((p, idx) => {
@@ -129,7 +129,7 @@ export default function PropertyStepPage() {
         const notTransferred = !p.transferredDate;
         const isResidential = isResidentialUse(p.usage);
         if (isSmall && noPrice && notTransferred && isResidential) {
-          jobs.push({ cid: c.id, idx, address: p.address, identifier: p.identifier });
+          jobs.push({ cid: c.id, idx, address: p.address, identifier: p.identifier, usage: p.usage });
         }
       });
     }
@@ -161,7 +161,7 @@ export default function PropertyStepPage() {
           const res = await fetch("/api/lookup-official-price", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ address: j.address, identifier: j.identifier }),
+            body: JSON.stringify({ address: j.address, identifier: j.identifier, usage: j.usage }),
           });
           const json = await res.json().catch(() => ({}));
           if (res.status === 429) {
