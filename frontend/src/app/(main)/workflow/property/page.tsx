@@ -113,6 +113,12 @@ export default function PropertyStepPage() {
     skipped: number;
     notFound: number;
     aborted?: boolean;
+    /** 에러 코드별 카운트 (PNU_REQUIRED/NO_API_KEY/NETWORK 등) */
+    errorBreakdown?: Record<string, number>;
+    /** 처음 몇 건의 실제 에러 메시지 (디버그용) */
+    sampleErrors?: Array<{ address: string; errorCode?: string; error?: string }>;
+    /** 식별번호 있는 행 / 없는 행 */
+    pnuStats?: { withPnu: number; withoutPnu: number };
   } | null>(null);
 
   const handleBulkPriceLookup = async () => {
@@ -148,8 +154,16 @@ export default function PropertyStepPage() {
     setPriceLookupResult(null);
     setPriceLookupProgress({ done: 0, total: jobs.length });
 
+    // 사전 통계 — PNU(식별번호) 보유 비율
+    const pnuStats = {
+      withPnu: jobs.filter((j) => j.identifier && j.identifier.length >= 8).length,
+      withoutPnu: jobs.filter((j) => !j.identifier || j.identifier.length < 8).length,
+    };
+
     let success = 0, fail = 0, notFound = 0;
     let aborted = false;
+    const errorBreakdown: Record<string, number> = {};
+    const sampleErrors: Array<{ address: string; errorCode?: string; error?: string }> = [];
 
     // 병렬 5개씩 처리
     const PARALLEL = 5;
@@ -187,18 +201,26 @@ export default function PropertyStepPage() {
             success++;
           } else if (json.errorCode === "NOT_FOUND") {
             notFound++;
+            const code = json.errorCode || "UNKNOWN";
+            errorBreakdown[code] = (errorBreakdown[code] || 0) + 1;
+            if (sampleErrors.length < 5) sampleErrors.push({ address: j.address, errorCode: code, error: json.error });
           } else {
             fail++;
+            const code = json.errorCode || `HTTP_${res.status}` || "UNKNOWN";
+            errorBreakdown[code] = (errorBreakdown[code] || 0) + 1;
+            if (sampleErrors.length < 5) sampleErrors.push({ address: j.address, errorCode: code, error: json.error });
           }
-        } catch {
+        } catch (e: any) {
           fail++;
+          errorBreakdown["EXCEPTION"] = (errorBreakdown["EXCEPTION"] || 0) + 1;
+          if (sampleErrors.length < 5) sampleErrors.push({ address: j.address, errorCode: "EXCEPTION", error: e?.message });
         }
       }));
       setPriceLookupProgress({ done: Math.min(i + PARALLEL, jobs.length), total: jobs.length });
     }
 
     const skipped = jobs.length - success - fail - notFound;
-    setPriceLookupResult({ success, fail, notFound, skipped, aborted });
+    setPriceLookupResult({ success, fail, notFound, skipped, aborted, errorBreakdown, sampleErrors, pnuStats });
     setPriceLookupProgress(null);
     setPriceLookupBusy(false);
     setReloadKey((k) => k + 1);
@@ -533,7 +555,61 @@ export default function PropertyStepPage() {
                   <span className="text-red-800 font-semibold">⚠ API 한도 초과로 중단</span>
                 )}
               </div>
-              <div className="mt-1 text-[11px] text-indigo-800/80">
+
+              {/* 사전 진단: PNU 보유 비율 */}
+              {priceLookupResult.pnuStats && (
+                <div className="mt-2 text-[11px] text-indigo-900 bg-white/60 rounded p-2 border border-indigo-100">
+                  📍 식별번호(PNU) 보유: <strong>{priceLookupResult.pnuStats.withPnu}건</strong> /
+                  미보유: <strong className={priceLookupResult.pnuStats.withoutPnu > 0 ? "text-red-700" : ""}>{priceLookupResult.pnuStats.withoutPnu}건</strong>
+                  {priceLookupResult.pnuStats.withoutPnu > 0 && (
+                    <span className="block mt-0.5 text-[10.5px] text-red-700">
+                      → PNU(고유번호) 없는 행은 자동 조회 불가. 엑셀의 「식별번호」 컬럼을 확인하세요.
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* 에러 코드 breakdown */}
+              {priceLookupResult.errorBreakdown && Object.keys(priceLookupResult.errorBreakdown).length > 0 && (
+                <div className="mt-2 text-[11px] text-indigo-900">
+                  <div className="font-semibold mb-0.5">실패 원인 분류:</div>
+                  <ul className="ml-4 list-disc space-y-0.5">
+                    {Object.entries(priceLookupResult.errorBreakdown).map(([code, n]) => (
+                      <li key={code}>
+                        <code className="text-[10.5px] bg-white/70 px-1 rounded">{code}</code>: {n}건
+                        {code === "PNU_REQUIRED" && <span className="text-red-700 ml-1">— 엑셀에 식별번호 컬럼이 없음</span>}
+                        {code === "NO_API_KEY" && <span className="text-red-700 ml-1">— Vercel 환경변수 미설정 또는 미배포</span>}
+                        {code === "NOT_FOUND" && <span className="text-amber-700 ml-1">— PNU 형식 오류 또는 API에 데이터 없음</span>}
+                        {code === "NETWORK" && <span className="text-red-700 ml-1">— V-World API 응답 오류</span>}
+                        {code === "RATE_LIMITED" && <span className="text-red-700 ml-1">— 호출 한도 초과</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* 샘플 에러 메시지 */}
+              {priceLookupResult.sampleErrors && priceLookupResult.sampleErrors.length > 0 && (
+                <details className="mt-2 text-[11px]">
+                  <summary className="cursor-pointer text-indigo-900 font-semibold">
+                    실패 샘플 메시지 보기 ({priceLookupResult.sampleErrors.length}건)
+                  </summary>
+                  <ul className="mt-1 ml-4 space-y-1 text-ink-2">
+                    {priceLookupResult.sampleErrors.map((e, i) => (
+                      <li key={i} className="bg-white/60 rounded p-1.5 border border-red-100">
+                        <div className="font-mono text-[10px] text-ink-3 truncate" title={e.address}>
+                          📍 {e.address}
+                        </div>
+                        <div className="text-red-800">
+                          [{e.errorCode}] {e.error}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+
+              <div className="mt-2 text-[11px] text-indigo-800/80">
                 💡 「소형·저가 예외」 기준(수도권 ≤1.6억 / 비수도권 ≤1억) 자동 비교돼 1주택자가 무주택으로 재판정될 수 있어요.
                 개별 주택은 「검증」 버튼으로 다시 평가하세요.
               </div>
