@@ -17,7 +17,9 @@ const securityHeaders = [
       //   - https://vercel.com (API endpoint that returns presigned upload URL)
       //   - https://*.public.blob.vercel-storage.com (스토리지 CDN — public 데이터)
       //   - https://*.blob.vercel-storage.com (스토리지 CDN — 일반)
-      "connect-src 'self' https://*.pusher.com wss://*.pusher.com https://realtime.ably.io wss://realtime.ably.io https://*.ably-realtime.com wss://*.ably-realtime.com https://vercel.com https://*.blob.vercel-storage.com https://*.public.blob.vercel-storage.com",
+      // V-World(공시가격)·juso.go.kr(주소→PNU) 직접 호출 허용 — Vercel→V-World
+      // 서버사이드 호출이 차단돼 클라이언트 사이드에서 직접 호출하는 폴백 경로 가능하게.
+      "connect-src 'self' https://*.pusher.com wss://*.pusher.com https://realtime.ably.io wss://realtime.ably.io https://*.ably-realtime.com wss://*.ably-realtime.com https://vercel.com https://*.blob.vercel-storage.com https://*.public.blob.vercel-storage.com https://api.vworld.kr https://business.juso.go.kr",
       // 우리 앱 내부의 PDF 미리보기 iframe 허용 (same-origin) + blob (로컬 업로드 미리보기)
       "frame-src 'self' blob:",
       "object-src 'none'",
