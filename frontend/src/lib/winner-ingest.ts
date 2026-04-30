@@ -21,6 +21,7 @@
  */
 
 import { toIdentity, identityScore, sameIdentity } from "./identity";
+import { addOrMergeProperty } from "./property-key";
 
 // xlsx는 300KB+ 라이브러리 — 번들 부풀림 방지를 위해 동적 import
 type XLSXModule = typeof import("xlsx");
@@ -1261,7 +1262,8 @@ export function consolidate(files: FileIngestResult[]): ConsolidatedResult {
       const profile = profilesByRrn.get(p.ownerRrn);
       if (profile) {
         if (!profile.properties) profile.properties = [];
-        profile.properties.push(p);
+        // 같은 매물(다른 주소 포맷 포함)은 합치고 새 매물만 추가
+        addOrMergeProperty(profile.properties, p);
         if (profile.sourceKinds && !profile.sourceKinds.includes(file.kind)) {
           profile.sourceKinds.push(file.kind);
         }
@@ -1273,7 +1275,7 @@ export function consolidate(files: FileIngestResult[]): ConsolidatedResult {
         if (attached) return;
         if (prof.householdMembers?.some((m) => m.memberRrn === p.ownerRrn)) {
           if (!prof.properties) prof.properties = [];
-          prof.properties.push(p);
+          addOrMergeProperty(prof.properties, p);
           if (prof.sourceKinds && !prof.sourceKinds.includes(file.kind)) {
             prof.sourceKinds.push(file.kind);
           }
