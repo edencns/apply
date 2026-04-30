@@ -13,6 +13,7 @@ import { parsePropertyOwnership, ensureXlsx } from "@/lib/winner-ingest";
 import { ingestForStage, type WorkflowIngestResult } from "@/lib/workflow-ingest";
 import { formatHousingCode } from "@/lib/housing-code";
 import IndividualVerifyModal from "@/components/workflow/IndividualVerifyModal";
+import ManualPriceQueue from "@/components/workflow/ManualPriceQueue";
 import {
   Home, AlertTriangle, FileSpreadsheet,
   Loader2, CheckCircle2, UserCheck, UserMinus, FileText, Sparkles,
@@ -665,6 +666,12 @@ export default function PropertyStepPage() {
               <span className="text-ink-2">검증 필요 {verifyResult.missing}명</span>
             </div>
           )}
+
+          {/* 공시가격 수동 입력 대기 큐 — 자동 조회 실패한 60㎡ 이하 주택 */}
+          <ManualPriceQueue
+            customers={localCustomers.listByAnnouncement(selected.id).filter((c) => !c.superseded)}
+            onUpdate={() => setReloadKey((k) => k + 1)}
+          />
 
           <StageCustomerList
             key={reloadKey}

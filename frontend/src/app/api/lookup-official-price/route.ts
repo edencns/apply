@@ -192,20 +192,53 @@ export async function POST(req: NextRequest) {
     try {
       let result: LookupResult | null = null;
 
+      // 단계적 시도:
+      //   1) 동·호 매칭 → 정확 가격
+      //   2) 동·호 빼고 PNU만 → 단지 첫 매칭 (단지 평균가에 가까움, 정확도 ↓)
+      //   3) 공동주택→개별주택 fallback
+      const tryApt = async (withDongHo: boolean) =>
+        callVworld({
+          url: APT_URL, keyEnv: "DATA_GO_KR_API_KEY", priceField: "pblntfPc",
+          pnu, dongNm: withDongHo ? dongNm : undefined, hoNm: withDongHo ? hoNm : undefined,
+          year, kindLabel: "apt",
+        });
+      const tryIndvd = async () =>
+        callVworld({
+          url: INDVD_URL, keyEnv: "DATA_GO_KR_API_KEY_INDVD", priceField: "housePc",
+          pnu, year, kindLabel: "indvd",
+        });
+
       if (kind === "apt") {
-        result = await callVworld({ url: APT_URL, keyEnv: "DATA_GO_KR_API_KEY", priceField: "pblntfPc", pnu, dongNm, hoNm, year, kindLabel: "apt" });
-      } else if (kind === "indvd") {
-        result = await callVworld({ url: INDVD_URL, keyEnv: "DATA_GO_KR_API_KEY_INDVD", priceField: "housePc", pnu, year, kindLabel: "indvd" });
-      } else {
-        // unknown — 공동주택 먼저 시도(아파트 가능성 높음), 실패 시 개별주택
         try {
-          result = await callVworld({ url: APT_URL, keyEnv: "DATA_GO_KR_API_KEY", priceField: "pblntfPc", pnu, dongNm, hoNm, year, kindLabel: "apt" });
+          result = await tryApt(true);
         } catch (e: any) {
-          if (/NOT_FOUND/.test(String(e?.message))) {
-            result = await callVworld({ url: INDVD_URL, keyEnv: "DATA_GO_KR_API_KEY_INDVD", priceField: "housePc", pnu, year, kindLabel: "indvd" });
-          } else {
-            throw e;
-          }
+          if (/NOT_FOUND/.test(String(e?.message)) && (dongNm || hoNm)) {
+            // 동·호 매칭 실패 시 PNU만으로 재시도 — confidence를 med로 낮춤
+            result = await tryApt(false);
+            if (result) result.confidence = "med";
+          } else throw e;
+        }
+      } else if (kind === "indvd") {
+        result = await tryIndvd();
+      } else {
+        // unknown — 공동주택(동호) → 공동주택(PNU만) → 개별주택 순으로 폴백
+        try {
+          result = await tryApt(true);
+        } catch (e1: any) {
+          if (/NOT_FOUND/.test(String(e1?.message))) {
+            try {
+              if (dongNm || hoNm) {
+                result = await tryApt(false);
+                if (result) result.confidence = "med";
+              } else {
+                throw e1;
+              }
+            } catch (e2: any) {
+              if (/NOT_FOUND/.test(String(e2?.message))) {
+                result = await tryIndvd();
+              } else throw e2;
+            }
+          } else throw e1;
         }
       }
       if (result) {

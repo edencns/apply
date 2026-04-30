@@ -123,10 +123,36 @@ async function callJuso(apiKey: string, keyword: string): Promise<any[]> {
 }
 
 /**
+ * 행정구역 토큰만 추출해 깔끔한 주소 keyword 생성.
+ * 단지명·도로명·"블록"·"단지" 같은 노이즈 토큰을 모두 제거.
+ *
+ * 예:
+ *   "강원도 강릉시 풍제동 일에이치미디어홈8단지 1044-0번지" → "강원도 강릉시 풍제동 1044번지"
+ *   "강원도 강릉시 연곡면 영진리 부영사람으로 12-0번지"   → "강원도 강릉시 연곡면 영진리 12번지"
+ *   "강원도 강릉시 풍제동 강룡주택 A-2블록 1044-0번지"   → "강원도 강릉시 풍제동 1044번지"
+ */
+function buildCleanAddress(addr: string): string | null {
+  // 마지막 "지번 + 번지" 구분점 찾기
+  const m = addr.match(/^(.*?)(\d+(?:-\d+)?\s*번지)(.*)$/);
+  if (!m) return null;
+
+  const tokens = m[1].split(/\s+/).filter(Boolean);
+  // 행정구역 단위로 끝나는 토큰만 살림 (시·도·특별자치도·특별자치시·특별시·광역시·시·군·구·읍·면·동·리)
+  const adminTokens = tokens.filter((t) =>
+    /(?:특별시|광역시|특별자치시|특별자치도|도|시|군|구|읍|면|동|리)$/.test(t),
+  );
+  if (adminTokens.length === 0) return null;
+
+  // 부번이 0이면 "1044번지"로 단순화 (juso가 부번까지 정확 매칭 요구할 때 부번 0 표기 망함)
+  const jibun = m[2].replace(/-0번지$/, "번지");
+  return adminTokens.join(" ") + " " + jibun;
+}
+
+/**
  * keyword 검색이 망할 만한 케이스를 단계적으로 시도해서 첫 매칭 반환.
  *   1) 정규화된 전체 주소
- *   2) 시·군·구 + 읍·면·동·리 + 지번만 추출
- *   3) 시·군·구 + 지번만 추출
+ *   2) 행정구역 토큰만 추출 (단지명·도로명 노이즈 완전 제거) ← 핵심
+ *   3) 시·군·구 + 지번만 추출 (읍·면·동·리도 제거)
  */
 async function tryAddressVariations(apiKey: string, address: string): Promise<{ list: any[]; tried: string }> {
   const variations: string[] = [];
@@ -135,18 +161,11 @@ async function tryAddressVariations(apiKey: string, address: string): Promise<{ 
   const v1 = normalizeForJuso(address);
   variations.push(v1);
 
-  // 2) 시·군·구·읍·면·동·리 + 지번 (단지명 완전 제거)
-  //    "강원도 강릉시 주문진읍 교항리 1269-0번지" 같은 형태
-  const m2 = v1.match(
-    /(\S+(?:시|도|특별자치도))\s+(\S+(?:시|군|구))\s+(?:(\S+(?:읍|면|동))\s+)?(?:(\S+(?:리|동))\s+)?(\d+(?:-\d+)?\s*번지)/,
-  );
-  if (m2) {
-    const parts = [m2[1], m2[2], m2[3], m2[4], m2[5]].filter(Boolean);
-    const v2 = parts.join(" ").replace(/-0번지/g, "번지");
-    if (v2 !== v1) variations.push(v2);
-  }
+  // 2) 행정구역 토큰만 살린 깔끔한 주소
+  const v2 = buildCleanAddress(v1);
+  if (v2 && v2 !== v1) variations.push(v2);
 
-  // 3) 시·군·구 + 지번만 (읍·면·동·리 제거)
+  // 3) 시·군·구 + 지번만
   const m3 = v1.match(/(\S+(?:시|도|특별자치도))\s+(\S+(?:시|군|구))\s+.*?(\d+(?:-\d+)?\s*번지)/);
   if (m3) {
     const v3 = `${m3[1]} ${m3[2]} ${m3[3]}`.replace(/-0번지/g, "번지");
