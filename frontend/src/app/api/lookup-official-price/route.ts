@@ -22,7 +22,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSessionFromRequestEdge } from "@/lib/auth-edge";
 import { guardRequest } from "@/lib/rate-limit";
 import {
   getCachedPrice,
@@ -32,7 +32,9 @@ import {
 import { classifyAddress, type RegionType } from "@/lib/region-classifier";
 import { addressToPnu } from "@/lib/juso-pnu";
 
-export const runtime = "nodejs";
+// Vercel serverless(Node.js) IP가 V-World에서 차단되는 문제 우회용으로 Edge Runtime 사용.
+// Edge는 Cloudflare 기반이라 다른 IP 대역. 일반 fetch만 쓰는 코드라 호환성 문제 없음.
+export const runtime = "edge";
 
 interface LookupResult {
   price?: number;
@@ -67,7 +69,7 @@ function decideKind(usage?: string): "apt" | "indvd" | "unknown" {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getSession();
+    const session = await getSessionFromRequestEdge(req);
     if (!session) {
       return NextResponse.json(
         { source: "api", confidence: "low", regionType: "unknown", error: "로그인 필요" } satisfies LookupResult,
