@@ -291,7 +291,12 @@ async function callVworld(opts: {
   // stdrYear는 옵션. 없으면 가장 최근 발표분 반환.
   // 명시하면 그 해 기준 가격을 받지만 미발표 연도면 빈 응답이라 기본은 미지정.
 
-  const res = await fetch(url.toString(), { method: "GET", cache: "no-store" });
+  // V-World는 종종 502/503/504 transient 오류를 던짐 — 1회 재시도
+  let res = await fetch(url.toString(), { method: "GET", cache: "no-store" });
+  if (!res.ok && [502, 503, 504].includes(res.status)) {
+    await new Promise((r) => setTimeout(r, 500));
+    res = await fetch(url.toString(), { method: "GET", cache: "no-store" });
+  }
   if (!res.ok) {
     if (res.status === 429) throw new Error("RATE_LIMIT");
     throw new Error(`HTTP ${res.status}`);
