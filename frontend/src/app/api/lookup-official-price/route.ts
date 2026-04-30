@@ -288,23 +288,26 @@ async function callVworld(opts: {
   // 공동주택은 같은 PNU 안에 여러 동·호가 있어 정확 매칭 위해 동·호도 같이 전달
   if (opts.dongNm) url.searchParams.set("dongNm", opts.dongNm);
   if (opts.hoNm) url.searchParams.set("hoNm", opts.hoNm);
-  // V-World는 발급 시 등록한 도메인을 domain 파라미터로 보내야 함 (서버사이드 호출 시 필수).
-  // 환경변수로 관리해 배포 환경별 변경 가능. 기본값은 production URL.
-  const vworldDomain = process.env.VWORLD_DOMAIN || "apply-flax.vercel.app";
-  url.searchParams.set("domain", vworldDomain);
+  // domain 파라미터는 V-World 직접 테스트 시 비어있어도 동작해서 의도적으로 미전송.
+  // 등록 도메인 매칭은 Origin/Referer 헤더로 처리 (아래 fetch 옵션).
   // stdrYear는 옵션. 없으면 가장 최근 발표분 반환.
   // 명시하면 그 해 기준 가격을 받지만 미발표 연도면 빈 응답이라 기본은 미지정.
 
-  // V-World fetch 옵션 — User-Agent·Accept 헤더 명시.
-  //   Node.js fetch(undici) 기본 UA가 「node」라 일부 게이트웨이가 차단할 수 있어
-  //   브라우저처럼 보이게 명시. UND_ERR_SOCKET 같은 transient 끊김도 줄어듦.
+  // V-World fetch 옵션 — 헤더 명시.
+  //   - User-Agent: 브라우저처럼 보이게 (Node.js 기본 UA 차단 회피)
+  //   - Origin/Referer: V-World가 등록 도메인 검증할 때 매칭되도록 세팅 (V-World 키
+  //     발급 시 등록한 URL = apply-flax.vercel.app)
+  //   환경변수 VWORLD_DOMAIN 으로 override 가능.
+  const vworldDomain = process.env.VWORLD_DOMAIN || "apply-flax.vercel.app";
   const fetchOpts: RequestInit = {
     method: "GET",
     cache: "no-store",
     headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; ApplyVerification/1.0)",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       "Accept": "application/json, text/plain, */*",
       "Accept-Language": "ko-KR,ko;q=0.9",
+      "Origin": `https://${vworldDomain}`,
+      "Referer": `https://${vworldDomain}/`,
     },
   };
 
