@@ -21,7 +21,7 @@
  */
 
 import { toIdentity, identityScore, sameIdentity } from "./identity";
-import { addOrMergeProperty } from "./property-key";
+import { addOrMergeProperty, consolidateDagagu } from "./property-key";
 
 // xlsx는 300KB+ 라이브러리 — 번들 부풀림 방지를 위해 동적 import
 type XLSXModule = typeof import("xlsx");
@@ -1324,6 +1324,13 @@ export function consolidate(files: FileIngestResult[]): ConsolidatedResult {
 
   // 전체 프로필 반환 (중복은 이미 1단계에서 identity-merge로 제거됨)
   const dedupProfiles: WinnerProfile[] = profilesList.slice();
+
+  // 다가구주택 호별 record를 1개로 합산 + 창고·부속 제외 (각 프로필별)
+  for (const prof of dedupProfiles) {
+    if (prof.properties && prof.properties.length > 0) {
+      prof.properties = consolidateDagagu(prof.properties);
+    }
+  }
 
   return {
     profiles: dedupProfiles,

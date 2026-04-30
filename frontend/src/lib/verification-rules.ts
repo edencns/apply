@@ -219,6 +219,10 @@ export function evaluateProperty(
   // 공고에 명시 없으면 단일값 small_low_house_price_max → 양쪽 동일 fallback.
   const SMALL_PRICE_MAX_METRO     = Number(rules.small_low_house_price_max_metro)     || Number(rules.small_low_house_price_max) || 160_000_000;
   const SMALL_PRICE_MAX_NON_METRO = Number(rules.small_low_house_price_max_non_metro) || Number(rules.small_low_house_price_max) || 100_000_000;
+  // 「주택공급에 관한 규칙」 53조 9호: 소형·저가주택은 「1호 또는 1세대」만 무주택 인정.
+  // 즉 2호 이상 보유 시 첫 1호만 예외, 나머지는 일반 주택으로 카운트.
+  // 공고에 별도 명시되면 그 값으로 오버라이드 가능.
+  const SMALL_COUNT_MAX = Number((rules as any).small_low_house_count_max) || 1;
   const INHERITANCE_MONTHS = Number(rules.inheritance_grace_months) || 6;
   const TEMP_2HOUSE_MONTHS = Number(rules.temporary_2housing_grace_months) || 36;
 
@@ -226,8 +230,10 @@ export function evaluateProperty(
   const exceptionWarnings: string[] = [];
 
   /** 1) 소형·저가주택 예외 — 60㎡ 이하 + 공시가격 한도 이하면 무주택 인정.
-   *  수도권(서울·인천·경기) 1.6억 / 비수도권 1억으로 분기. */
+   *  수도권(서울·인천·경기) 1.6억 / 비수도권 1억으로 분기.
+   *  「주택공급에 관한 규칙」 53조 9호 — 1세대 1호만 인정 (SMALL_COUNT_MAX). */
   let smallLowApplied = 0;
+  let smallLowExcessCount = 0;
   let smallAreaButPriceUnknown = 0;
   const priceMaxForProperty = (p: any): number => {
     const region = p?.regionType || classifyAddress(p?.address);
@@ -240,6 +246,11 @@ export function evaluateProperty(
     if ((p as any).officialPrice != null) {
       // 공시가격 데이터 있음 → 자동 판정
       if ((p as any).officialPrice <= limit) {
+        // 한도(SMALL_COUNT_MAX) 안에서만 무주택 인정. 초과분은 일반 주택으로 카운트.
+        if (smallLowApplied >= SMALL_COUNT_MAX) {
+          smallLowExcessCount++;
+          return true;
+        }
         smallLowApplied++;
         return false;
       }
@@ -251,7 +262,12 @@ export function evaluateProperty(
   });
   if (smallLowApplied > 0) {
     exceptionWarnings.push(
-      `소형·저가주택 ${smallLowApplied}건 자동 무주택 예외 적용 (≤${SMALL_AREA_MAX}㎡ + 공시가격: 수도권 ≤${(SMALL_PRICE_MAX_METRO/100_000_000).toFixed(1)}억 / 비수도권 ≤${(SMALL_PRICE_MAX_NON_METRO/100_000_000).toFixed(1)}억)`,
+      `소형·저가주택 ${smallLowApplied}건 자동 무주택 예외 적용 (≤${SMALL_AREA_MAX}㎡ + 공시가격: 수도권 ≤${(SMALL_PRICE_MAX_METRO/100_000_000).toFixed(1)}억 / 비수도권 ≤${(SMALL_PRICE_MAX_NON_METRO/100_000_000).toFixed(1)}억) — 규정상 ${SMALL_COUNT_MAX}호 한도`,
+    );
+  }
+  if (smallLowExcessCount > 0) {
+    exceptionWarnings.push(
+      `소형·저가주택 ${smallLowExcessCount}건 — 「주택공급에 관한 규칙」 53조 9호 한도(${SMALL_COUNT_MAX}호) 초과로 무주택 예외 미적용, 일반 주택으로 카운트`,
     );
   }
   if (smallAreaButPriceUnknown > 0) {
