@@ -295,31 +295,61 @@ async function callVworld(opts: {
   // stdrYear는 옵션. 없으면 가장 최근 발표분 반환.
   // 명시하면 그 해 기준 가격을 받지만 미발표 연도면 빈 응답이라 기본은 미지정.
 
-  // V-World는 종종 502/503/504 transient 오류를 던짐 — 1회 재시도
-  // fetch 자체 실패 (DNS·연결거부·TLS) 시 cause.code로 정확한 원인 노출
-  let res: Response;
-  try {
-    res = await fetch(url.toString(), { method: "GET", cache: "no-store" });
-  } catch (e: any) {
-    const cause = e?.cause?.code || e?.cause?.message || e?.code || "UNKNOWN";
-    throw new Error(`FETCH_FAILED:${cause}`);
-  }
-  if (!res.ok && [502, 503, 504].includes(res.status)) {
-    await new Promise((r) => setTimeout(r, 500));
+  // V-World fetch 옵션 — User-Agent·Accept 헤더 명시.
+  //   Node.js fetch(undici) 기본 UA가 「node」라 일부 게이트웨이가 차단할 수 있어
+  //   브라우저처럼 보이게 명시. UND_ERR_SOCKET 같은 transient 끊김도 줄어듦.
+  const fetchOpts: RequestInit = {
+    method: "GET",
+    cache: "no-store",
+    headers: {
+      "User-Agent": "Mozilla/5.0 (compatible; ApplyVerification/1.0)",
+      "Accept": "application/json, text/plain, */*",
+      "Accept-Language": "ko-KR,ko;q=0.9",
+    },
+  };
+
+  // V-World는 종종 502/503/504 transient 오류 + UND_ERR_SOCKET 자체 끊김 → 최대 2회 재시도
+  let res: Response | null = null;
+  let lastErr: any = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      res = await fetch(url.toString(), { method: "GET", cache: "no-store" });
+      res = await fetch(url.toString(), fetchOpts);
+      if (res.ok) break;
+      if ([502, 503, 504].includes(res.status)) {
+        await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+        continue;
+      }
+      break; // 그 외 4xx 에러는 재시도 무의미
     } catch (e: any) {
-      const cause = e?.cause?.code || e?.cause?.message || e?.code || "UNKNOWN";
-      throw new Error(`FETCH_FAILED:${cause}`);
+      lastErr = e;
+      const cause = e?.cause?.code || e?.cause?.message || e?.code || "";
+      // 소켓 끊김·timeout만 재시도. DNS·TLS 실패는 retry해도 같음.
+      if (/UND_ERR_SOCKET|ETIMEDOUT|ECONNRESET/i.test(String(cause))) {
+        await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+        continue;
+      }
+      throw new Error(`FETCH_FAILED:${cause || "UNKNOWN"}`);
     }
+  }
+  if (!res) {
+    const cause = lastErr?.cause?.code || lastErr?.cause?.message || "RETRY_EXHAUSTED";
+    throw new Error(`FETCH_FAILED:${cause}`);
   }
   if (!res.ok) {
     if (res.status === 429) throw new Error("RATE_LIMIT");
     throw new Error(`HTTP ${res.status}`);
   }
   const data = await res.json().catch(() => null) as any;
-  // V-World 응답 → fields.field 가 객체 또는 배열
-  const fieldRaw = data?.fields?.field ?? data?.response?.fields?.field;
+  // V-World 응답 루트는 서비스마다 다름:
+  //   공동주택: data.apartHousingPrices.field[]
+  //   개별주택: data.indvdHousingPrices.field[] (추정)
+  //   레거시:   data.fields.field, data.response.fields.field
+  const fieldRaw =
+    data?.apartHousingPrices?.field ??
+    data?.indvdHousingPrices?.field ??
+    data?.individualHousingPrices?.field ??
+    data?.fields?.field ??
+    data?.response?.fields?.field;
   const item = Array.isArray(fieldRaw) ? fieldRaw[0] : fieldRaw;
   if (!item) throw new Error("NOT_FOUND");
 
