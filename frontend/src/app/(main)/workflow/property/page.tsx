@@ -15,7 +15,7 @@ import { formatHousingCode } from "@/lib/housing-code";
 import IndividualVerifyModal from "@/components/workflow/IndividualVerifyModal";
 import {
   Home, AlertTriangle, FileSpreadsheet,
-  Loader2, CheckCircle2, UserCheck, UserMinus, FileText,
+  Loader2, CheckCircle2, UserCheck, UserMinus, FileText, Sparkles,
 } from "lucide-react";
 
 const step = WORKFLOW_STEPS[2]; // property
@@ -100,6 +100,110 @@ export default function PropertyStepPage() {
   const evaluate = (c: LocalCustomer, a: LocalAnnouncement) => evaluateProperty(c, a);
   const regulation = (selected?.eligibility_rules?.regulation as string) || undefined;
 
+  /** 공시가격 일괄 조회 — 모든 등록 당첨자의 60㎡ 이하 + 가격 미상 보유 주택 자동 조회.
+   *  병렬 5개씩, 진행률 + 결과 토스트 표시. */
+  const [priceLookupBusy, setPriceLookupBusy] = useState(false);
+  const [priceLookupProgress, setPriceLookupProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
+  const [priceLookupResult, setPriceLookupResult] = useState<{
+    success: number;
+    fail: number;
+    skipped: number;
+    notFound: number;
+    aborted?: boolean;
+  } | null>(null);
+
+  const handleBulkPriceLookup = async () => {
+    if (!selected) return;
+    const customers = localCustomers
+      .listByAnnouncement(selected.id)
+      .filter((c) => !c.superseded);
+    type Job = { cid: number; idx: number; address: string; identifier?: string };
+    const jobs: Job[] = [];
+    for (const c of customers) {
+      (c.properties || []).forEach((p, idx) => {
+        const isSmall = (p.areaM2 ?? Infinity) > 0 && (p.areaM2 ?? Infinity) <= 60;
+        const noPrice = (p as any).officialPrice == null;
+        const notTransferred = !p.transferredDate;
+        const isResidential = isResidentialUse(p.usage);
+        if (isSmall && noPrice && notTransferred && isResidential) {
+          jobs.push({ cid: c.id, idx, address: p.address, identifier: p.identifier });
+        }
+      });
+    }
+    if (jobs.length === 0) {
+      alert("자동 조회 대상이 없습니다.\n(60㎡ 이하 + 주거용 + 보유 중 + 공시가격 미상인 주택만 대상)");
+      return;
+    }
+    if (!confirm(
+      `소형(≤60㎡) 보유 주택 ${jobs.length}건의 공시가격을 일괄 조회합니다.\n\n` +
+      `· 식별번호(PNU) 있는 주택은 자동 조회 성공률 높음\n` +
+      `· 주소만 있는 주택은 NOT_FOUND 응답 가능 — 「공시가격 알리미」 새 탭으로 폴백 가능\n\n` +
+      `진행하시겠습니까?`,
+    )) return;
+
+    setPriceLookupBusy(true);
+    setPriceLookupResult(null);
+    setPriceLookupProgress({ done: 0, total: jobs.length });
+
+    let success = 0, fail = 0, notFound = 0;
+    let aborted = false;
+
+    // 병렬 5개씩 처리
+    const PARALLEL = 5;
+    for (let i = 0; i < jobs.length; i += PARALLEL) {
+      if (aborted) break;
+      const batch = jobs.slice(i, i + PARALLEL);
+      await Promise.all(batch.map(async (j) => {
+        try {
+          const res = await fetch("/api/lookup-official-price", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ address: j.address, identifier: j.identifier }),
+          });
+          const json = await res.json().catch(() => ({}));
+          if (res.status === 429) {
+            aborted = true;
+            return;
+          }
+          if (res.ok && json.price) {
+            const latest = localCustomers.get(j.cid);
+            if (latest) {
+              const props = (latest.properties || []).slice();
+              const target = props[j.idx];
+              if (target) {
+                props[j.idx] = {
+                  ...target,
+                  officialPrice: json.price,
+                  officialPriceYear: json.year,
+                  officialPriceSource: "api",
+                  regionType: json.regionType,
+                } as any;
+                localCustomers.update(j.cid, { properties: props as any });
+              }
+            }
+            success++;
+          } else if (json.errorCode === "NOT_FOUND") {
+            notFound++;
+          } else {
+            fail++;
+          }
+        } catch {
+          fail++;
+        }
+      }));
+      setPriceLookupProgress({ done: Math.min(i + PARALLEL, jobs.length), total: jobs.length });
+    }
+
+    const skipped = jobs.length - success - fail - notFound;
+    setPriceLookupResult({ success, fail, notFound, skipped, aborted });
+    setPriceLookupProgress(null);
+    setPriceLookupBusy(false);
+    setReloadKey((k) => k + 1);
+  };
+
   const handleFile = async (file: File) => {
     if (!selected) { alert("먼저 공고를 선택해주세요"); return; }
     setUploading(true);
@@ -166,6 +270,7 @@ export default function PropertyStepPage() {
           rightsType: p.rightsType,
           buySell: p.buySell,
           officialPrice: p.officialPrice,
+          officialPriceSource: p.officialPrice != null ? "excel" as const : undefined,
           identifier: p.identifier,
           zipCode: p.zipCode,
         })),
@@ -374,6 +479,22 @@ export default function PropertyStepPage() {
                 <><FileText className="w-4 h-4" /> 분리세대 회신</>
               )}
             </button>
+            <button
+              onClick={handleBulkPriceLookup}
+              disabled={priceLookupBusy}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40"
+              title="60㎡ 이하 + 공시가격 미상인 보유 주택을 일괄 자동 조회 (공공데이터포털 API)"
+            >
+              {priceLookupBusy ? (
+                <><Loader2 className="w-4 h-4 animate-spin" />
+                  공시가격 {priceLookupProgress
+                    ? `${priceLookupProgress.done}/${priceLookupProgress.total}`
+                    : "조회 중…"}
+                </>
+              ) : (
+                <><Sparkles className="w-4 h-4" /> 📊 공시가격 일괄 조회</>
+              )}
+            </button>
             <input
               ref={separatedPdfRef}
               type="file"
@@ -394,6 +515,30 @@ export default function PropertyStepPage() {
             fileHint="한 명의 주택소유 전산검색 결과 파일만 올려 해당 고객에게 붙입니다."
             onApply={handleIndividualUpload}
           />
+
+          {/* 공시가격 일괄 조회 결과 */}
+          {priceLookupResult && (
+            <div className="card mb-4 p-3 text-sm bg-indigo-50/70 border-indigo-200">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Sparkles className="w-4 h-4 text-indigo-700" />
+                <span className="font-semibold text-indigo-900">공시가격 일괄 조회 완료</span>
+                <span className="text-emerald-700">✓ 자동 반영 {priceLookupResult.success}건</span>
+                {priceLookupResult.notFound > 0 && (
+                  <span className="text-amber-700">⚠ 미발견 {priceLookupResult.notFound}건 (수동 입력 또는 알리미 폴백)</span>
+                )}
+                {priceLookupResult.fail > 0 && (
+                  <span className="text-red-700">실패 {priceLookupResult.fail}건</span>
+                )}
+                {priceLookupResult.aborted && (
+                  <span className="text-red-800 font-semibold">⚠ API 한도 초과로 중단</span>
+                )}
+              </div>
+              <div className="mt-1 text-[11px] text-indigo-800/80">
+                💡 「소형·저가 예외」 기준(수도권 ≤1.6억 / 비수도권 ≤1억) 자동 비교돼 1주택자가 무주택으로 재판정될 수 있어요.
+                개별 주택은 「검증」 버튼으로 다시 평가하세요.
+              </div>
+            </div>
+          )}
 
           {/* 분리세대 주택소유 회신 업로드 결과 */}
           {sepResult && (

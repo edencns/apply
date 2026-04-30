@@ -6,10 +6,12 @@
  * - 판정 결과(StageVerdict)를 카드 헤더에 뱃지로 표시
  */
 
-import type { LocalCustomer } from "@/lib/local-store";
+import { useState } from "react";
+import { localCustomers, type LocalCustomer } from "@/lib/local-store";
 import type { StageVerdict } from "@/lib/verification-rules";
 import { isResidentialUse } from "@/lib/verification-rules";
-import { Users, Home, Banknote, AlertTriangle, CheckCircle2, XCircle, Circle } from "lucide-react";
+import { classifyAddress } from "@/lib/region-classifier";
+import { Users, Home, Banknote, AlertTriangle, CheckCircle2, XCircle, Circle, Search, Loader2, ExternalLink, Sparkles } from "lucide-react";
 
 function VerdictBadge({ verdict }: { verdict: StageVerdict }) {
   if (verdict.missing) {
@@ -122,24 +124,167 @@ export function HouseholdPanel({
 
 /* ─── 주택소유 패널 ───────────────────────────────── */
 
+/**
+ * 주택 한 행에 대해 공시가격 자동 조회.
+ * 성공 시 customer.properties[idx]에 officialPrice/Year/Source/regionType 채워 update.
+ *
+ * 조회 단계:
+ *   1. /api/lookup-official-price 호출 (식별번호·주소 전송)
+ *   2. 응답이 200이면 자동 채우기, 4xx/5xx면 에러 메시지를 alert
+ *   3. NOT_FOUND·NO_API_KEY 케이스는 「공시가격 알리미 새 탭」 fallback 안내
+ */
+async function lookupAndAttach(
+  customerId: number,
+  propertyIdx: number,
+  prop: { address: string; identifier?: string },
+  setBusy: (busy: boolean) => void,
+  onAfter: () => void,
+): Promise<void> {
+  setBusy(true);
+  try {
+    const res = await fetch("/api/lookup-official-price", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        address: prop.address,
+        identifier: prop.identifier,
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.price) {
+      const msg = json.error || `조회 실패 (HTTP ${res.status})`;
+      const code = json.errorCode;
+      if (code === "NO_API_KEY") {
+        alert(
+          `${msg}\n\n임시로 「공시가격 알리미」를 새 탭에서 열겠습니다. 가격을 확인 후 수동 입력해주세요.`,
+        );
+        window.open(
+          `https://www.realtyprice.kr:447/notice/main/mainBody.htm?addr=${encodeURIComponent(prop.address)}`,
+          "_blank",
+          "noopener,noreferrer",
+        );
+        return;
+      }
+      if (code === "NOT_FOUND") {
+        if (
+          confirm(
+            `${msg}\n\n「공시가격 알리미」 새 탭으로 열어 직접 확인하시겠습니까?`,
+          )
+        ) {
+          window.open(
+            `https://www.realtyprice.kr:447/notice/main/mainBody.htm?addr=${encodeURIComponent(prop.address)}`,
+            "_blank",
+            "noopener,noreferrer",
+          );
+        }
+        return;
+      }
+      alert(msg);
+      return;
+    }
+
+    // 성공 — customer.properties 업데이트
+    const latest = localCustomers.get(customerId);
+    if (!latest) return;
+    const props = (latest.properties || []).slice();
+    const target = props[propertyIdx];
+    if (!target) return;
+    props[propertyIdx] = {
+      ...target,
+      officialPrice: json.price,
+      officialPriceYear: json.year,
+      officialPriceSource: "api",
+      regionType: json.regionType,
+    } as any;
+    localCustomers.update(customerId, { properties: props as any });
+    onAfter();
+  } catch (e: any) {
+    alert(`조회 실패: ${e?.message || "알 수 없는 오류"}`);
+  } finally {
+    setBusy(false);
+  }
+}
+
 export function PropertyPanel({
   customer,
   verdict,
   regulation,
+  onUpdate,
 }: {
   customer: LocalCustomer;
   verdict: StageVerdict;
   regulation?: string;
+  onUpdate?: (c: LocalCustomer) => void;
 }) {
   const properties = customer.properties || [];
+  const [busyIdx, setBusyIdx] = useState<number | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
-  // 소유자별 그룹핑
-  const byOwner: Record<string, typeof properties> = {};
-  for (const p of properties) {
+  // 소유자별 그룹핑 — 원본 인덱스 보존(공시가격 update 시 필요)
+  const byOwner: Record<string, Array<{ p: typeof properties[number]; idx: number }>> = {};
+  properties.forEach((p, idx) => {
     const key = `${p.ownerName}|${p.ownerRrn}`;
     if (!byOwner[key]) byOwner[key] = [];
-    byOwner[key].push(p);
-  }
+    byOwner[key].push({ p, idx });
+  });
+
+  /** 이 당첨자의 모든 주택을 일괄 조회 — 60㎡ 이하 + 가격 미상인 행만 대상 */
+  const handleBulkLookup = async () => {
+    const targets: number[] = [];
+    properties.forEach((p, idx) => {
+      const isSmall = (p.areaM2 ?? Infinity) > 0 && (p.areaM2 ?? Infinity) <= 60;
+      const noPrice = (p as any).officialPrice == null;
+      const notTransferred = !p.transferredDate;
+      if (isSmall && noPrice && notTransferred) targets.push(idx);
+    });
+    if (targets.length === 0) {
+      alert("자동 조회 대상이 없습니다 — 60㎡ 이하 + 공시가격 미상인 보유 주택만 조회");
+      return;
+    }
+    if (!confirm(`소형(≤60㎡) 미상 주택 ${targets.length}건 일괄 조회하시겠습니까?`)) return;
+    setBulkBusy(true);
+    try {
+      let success = 0, fail = 0;
+      for (const idx of targets) {
+        const p = properties[idx];
+        try {
+          const res = await fetch("/api/lookup-official-price", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ address: p.address, identifier: p.identifier }),
+          });
+          const json = await res.json().catch(() => ({}));
+          if (res.ok && json.price) {
+            const latest = localCustomers.get(customer.id);
+            if (latest) {
+              const props = (latest.properties || []).slice();
+              const target = props[idx];
+              if (target) {
+                props[idx] = {
+                  ...target,
+                  officialPrice: json.price,
+                  officialPriceYear: json.year,
+                  officialPriceSource: "api",
+                  regionType: json.regionType,
+                } as any;
+                localCustomers.update(customer.id, { properties: props as any });
+              }
+            }
+            success++;
+          } else {
+            fail++;
+          }
+        } catch {
+          fail++;
+        }
+      }
+      const updated = localCustomers.get(customer.id);
+      if (updated && onUpdate) onUpdate(updated);
+      alert(`일괄 조회 완료 — 성공 ${success}건 / 실패 ${fail}건`);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   return (
     <div className="card">
@@ -151,6 +296,21 @@ export function PropertyPanel({
           <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
             공고 규제: {regulation}
           </span>
+        )}
+        {properties.some((p) => (p.areaM2 ?? Infinity) <= 60 && (p as any).officialPrice == null && !p.transferredDate) && (
+          <button
+            type="button"
+            onClick={handleBulkLookup}
+            disabled={bulkBusy}
+            className="ml-auto inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-medium disabled:opacity-50"
+            title="60㎡ 이하 + 공시가격 미상인 보유 주택의 가격을 일괄 자동 조회"
+          >
+            {bulkBusy ? (
+              <><Loader2 className="w-3 h-3 animate-spin" /> 조회 중…</>
+            ) : (
+              <><Sparkles className="w-3 h-3" /> 공시가격 일괄 조회</>
+            )}
+          </button>
         )}
       </div>
 
@@ -172,11 +332,12 @@ export function PropertyPanel({
                       <th className="text-left py-1 font-normal">주소</th>
                       <th className="text-right py-1 font-normal">면적</th>
                       <th className="text-left py-1 font-normal pl-2">용도</th>
+                      <th className="text-right py-1 font-normal pl-2">공시가격</th>
                       <th className="text-left py-1 font-normal pl-2">상태</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {owned.map((p, i) => {
+                    {owned.map(({ p, idx }) => {
                       const isCurrent = !p.transferredDate;
                       const isRes = isResidentialUse(p.usage);
                       const statusCls = !isCurrent
@@ -189,15 +350,73 @@ export function PropertyPanel({
                         : isRes
                           ? "현재 보유"
                           : "비주거";
+                      const isSmall = (p.areaM2 ?? Infinity) > 0 && (p.areaM2 ?? Infinity) <= 60;
+                      const region = (p as any).regionType || classifyAddress(p.address);
+                      const limit = region === "non_metro" ? 100_000_000 : 160_000_000;
+                      const price = (p as any).officialPrice as number | undefined;
+                      const priceYear = (p as any).officialPriceYear as number | undefined;
+                      const priceSource = (p as any).officialPriceSource as string | undefined;
+                      const exemptApplied = isSmall && isCurrent && isRes && price != null && price <= limit;
+                      const exemptDenied = isSmall && isCurrent && isRes && price != null && price > limit;
                       return (
-                        <tr key={i} className="border-b border-gray-50 last:border-0">
+                        <tr key={idx} className="border-b border-gray-50 last:border-0 align-top">
                           <td className="py-1.5 text-ink-2 truncate max-w-xs" title={p.address}>
                             {p.address}
+                            {region === "metro" && <span className="ml-1 text-[9.5px] text-blue-700">[수도권]</span>}
+                            {region === "non_metro" && <span className="ml-1 text-[9.5px] text-purple-700">[비수도권]</span>}
                           </td>
                           <td className="py-1.5 text-right text-ink-2">
                             {p.areaM2 ? `${p.areaM2}㎡` : "—"}
                           </td>
                           <td className="py-1.5 pl-2 text-ink-2">{p.usage || "—"}</td>
+                          <td className="py-1.5 pl-2 text-right">
+                            {price != null ? (
+                              <div className="flex flex-col items-end gap-0.5">
+                                <span className="font-mono text-ink-2">
+                                  {(price / 100_000_000).toFixed(2)}억
+                                </span>
+                                <span className="text-[9.5px] text-ink-4">
+                                  {priceYear ? `${priceYear}년` : ""}
+                                  {priceSource === "api" && " · 자동"}
+                                  {priceSource === "excel" && " · 엑셀"}
+                                  {priceSource === "manual" && " · 수동"}
+                                </span>
+                                {exemptApplied && (
+                                  <span className="text-[9.5px] bg-emerald-100 text-emerald-800 px-1 py-0.5 rounded font-semibold">
+                                    ✓ 소형·저가 예외
+                                  </span>
+                                )}
+                                {exemptDenied && (
+                                  <span className="text-[9.5px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded font-medium">
+                                    한도 초과 (≤{(limit/100_000_000).toFixed(1)}억)
+                                  </span>
+                                )}
+                              </div>
+                            ) : isSmall && isCurrent ? (
+                              <button
+                                type="button"
+                                onClick={() => lookupAndAttach(
+                                  customer.id, idx, { address: p.address, identifier: p.identifier },
+                                  (b) => setBusyIdx(b ? idx : null),
+                                  () => {
+                                    const updated = localCustomers.get(customer.id);
+                                    if (updated && onUpdate) onUpdate(updated);
+                                  },
+                                )}
+                                disabled={busyIdx === idx}
+                                className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 disabled:opacity-50"
+                                title="공공데이터포털 공시가격 자동 조회"
+                              >
+                                {busyIdx === idx ? (
+                                  <><Loader2 className="w-2.5 h-2.5 animate-spin" /> 조회 중…</>
+                                ) : (
+                                  <><Search className="w-2.5 h-2.5" /> 자동 조회</>
+                                )}
+                              </button>
+                            ) : (
+                              <span className="text-ink-4 text-[10px]">—</span>
+                            )}
+                          </td>
                           <td className={`py-1.5 pl-2 ${statusCls}`}>{statusLabel}</td>
                         </tr>
                       );

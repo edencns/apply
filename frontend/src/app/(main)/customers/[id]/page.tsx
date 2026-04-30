@@ -314,7 +314,7 @@ function CustomerDetailInner() {
             <HouseholdPanel customer={customer} verdict={finalVerdict.stages.household} />
           )}
           {stage === "property" && (
-            <PropertyPanel customer={customer} verdict={finalVerdict.stages.property} regulation={regulation} />
+            <PropertyPanel customer={customer} verdict={finalVerdict.stages.property} regulation={regulation} onUpdate={setCustomer} />
           )}
           {stage === "savings" && (
             <SavingsPanel customer={customer} verdict={finalVerdict.stages.savings} minSubscriptionMonths={minSubscription} />

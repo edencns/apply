@@ -167,6 +167,12 @@ export interface PropertyOwnershipRecord {
   buySell?: string;
   /** 공시가격 (원) — 소형·저가주택 무주택 예외 적용에 사용 (있으면) */
   officialPrice?: number;
+  /** 공시가격 발표연도 (예: 2024) — 어느 해 기준 가격인지 표시 */
+  officialPriceYear?: number;
+  /** 공시가격 출처 — "excel"=엑셀에서 자동 파싱 / "api"=공공데이터포털 자동 조회 / "manual"=수동 입력 */
+  officialPriceSource?: "excel" | "api" | "manual";
+  /** 수도권/비수도권 — 주소에서 자동 분류 (소형·저가 한도가 다름) */
+  regionType?: "metro" | "non_metro" | "unknown";
 }
 
 /** 청약통장 순위확인 레코드 */

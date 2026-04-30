@@ -338,6 +338,9 @@ export interface LocalCustomer {
     rightsType?: string;         // 권리구분
     buySell?: string;            // 매수·매도
     officialPrice?: number;      // 공시가격 (원)
+    officialPriceYear?: number;  // 공시가격 발표연도
+    officialPriceSource?: "excel" | "api" | "manual"; // 출처
+    regionType?: "metro" | "non_metro" | "unknown";   // 주소 기반 자동 분류
     identifier?: string;         // 식별번호
     zipCode?: string;            // 우편번호
   }>;

@@ -183,6 +183,7 @@ export async function ingestForStage(
             rightsType: x.rightsType,
             buySell: x.buySell,
             officialPrice: x.officialPrice,
+            officialPriceSource: x.officialPrice != null ? ("excel" as const) : undefined,
             identifier: x.identifier,
             zipCode: x.zipCode,
           })),
