@@ -288,6 +288,10 @@ async function callVworld(opts: {
   // 공동주택은 같은 PNU 안에 여러 동·호가 있어 정확 매칭 위해 동·호도 같이 전달
   if (opts.dongNm) url.searchParams.set("dongNm", opts.dongNm);
   if (opts.hoNm) url.searchParams.set("hoNm", opts.hoNm);
+  // V-World는 발급 시 등록한 도메인을 domain 파라미터로 보내야 함 (서버사이드 호출 시 필수).
+  // 환경변수로 관리해 배포 환경별 변경 가능. 기본값은 production URL.
+  const vworldDomain = process.env.VWORLD_DOMAIN || "apply-flax.vercel.app";
+  url.searchParams.set("domain", vworldDomain);
   // stdrYear는 옵션. 없으면 가장 최근 발표분 반환.
   // 명시하면 그 해 기준 가격을 받지만 미발표 연도면 빈 응답이라 기본은 미지정.
 
