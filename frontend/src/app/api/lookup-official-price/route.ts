@@ -292,10 +292,22 @@ async function callVworld(opts: {
   // 명시하면 그 해 기준 가격을 받지만 미발표 연도면 빈 응답이라 기본은 미지정.
 
   // V-World는 종종 502/503/504 transient 오류를 던짐 — 1회 재시도
-  let res = await fetch(url.toString(), { method: "GET", cache: "no-store" });
+  // fetch 자체 실패 (DNS·연결거부·TLS) 시 cause.code로 정확한 원인 노출
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), { method: "GET", cache: "no-store" });
+  } catch (e: any) {
+    const cause = e?.cause?.code || e?.cause?.message || e?.code || "UNKNOWN";
+    throw new Error(`FETCH_FAILED:${cause}`);
+  }
   if (!res.ok && [502, 503, 504].includes(res.status)) {
     await new Promise((r) => setTimeout(r, 500));
-    res = await fetch(url.toString(), { method: "GET", cache: "no-store" });
+    try {
+      res = await fetch(url.toString(), { method: "GET", cache: "no-store" });
+    } catch (e: any) {
+      const cause = e?.cause?.code || e?.cause?.message || e?.code || "UNKNOWN";
+      throw new Error(`FETCH_FAILED:${cause}`);
+    }
   }
   if (!res.ok) {
     if (res.status === 429) throw new Error("RATE_LIMIT");
