@@ -40,8 +40,13 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
   const [saving, setSaving] = useState<string | null>(null);
 
   // 가격 입력 필요 항목 — 60㎡ 이하 + 보유 + 주거용 + 가격 미상
+  // ⚠ 일반공급 신청자에 한정 — 특별공급은 「유주택자 = 부적격」이라
+  //   소형·저가 무주택 예외 적용 자체가 안 됨. 가격 입력 무의미하므로 큐에서 제외.
   const items: QueueItem[] = [];
   for (const c of customers) {
+    const supplyType = (c.supply_type || "일반공급").trim();
+    const isGeneralSupply = /일반공급/.test(supplyType) || supplyType === "";
+    if (!isGeneralSupply) continue; // 특별공급은 큐에 안 띄움
     (c.properties || []).forEach((p, idx) => {
       const isSmall = (p.areaM2 ?? Infinity) <= 60 && (p.areaM2 ?? 0) > 0;
       const noPrice = (p as any).officialPrice == null;
