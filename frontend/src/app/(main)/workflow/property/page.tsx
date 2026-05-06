@@ -117,7 +117,7 @@ export default function PropertyStepPage() {
     /** 에러 코드별 카운트 (PNU_REQUIRED/NO_API_KEY/NETWORK 등) */
     errorBreakdown?: Record<string, number>;
     /** 처음 몇 건의 실제 에러 메시지 (디버그용) */
-    sampleErrors?: Array<{ address: string; errorCode?: string; error?: string }>;
+    sampleErrors?: Array<{ address: string; errorCode?: string; error?: string; resolvedAddress?: string }>;
     /** 식별번호 있는 행 / 없는 행 */
     pnuStats?: { withPnu: number; withoutPnu: number };
   } | null>(null);
@@ -204,12 +204,12 @@ export default function PropertyStepPage() {
             notFound++;
             const code = json.errorCode || "UNKNOWN";
             errorBreakdown[code] = (errorBreakdown[code] || 0) + 1;
-            if (sampleErrors.length < 5) sampleErrors.push({ address: j.address, errorCode: code, error: json.error });
+            if (sampleErrors.length < 5) sampleErrors.push({ address: j.address, errorCode: code, error: json.error, resolvedAddress: json.resolvedAddress });
           } else {
             fail++;
             const code = json.errorCode || `HTTP_${res.status}` || "UNKNOWN";
             errorBreakdown[code] = (errorBreakdown[code] || 0) + 1;
-            if (sampleErrors.length < 5) sampleErrors.push({ address: j.address, errorCode: code, error: json.error });
+            if (sampleErrors.length < 5) sampleErrors.push({ address: j.address, errorCode: code, error: json.error, resolvedAddress: json.resolvedAddress });
           }
         } catch (e: any) {
           fail++;
@@ -604,6 +604,11 @@ export default function PropertyStepPage() {
                         <div className="text-red-800">
                           [{e.errorCode}] {e.error}
                         </div>
+                        {e.resolvedAddress && (
+                          <div className="text-[10px] text-ink-3 mt-0.5 font-mono break-all">
+                            🔍 {e.resolvedAddress}
+                          </div>
+                        )}
                       </li>
                     ))}
                   </ul>
