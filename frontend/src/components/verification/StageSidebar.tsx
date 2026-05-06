@@ -23,11 +23,11 @@ const STAGES: Array<{
   field: keyof FinalVerdict["stages"];
   optional?: boolean;
 }> = [
-  { key: "registration", label: "당첨자 등록",       icon: UserCheck, field: "registration" },
-  { key: "household",    label: "세대·가족관계",     icon: Users,     field: "household" },
-  { key: "property",     label: "주택소유 조회",     icon: Home,      field: "property" },
-  { key: "savings",      label: "청약통장 검증",     icon: Banknote,  field: "savings", optional: true },
-  { key: "documents",    label: "서류검토·최종판정", icon: FileText,  field: "documents" },
+  { key: "registration", label: "당첨자 등록",   icon: UserCheck, field: "registration" },
+  { key: "household",    label: "세대·가족관계", icon: Users,     field: "household" },
+  { key: "property",     label: "주택소유 조회", icon: Home,      field: "property" },
+  { key: "savings",      label: "청약통장 검증", icon: Banknote,  field: "savings", optional: true },
+  { key: "documents",    label: "서류검토·판정", icon: FileText,  field: "documents" },
 ];
 
 function stateIcon(v: FinalVerdict["stages"][keyof FinalVerdict["stages"]]) {
@@ -106,25 +106,26 @@ export default function StageSidebar({
             <li key={s.key}>
               <button
                 onClick={() => onSelect(s.key)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
+                className={`w-full flex items-center gap-2 px-2.5 py-2.5 rounded-lg text-sm transition-colors text-left ${
                   active
                     ? "bg-accent-soft text-accent ring-1 ring-blue-200"
                     : "hover:bg-surface2 text-ink-2"
                 } ${isSuperseded ? "opacity-60" : ""}`}
+                title={s.optional ? `${s.label} (선택)` : s.label}
               >
-                <span className={`text-[10px] font-mono w-4 ${active ? "text-accent" : "text-ink-4"}`}>
+                <span className={`text-[10px] font-mono w-4 flex-shrink-0 ${active ? "text-accent" : "text-ink-4"}`}>
                   0{i + 1}
                 </span>
                 <StepIcon className={`w-4 h-4 flex-shrink-0 ${active ? "text-accent" : "text-ink-3"}`} />
-                <span className="flex-1 font-medium flex items-center gap-1.5">
-                  {s.label}
+                <span className="flex-1 min-w-0 font-medium text-[13px] truncate whitespace-nowrap flex items-center gap-1">
+                  <span className="truncate">{s.label}</span>
                   {s.optional && (
-                    <span className="text-[9px] px-1 py-0 rounded bg-gray-100 text-ink-3 font-normal">
+                    <span className="flex-shrink-0 text-[9px] px-1 py-0 rounded bg-gray-100 text-ink-3 font-normal">
                       선택
                     </span>
                   )}
                 </span>
-                <StateIcon className={`w-4 h-4 ${cls}`} />
+                <StateIcon className={`w-4 h-4 flex-shrink-0 ${cls}`} />
               </button>
             </li>
           );
