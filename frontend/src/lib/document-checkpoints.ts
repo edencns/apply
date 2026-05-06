@@ -93,19 +93,20 @@ function makeRegistrationCertChecks(
     });
   }
 
-  // 세대주 / 세대구성원 여부
-  //   - 노부모부양: 세대주 본인 필수 (must)
-  //   - 그 외 특공(신혼부부·생애최초·다자녀·신생아·청년 등): 무주택세대구성원이면 가능 — 세대주 강제 아님
-  //   - 공고에 household_head_required=true 명시되면 must
+  // 세대주 / 세대구성원 여부 — 공급유형 우선순위로 판정
+  //   1순위: 노부모부양 → 세대주 본인 필수 (실제 규정)
+  //   2순위: 신혼부부/생애최초/다자녀/신생아 → 무주택세대구성원이면 가능
+  //          (공고 PDF에 household_head_required=true가 잘못 들어와도 무시)
+  //   3순위: 일반공급 등 — 공고에 명시되면 세대주 체크
   const needsHead = (a?.eligibility_rules as any)?.household_head_required;
-  if (needsHead || supply.includes("노부모")) {
+  if (supply.includes("노부모")) {
     out.push({
       key: "household_head",
       label: "세대주 본인 확인",
       expected: `${c.name} 본인이 세대주`,
       source: "공고 요건",
       severity: "must",
-      hint: "노부모부양 특공·공고 명시 시 세대주 필수 (배우자·세대원은 불가)",
+      hint: "노부모부양 특공은 세대주 본인 필수 (배우자·세대원은 불가)",
     });
   } else if (/신혼부부|생애최초|다자녀|신생아/.test(supply)) {
     out.push({
@@ -115,6 +116,15 @@ function makeRegistrationCertChecks(
       source: "공고 요건",
       severity: "verify",
       hint: "세대주 강제 아님 — 본인이 세대원이어도 「세대 전원 무주택」이면 OK",
+    });
+  } else if (needsHead) {
+    out.push({
+      key: "household_head",
+      label: "세대주 본인 확인",
+      expected: `${c.name} 본인이 세대주`,
+      source: "공고 요건",
+      severity: "must",
+      hint: "공고에 세대주 필수로 명시됨",
     });
   }
 
