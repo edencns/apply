@@ -93,16 +93,28 @@ function makeRegistrationCertChecks(
     });
   }
 
-  // 세대주 여부
+  // 세대주 / 세대구성원 여부
+  //   - 노부모부양: 세대주 본인 필수 (must)
+  //   - 그 외 특공(신혼부부·생애최초·다자녀·신생아·청년 등): 무주택세대구성원이면 가능 — 세대주 강제 아님
+  //   - 공고에 household_head_required=true 명시되면 must
   const needsHead = (a?.eligibility_rules as any)?.household_head_required;
-  if (needsHead || /신혼부부|생애최초|다자녀|노부모/.test(supply)) {
+  if (needsHead || supply.includes("노부모")) {
     out.push({
       key: "household_head",
-      label: "세대주 확인",
+      label: "세대주 본인 확인",
       expected: `${c.name} 본인이 세대주`,
       source: "공고 요건",
-      severity: supply.includes("노부모") ? "must" : "verify",
-      hint: "노부모부양 특공은 세대주 필수",
+      severity: "must",
+      hint: "노부모부양 특공·공고 명시 시 세대주 필수 (배우자·세대원은 불가)",
+    });
+  } else if (/신혼부부|생애최초|다자녀|신생아/.test(supply)) {
+    out.push({
+      key: "household_member_homeless",
+      label: "무주택세대구성원 확인",
+      expected: "본인 + 세대원 전원 무주택",
+      source: "공고 요건",
+      severity: "verify",
+      hint: "세대주 강제 아님 — 본인이 세대원이어도 「세대 전원 무주택」이면 OK",
     });
   }
 
