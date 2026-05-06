@@ -1283,6 +1283,10 @@ function DocumentsStage({
               ? APPLYHOME_AUTO_VERIFIED_DOCUMENTS
               : []
           }
+          // 페이지 매핑 중에 동시에 담당자 확인 포인트 검수 가능
+          customer={customer}
+          announcement={announcement || undefined}
+          onCheckpointChange={handleCheckpointChange}
         />
       )}
     </>

@@ -20,6 +20,8 @@ import {
   X, FileText, CheckCircle2,
   ChevronLeft, ChevronRight, AlertCircle, Plus, Image as ImageIcon,
 } from "lucide-react";
+import { getCheckpointsForDocument } from "@/lib/document-checkpoints";
+import type { LocalCustomer, LocalAnnouncement } from "@/lib/local-store";
 
 type DocFile = {
   url?: string;
@@ -27,6 +29,8 @@ type DocFile = {
   page?: number;
   pages?: number[];
   totalPages?: number;
+  /** 체크포인트별 검수 결과 (5단계 상세 페이지와 동일 스토리지) */
+  checkpointResults?: Record<string, { status: "pass" | "fail" | "pending"; note?: string }>;
 };
 
 type DocItem = {
@@ -58,6 +62,18 @@ export interface DocumentMapperProps {
    * 매퍼에서 [+] 버튼 비활성화 + 녹색 「청약홈 자동확인」 배지로 구분.
    */
   applyhomeAutoVerified?: string[];
+  /**
+   * 담당자 확인 포인트 표시용 — 있으면 우측 서류 카드 안에 체크포인트 인라인 노출.
+   * 페이지 매핑하면서 동시에 「부양가족 수 일치」「미성년 자녀 3명 이상」 등 검증 가능.
+   */
+  customer?: LocalCustomer;
+  announcement?: LocalAnnouncement;
+  /** 체크포인트 상태 변경 콜백 — pass/fail/pending 토글 */
+  onCheckpointChange?: (
+    docName: string,
+    cpKey: string,
+    next: { status?: "pass" | "fail" | "pending"; note?: string },
+  ) => void;
 }
 
 /* ─── 페이지 썸네일 캐시 ─── */
@@ -72,6 +88,7 @@ export default function DocumentPageMapper({
   isOpen, onClose, bundleUrl, bundleFilename, bundleFileId,
   totalPages: totalPagesProp, documents, fileMap, onAssignPage,
   initialPage = 1, applyhomeAutoVerified = [],
+  customer, announcement, onCheckpointChange,
 }: DocumentMapperProps) {
   const autoVerifiedSet = new Set(applyhomeAutoVerified);
   const [currentPage, setCurrentPage] = useState<number>(initialPage);
@@ -589,6 +606,83 @@ export default function DocumentPageMapper({
                           )}
                         </div>
                       </div>
+
+                      {/* 담당자 확인 포인트 — customer/announcement 있을 때만 노출 */}
+                      {!isAutoVerified && customer && (() => {
+                        const checkpoints = getCheckpointsForDocument(d.name, customer, announcement);
+                        if (checkpoints.length === 0) return null;
+                        const results = df?.checkpointResults || {};
+                        const doneCount = checkpoints.filter((c) => results[c.key]?.status === "pass").length;
+                        return (
+                          <div className="mt-1.5 p-1.5 rounded bg-white/70 border border-blue-100 text-[10px] space-y-0.5">
+                            <div className="flex items-center justify-between">
+                              <div className="text-[9.5px] font-semibold text-blue-900">
+                                💡 담당자 확인 포인트
+                              </div>
+                              <div className="text-[9px] text-ink-4">
+                                {doneCount}/{checkpoints.length} 확인
+                              </div>
+                            </div>
+                            {checkpoints.map((cp) => {
+                              const status = results[cp.key]?.status || "pending";
+                              const sevColor = cp.severity === "must"
+                                ? "text-red-600"
+                                : cp.severity === "verify"
+                                  ? "text-amber-600"
+                                  : "text-ink-3";
+                              const bgClr = status === "pass"
+                                ? "bg-green-50"
+                                : status === "fail"
+                                  ? "bg-red-50"
+                                  : "";
+                              return (
+                                <div key={cp.key} className={`flex items-start gap-1 p-1 rounded ${bgClr}`}>
+                                  <span className={`flex-shrink-0 mt-0.5 ${sevColor}`}>
+                                    {cp.severity === "must" ? "●" : cp.severity === "verify" ? "◉" : "◯"}
+                                  </span>
+                                  <div className="flex-1 min-w-0 text-ink-2 leading-tight">
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                      <span>{cp.label}</span>
+                                      {cp.expected && (
+                                        <span className="font-semibold text-ink">
+                                          {cp.expected}
+                                        </span>
+                                      )}
+                                      <span className="text-[8.5px] text-ink-4">
+                                        [{cp.source}]
+                                      </span>
+                                    </div>
+                                    {cp.hint && (
+                                      <div className="text-[9px] text-ink-4 mt-0.5">
+                                        ↳ {cp.hint}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {/* pass/fail/pending 토글 */}
+                                  {onCheckpointChange && (
+                                    <div className="flex flex-shrink-0 gap-0.5 items-center">
+                                      <button
+                                        onClick={() => onCheckpointChange(d.name, cp.key, { status: status === "pass" ? "pending" : "pass" })}
+                                        className={`px-1 py-0 rounded text-[10px] ${status === "pass" ? "bg-green-600 text-white" : "bg-gray-100 text-ink-3 hover:bg-green-100"}`}
+                                        title="확인 완료"
+                                      >
+                                        ✓
+                                      </button>
+                                      <button
+                                        onClick={() => onCheckpointChange(d.name, cp.key, { status: status === "fail" ? "pending" : "fail" })}
+                                        className={`px-1 py-0 rounded text-[10px] ${status === "fail" ? "bg-red-600 text-white" : "bg-gray-100 text-ink-3 hover:bg-red-100"}`}
+                                        title="문제 있음"
+                                      >
+                                        ✗
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}

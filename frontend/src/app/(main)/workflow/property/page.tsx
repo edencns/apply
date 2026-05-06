@@ -164,7 +164,7 @@ export default function PropertyStepPage() {
     let success = 0, fail = 0, notFound = 0;
     let aborted = false;
     const errorBreakdown: Record<string, number> = {};
-    const sampleErrors: Array<{ address: string; errorCode?: string; error?: string }> = [];
+    const sampleErrors: Array<{ address: string; errorCode?: string; error?: string; resolvedAddress?: string }> = [];
 
     // 병렬 5개씩 처리
     const PARALLEL = 5;
