@@ -153,7 +153,8 @@ export async function POST(req: NextRequest) {
         dongNm = lookup.dongNm;
         hoNm = lookup.hoNm;
         resolvedFromAddress = true;
-        resolvedAddress = lookup.matchedAddress;
+        // 디버그: juso가 매칭한 주소 + 우리가 만든 PNU + 추출한 동·호 모두 노출
+        resolvedAddress = `juso매치=${lookup.matchedAddress || "-"} | PNU=${pnu} | 동=${dongNm || "-"} 호=${hoNm || "-"}`;
       } catch (err: any) {
         const msg = String(err?.message || "");
         if (/NO_JUSO_API_KEY/.test(msg)) {
@@ -273,7 +274,15 @@ export async function POST(req: NextRequest) {
       }
       if (/NOT_FOUND|404|0건/i.test(msg)) {
         return NextResponse.json<LookupResult>(
-          { source: "api", confidence: "low", regionType, error: "해당 PNU로 공시가격을 찾을 수 없습니다 — PNU 정확성 또는 주택종류(공동/단독) 확인 필요", errorCode: "NOT_FOUND" },
+          {
+            source: "api",
+            confidence: "low",
+            regionType,
+            error: `V-World에 데이터 없음. ${resolvedAddress || ""}`,
+            errorCode: "NOT_FOUND",
+            resolvedFromAddress,
+            resolvedAddress,
+          },
           { status: 404 },
         );
       }

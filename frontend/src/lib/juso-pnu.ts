@@ -209,6 +209,9 @@ export async function addressToPnu(address: string): Promise<AddressLookupResult
     pnu,
     dongNm,
     hoNm,
-    matchedAddress: `${item?.roadAddr || item?.jibunAddr || ""} (검색: ${tried})`,
+    // 디버그용 — juso 매치 정보를 자세히 노출. NOT_FOUND 디버그 시 PNU 자릿수 확인 가능.
+    matchedAddress:
+      `${item?.jibunAddr || item?.roadAddr || ""} ` +
+      `[admCd=${admCd} mt=${mtFlag} 본번=${mainNo} 부번=${subNo}] (검색: ${tried})`,
   };
 }
