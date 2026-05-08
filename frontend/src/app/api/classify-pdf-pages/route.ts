@@ -157,11 +157,24 @@ export async function POST(req: NextRequest) {
 
     if (contentType.includes("application/json")) {
       const body = await req.json().catch(() => ({}));
-      const url = String(body?.url || "").trim();
+      let url = String(body?.url || "").trim();
       if (!url) {
         return NextResponse.json({ error: "url 필요" }, { status: 400 });
       }
-      const r = await fetch(url, { cache: "no-store" });
+      // 상대 URL(/api/files/N/download)이면 요청 헤더에서 origin을 뽑아 절대 URL로 변환.
+      // 내부 라우트 호출이라 같은 origin 자체가 OK.
+      if (url.startsWith("/")) {
+        const origin = req.nextUrl?.origin
+          || req.headers.get("origin")
+          || `https://${req.headers.get("host") || "localhost"}`;
+        url = origin + url;
+      }
+      // 내부 API 호출은 인증 쿠키를 함께 전송해야 통과 (files/N/download가 세션 검증함)
+      const cookieHeader = req.headers.get("cookie") || "";
+      const r = await fetch(url, {
+        cache: "no-store",
+        headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+      });
       if (!r.ok) {
         return NextResponse.json({ error: `PDF 다운로드 실패 (${r.status})` }, { status: 502 });
       }
