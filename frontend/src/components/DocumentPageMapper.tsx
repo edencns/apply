@@ -101,6 +101,73 @@ export default function DocumentPageMapper({
   const wheelLockRef = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  /* AI 자동 분류 — 페이지 → 서류 종류 제안 */
+  type Suggestion = { docType: string; confidence: "high" | "med" | "low"; reason?: string };
+  const [aiSuggestions, setAiSuggestions] = useState<Map<number, Suggestion>>(new Map());
+  const [classifying, setClassifying] = useState(false);
+  const [classifyError, setClassifyError] = useState<string | null>(null);
+
+  const runAutoClassify = async () => {
+    if (classifying || !bundleUrl) return;
+    setClassifying(true);
+    setClassifyError(null);
+    try {
+      const res = await fetch("/api/classify-pdf-pages", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: bundleUrl }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setClassifyError(json.error || `분류 실패 (${res.status})`);
+        return;
+      }
+      const map = new Map<number, Suggestion>();
+      for (const p of (json.pages || [])) {
+        if (p.pageNum) {
+          map.set(p.pageNum, {
+            docType: p.docType,
+            confidence: p.confidence,
+            reason: p.reason,
+          });
+        }
+      }
+      setAiSuggestions(map);
+    } catch (e: any) {
+      setClassifyError(e?.message || "분류 호출 실패");
+    } finally {
+      setClassifying(false);
+    }
+  };
+
+  /** 한 서류에 대해 AI가 제안한 페이지 목록 — d.shortName 기준 매칭 */
+  const suggestedPagesForDoc = (doc: DocItem): number[] => {
+    if (aiSuggestions.size === 0) return [];
+    const target = (doc.shortName || doc.name).split(/[\s(]/)[0]; // "주민등록등본 (상세, 본인)" → "주민등록등본"
+    const out: number[] = [];
+    aiSuggestions.forEach((sug, pageNum) => {
+      // docType이 target과 같거나, target이 docType을 포함하는 경우 매칭
+      const sugType = sug.docType.split(/[\s(]/)[0];
+      if (sugType === target || target.includes(sugType) || sugType.includes(target)) {
+        out.push(pageNum);
+      }
+    });
+    return out.sort((a, b) => a - b);
+  };
+
+  /** 한 서류에 AI 제안을 한 번에 적용 */
+  const applyAllSuggestionsForDoc = (doc: DocItem) => {
+    const pages = suggestedPagesForDoc(doc);
+    const existing = (() => {
+      const df: any = fileMap[doc.name];
+      const arr: number[] = Array.isArray(df?.pages) ? df.pages : (df?.page ? [df.page] : []);
+      return new Set(arr);
+    })();
+    pages.forEach((p) => {
+      if (!existing.has(p)) onAssignPage(doc.name, p); // 토글이라 추가만
+    });
+  };
+
   // URL에서 fileId 추출 (legacy 파일 호환)
   const effectiveFileId = (() => {
     if (bundleFileId) return bundleFileId;
@@ -433,6 +500,14 @@ export default function DocumentPageMapper({
                   const isCurrent = p === currentPage;
                   const hasAssign = docs.length > 0;
                   const thumbUrl = thumbs[p];
+                  const sug = aiSuggestions.get(p);
+                  const sugBorder = !hasAssign && sug
+                    ? sug.confidence === "high"
+                      ? "border-purple-400"
+                      : sug.confidence === "med"
+                        ? "border-amber-400"
+                        : "border-red-300"
+                    : null;
                   return (
                     <button
                       key={p}
@@ -442,9 +517,15 @@ export default function DocumentPageMapper({
                           ? "border-indigo-600 ring-2 ring-indigo-200"
                           : hasAssign
                             ? "border-emerald-400"
-                            : "border-gray-200 hover:border-indigo-300"
+                            : sugBorder ?? "border-gray-200 hover:border-indigo-300"
                       }`}
-                      title={docs.length > 0 ? docs.join(", ") : `${p}p로 이동`}
+                      title={
+                        docs.length > 0
+                          ? docs.join(", ")
+                          : sug
+                            ? `🤖 AI 제안: ${sug.docType} (${sug.confidence})${sug.reason ? ` — ${sug.reason}` : ""}`
+                            : `${p}p로 이동`
+                      }
                     >
                       {thumbUrl ? (
                         <img src={thumbUrl} alt={`p${p}`} className="w-full h-auto block" />
@@ -458,12 +539,24 @@ export default function DocumentPageMapper({
                       }`}>
                         {p}
                       </span>
-                      {hasAssign && (
+                      {hasAssign ? (
                         <span className="absolute bottom-0 left-0 right-0 px-1 py-0.5 bg-emerald-600/90 text-white text-[9px] truncate">
                           {docs[0].length > 6 ? docs[0].slice(0, 6) + "…" : docs[0]}
                           {docs.length > 1 ? ` +${docs.length - 1}` : ""}
                         </span>
-                      )}
+                      ) : sug ? (
+                        <span
+                          className={`absolute bottom-0 left-0 right-0 px-1 py-0.5 text-[9px] truncate ${
+                            sug.confidence === "high"
+                              ? "bg-purple-500/90 text-white"
+                              : sug.confidence === "med"
+                                ? "bg-amber-400/90 text-amber-900"
+                                : "bg-red-300/90 text-red-900"
+                          }`}
+                        >
+                          🤖 {sug.docType.length > 5 ? sug.docType.slice(0, 5) + "…" : sug.docType}
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -474,10 +567,31 @@ export default function DocumentPageMapper({
           {/* 우: 서류 목록 */}
           <div className="w-[360px] flex-shrink-0 flex flex-col border-l border-border bg-white">
             <div className="px-3 py-2 border-b border-border bg-surface2/50">
-              <h3 className="text-xs font-semibold text-ink-2">서류 목록</h3>
-              <p className="text-[10px] text-ink-3 mt-0.5 leading-relaxed">
-                현재 <strong className="text-indigo-700">{currentPage}p</strong>를 [+] 버튼으로 서류에 추가/제거하세요. (같은 서류에 여러 장 추가 가능)
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <h3 className="text-xs font-semibold text-ink-2">서류 목록</h3>
+                <button
+                  type="button"
+                  onClick={runAutoClassify}
+                  disabled={classifying}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+                  title="Gemini Vision으로 PDF 페이지를 서류 종류로 자동 분류 (제안만, 사용자 확인 필요)"
+                >
+                  {classifying ? "분석 중…" : aiSuggestions.size > 0 ? "🤖 재분석" : "🤖 AI 자동 분류"}
+                </button>
+              </div>
+              <p className="text-[10px] text-ink-3 leading-relaxed">
+                현재 <strong className="text-indigo-700">{currentPage}p</strong>를 [+] 버튼으로 서류에 추가/제거하세요.
+                {aiSuggestions.size > 0 && (
+                  <span className="block mt-0.5 text-indigo-700">
+                    ✨ AI가 {aiSuggestions.size}p 분류 — 각 서류의 「제안 적용」 클릭해 일괄 추가
+                  </span>
+                )}
               </p>
+              {classifyError && (
+                <div className="mt-1 text-[10px] text-red-700 bg-red-50 border border-red-200 rounded p-1">
+                  {classifyError}
+                </div>
+              )}
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
               {documents
@@ -567,6 +681,38 @@ export default function DocumentPageMapper({
                               <div className="text-[10px] text-ink-4 mt-0.5">미지정</div>
                             )
                           )}
+
+                          {/* AI 제안 표시 — 아직 지정 안 된 제안 페이지만 노출 */}
+                          {!isAutoVerified && (() => {
+                            const suggested = suggestedPagesForDoc(d).filter((p) => !pages.includes(p));
+                            if (suggested.length === 0) return null;
+                            const sugConfidences = suggested.map((p) => aiSuggestions.get(p)?.confidence || "low");
+                            const minConf = sugConfidences.includes("low") ? "low" : sugConfidences.includes("med") ? "med" : "high";
+                            const confColor = minConf === "high"
+                              ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                              : minConf === "med"
+                                ? "text-amber-800 bg-amber-50 border-amber-200"
+                                : "text-red-700 bg-red-50 border-red-200";
+                            return (
+                              <div className={`mt-1 p-1 rounded border text-[10px] ${confColor}`}>
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="font-semibold">
+                                    🤖 AI 제안: {suggested.map((p) => `${p}p`).join(", ")}
+                                    <span className="ml-1 opacity-70">
+                                      ({minConf === "high" ? "신뢰↑" : minConf === "med" ? "확인 필요" : "저신뢰"})
+                                    </span>
+                                  </span>
+                                  <button
+                                    onClick={() => applyAllSuggestionsForDoc(d)}
+                                    className="px-1.5 py-0 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[9.5px] font-semibold whitespace-nowrap"
+                                    title="제안된 페이지 일괄 추가"
+                                  >
+                                    ✓ 제안 적용
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           {isAutoVerified ? (
