@@ -23,10 +23,46 @@ interface QueueItem {
   customerName: string;
   unitDong?: string;
   unitHo?: string;
-  propIdx: number;
+  /** 묶인 properties 인덱스들 — 가격 저장 시 모든 인덱스에 동시 반영 */
+  propIdxList: number[];
   address: string;
   areaM2?: number;
   usage?: string;
+  /** 그룹화된 행 개수 (1=단독, 2이상=중복 묶음) */
+  groupSize: number;
+}
+
+/**
+ * 동일 부동산 「signature」 생성. 다음 표기 차이를 모두 같은 부동산으로 묶음:
+ *   - "0019 00202" vs "19동 202호" vs "1089-40번지 0019 00202"
+ *   - 단지명 차이 ("해안연립" vs "해안빌라")
+ *   - 면적 ±2㎡ 차이 (반올림)
+ *   - 부번 0 표기 차이 ("1089-0번지" vs "1089번지")
+ */
+function propSignature(address: string, areaM2?: number): string {
+  let s = (address || "").trim();
+  // 행정구역 중복 prefix (강원도 강원강릉시 등)
+  s = s.replace(/(강원|경기|충북|충남|전북|전남|경북|경남|제주|충청|전라|경상)도\s+\1(?=\S)/g, "$1도 ");
+  // -0번지 → 번지
+  s = s.replace(/-0번지/g, "번지");
+  // 단지명 + 동/호 패턴 제거: 「단지명 1089-1번지 19동 202호」 → 핵심 부분만
+  // 1) "ddd-ddd번지" 추출
+  const jibun = s.match(/(\d+(?:-\d+)?)\s*번지/);
+  // 2) 시·군·구 + 읍·면·동·리 추출
+  const adminMatch = s.match(/(\S+(?:특별시|광역시|특별자치도|도)\s+\S+(?:시|군|구)(?:\s+\S+(?:읍|면|동|리))?(?:\s+\S+(?:리|동))?)/);
+  // 3) 동·호 (있으면)
+  const dongho = s.match(/(\d{1,4})\s*[동층]\s*(\d{1,5})\s*호?|\s(\d{2,5})\s+(\d{2,5})\s*$/);
+  let dongHo = "";
+  if (dongho) {
+    const d = dongho[1] || dongho[3] || "";
+    const h = dongho[2] || dongho[4] || "";
+    dongHo = `${Number(d || 0)}-${Number(h || 0)}`;
+  }
+  const admin = adminMatch ? adminMatch[1].replace(/\s+/g, " ") : "";
+  const jb = jibun ? jibun[1].replace(/-0$/, "") : "";
+  // 면적은 ±2㎡ 차이를 같게 처리하려고 floor(area/2)
+  const aBucket = areaM2 != null ? Math.floor(areaM2 / 2) : "?";
+  return `${admin}|${jb}|${dongHo}|${aBucket}`;
 }
 
 interface Props {
@@ -42,37 +78,58 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
   // 가격 입력 필요 항목 — 60㎡ 이하 + 보유 + 주거용 + 가격 미상
   // ⚠ 일반공급 신청자에 한정 — 특별공급은 「유주택자 = 부적격」이라
   //   소형·저가 무주택 예외 적용 자체가 안 됨. 가격 입력 무의미하므로 큐에서 제외.
+  //
+  // 동일 부동산이 다른 표기로 중복 등록된 케이스(예: "0019 00202" vs "19동 202호"는
+  // 같은 부동산) 자동 묶음 처리. 가격 저장 시 묶인 모든 인덱스에 동시 반영.
   const items: QueueItem[] = [];
   for (const c of customers) {
     const supplyType = (c.supply_type || "일반공급").trim();
     const isGeneralSupply = /일반공급/.test(supplyType) || supplyType === "";
-    if (!isGeneralSupply) continue; // 특별공급은 큐에 안 띄움
+    if (!isGeneralSupply) continue;
+
+    // 1차: 적격 행 수집 (인덱스 보존)
+    const eligible: Array<{ idx: number; address: string; areaM2?: number; usage?: string }> = [];
     (c.properties || []).forEach((p, idx) => {
       const isSmall = (p.areaM2 ?? Infinity) <= 60 && (p.areaM2 ?? 0) > 0;
       const noPrice = (p as any).officialPrice == null;
       const notTransferred = !p.transferredDate;
       const isRes = !p.usage || /아파트|주택|연립|다세대|단독|다가구|공동/.test(p.usage);
       if (isSmall && noPrice && notTransferred && isRes) {
-        items.push({
-          customerId: c.id,
-          customerName: c.name,
-          unitDong: (c as any).unit_dong,
-          unitHo: (c as any).unit_ho,
-          propIdx: idx,
-          address: p.address,
-          areaM2: p.areaM2,
-          usage: p.usage,
-        });
+        eligible.push({ idx, address: p.address, areaM2: p.areaM2, usage: p.usage });
       }
+    });
+    if (eligible.length === 0) continue;
+
+    // 2차: signature로 그룹핑 → 1 row per group
+    const groups = new Map<string, typeof eligible>();
+    for (const e of eligible) {
+      const sig = propSignature(e.address, e.areaM2);
+      const arr = groups.get(sig) || [];
+      arr.push(e);
+      groups.set(sig, arr);
+    }
+    groups.forEach((arr) => {
+      // 대표 항목 = 가장 정보 많아 보이는 행 (긴 주소 우선)
+      const rep = arr.slice().sort((a, b) => b.address.length - a.address.length)[0];
+      items.push({
+        customerId: c.id,
+        customerName: c.name,
+        unitDong: (c as any).unit_dong,
+        unitHo: (c as any).unit_ho,
+        propIdxList: arr.map((x) => x.idx),
+        address: rep.address,
+        areaM2: rep.areaM2,
+        usage: rep.usage,
+        groupSize: arr.length,
+      });
     });
   }
 
   if (items.length === 0) return null;
 
   const handleSave = async (item: QueueItem) => {
-    const key = `${item.customerId}-${item.propIdx}`;
+    const key = `${item.customerId}-${item.propIdxList.join(",")}`;
     const raw = draft[key] || "";
-    // 「2.4억」 「24,000,000」 「2400만」 등 한국식 표기 일부 인식
     const num = parsePriceInput(raw);
     if (!num || num <= 0) {
       alert("가격을 정확히 입력해주세요 (원 단위 숫자, 또는 「2.4억」 「2400만」 등)");
@@ -83,14 +140,17 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
       const c = localCustomers.get(item.customerId);
       if (!c) return;
       const props = (c.properties || []).slice();
-      const target = props[item.propIdx];
-      if (!target) return;
-      props[item.propIdx] = {
-        ...target,
-        officialPrice: num,
-        officialPriceYear: new Date().getFullYear(),
-        officialPriceSource: "manual",
-      } as any;
+      // 묶인 모든 인덱스에 동일 가격 반영
+      for (const idx of item.propIdxList) {
+        const target = props[idx];
+        if (!target) continue;
+        props[idx] = {
+          ...target,
+          officialPrice: num,
+          officialPriceYear: new Date().getFullYear(),
+          officialPriceSource: "manual",
+        } as any;
+      }
       localCustomers.update(item.customerId, { properties: props as any });
       setDraft((d) => {
         const n = { ...d };
@@ -117,6 +177,17 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
           <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 font-bold">
             {items.length}건
           </span>
+          {(() => {
+            const grouped = items.filter((i) => i.groupSize > 1);
+            if (grouped.length === 0) return null;
+            const collapsedFrom = grouped.reduce((sum, i) => sum + i.groupSize, 0);
+            const savedRows = collapsedFrom - grouped.length;
+            return (
+              <span className="text-[10.5px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 font-medium">
+                🔗 중복 {grouped.length}개 묶음 ({savedRows}건 자동 통합)
+              </span>
+            );
+          })()}
           <span className="text-[10.5px] text-amber-800/80">
             자동 조회 실패 → 알리미에서 직접 확인 후 입력
           </span>
@@ -127,7 +198,7 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
       {open && (
         <div className="mt-2 space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
           {items.map((item) => {
-            const key = `${item.customerId}-${item.propIdx}`;
+            const key = `${item.customerId}-${item.propIdxList.join(",")}`;
             const allimiUrl = `https://www.realtyprice.kr:447/notice/main/mainBody.htm?addr=${encodeURIComponent(item.address)}`;
             return (
               <div
@@ -140,6 +211,14 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
                 <span className="font-medium text-ink-2 whitespace-nowrap">{item.customerName}</span>
                 <span className="truncate text-ink-2" title={item.address}>
                   📍 {item.address}
+                  {item.groupSize > 1 && (
+                    <span
+                      className="ml-1 text-[9.5px] px-1 py-0 rounded bg-indigo-100 text-indigo-800 font-semibold"
+                      title={`동일 부동산 중복 등록 ${item.groupSize}건 자동 묶음 — 가격 저장 시 모두 일괄 반영`}
+                    >
+                      🔗 {item.groupSize}건 묶음
+                    </span>
+                  )}
                 </span>
                 <span className="text-[10px] text-ink-4 whitespace-nowrap">
                   {item.areaM2 ? `${item.areaM2}㎡` : ""}
