@@ -8,9 +8,10 @@ import { COMMON_DOCUMENTS, SUPPLY_TYPE_DOCUMENTS } from "@/lib/document-checklis
 import { localCustomers, type LocalAnnouncement, type LocalCustomer } from "@/lib/local-store";
 import { ingestAutoStage, stageLabel, type WorkflowIngestResult } from "@/lib/workflow-ingest";
 import { uploadFileViaClient } from "@/lib/client-upload";
+import { parseIneligibleExcel, matchIneligibleToCustomer } from "@/lib/ineligible-ingest";
 import {
   CheckCircle2, XCircle, Clock, FileText, FileSpreadsheet, Loader2, Gavel,
-  FolderUp, ShieldCheck, FileQuestion, PauseCircle,
+  FolderUp, ShieldCheck, FileQuestion, PauseCircle, UserX,
 } from "lucide-react";
 
 // 인덱스 대신 key 검색 — 단계 순서 바뀌어도 안전
@@ -247,6 +248,57 @@ export default function DocumentsStepPage() {
   } | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ eligible: number } | null>(null);
+
+  /** Phase 3 — 부적격자 서류검수 엑셀 일괄 처리 */
+  const ineligibleRef = useRef<HTMLInputElement>(null);
+  const [uploadingIneligible, setUploadingIneligible] = useState(false);
+  const [ineligibleResult, setIneligibleResult] = useState<{
+    detected: number;
+    marked: number;
+    unmatched: number;
+    samples: Array<{ name: string; dong?: string; ho?: string; reason: string }>;
+  } | null>(null);
+
+  const handleIneligibleExcel = async (file: File) => {
+    if (!selected) { alert("먼저 공고를 선택해주세요"); return; }
+    setUploadingIneligible(true);
+    setIneligibleResult(null);
+    try {
+      const buf = await file.arrayBuffer();
+      const { records } = await parseIneligibleExcel(buf);
+      if (records.length === 0) {
+        alert("부적격 처리할 행이 없습니다. (오류내용/결과 컬럼 확인)");
+        setIneligibleResult({ detected: 0, marked: 0, unmatched: 0, samples: [] });
+        return;
+      }
+      const customers = localCustomers.listByAnnouncement(selected.id).filter((c) => !c.superseded);
+      let marked = 0;
+      let unmatched = 0;
+      const samples: Array<{ name: string; dong?: string; ho?: string; reason: string }> = [];
+      for (const rec of records) {
+        const target = matchIneligibleToCustomer(rec, customers);
+        if (!target) { unmatched++; continue; }
+        const reason = `부적격 (${rec.errorReason || rec.result || "사유 미상"})`;
+        const existing = (target.verification_reasons || []).filter((r) => !/부적격/.test(r));
+        localCustomers.update(target.id, {
+          verification_verdict: "ineligible",
+          verification_reasons: [...existing, reason],
+          verification_checked_at: new Date().toISOString(),
+        });
+        marked++;
+        if (samples.length < 5) {
+          samples.push({ name: rec.name, dong: rec.dong, ho: rec.ho, reason: rec.errorReason || rec.result || "" });
+        }
+      }
+      setIneligibleResult({ detected: records.length, marked, unmatched, samples });
+      setReloadKey((k) => k + 1);
+    } catch (err: any) {
+      alert(err?.message || "엑셀 파싱 실패");
+    } finally {
+      setUploadingIneligible(false);
+      if (ineligibleRef.current) ineligibleRef.current.value = "";
+    }
+  };
 
   /**
    * 동호수+이름 양쪽 다 일치하지 않은 파일은 자동 첨부하지 않고 보류 큐에 둡니다.
@@ -785,7 +837,57 @@ export default function DocumentsStepPage() {
               >
                 <Gavel className="w-4 h-4" /> 전체 자동 재판정
               </button>
+              <button
+                onClick={() => ineligibleRef.current?.click()}
+                disabled={uploadingIneligible}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-red-600 hover:bg-red-700 shadow-sm disabled:opacity-40"
+                title="사업자 서류검수 엑셀(부적격 명단) 일괄 처리 — 오류내용/결과 컬럼 자동 반영"
+              >
+                {uploadingIneligible ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> 처리 중…</>
+                ) : (
+                  <><UserX className="w-4 h-4" /> 부적격 명단 일괄 처리</>
+                )}
+              </button>
+              <input
+                ref={ineligibleRef}
+                type="file"
+                accept=".xlsx,.xls,.xlsm"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleIneligibleExcel(f);
+                }}
+              />
             </div>
+
+            {/* 부적격 명단 일괄 처리 결과 */}
+            {ineligibleResult && (
+              <div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-sm">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <UserX className="w-4 h-4 text-red-700" />
+                  <span className="font-semibold text-red-900">부적격 명단 처리 완료</span>
+                  <span className="text-red-800">검출 {ineligibleResult.detected}건</span>
+                  <span className="text-red-900 font-semibold">→ 부적합 마킹 {ineligibleResult.marked}건</span>
+                  {ineligibleResult.unmatched > 0 && (
+                    <span className="text-amber-800">매칭 실패 {ineligibleResult.unmatched}건</span>
+                  )}
+                </div>
+                {ineligibleResult.samples.length > 0 && (
+                  <details className="mt-2 text-[11px]" open>
+                    <summary className="cursor-pointer text-red-900 font-semibold">샘플</summary>
+                    <ul className="mt-1 ml-4 space-y-0.5 text-ink-2">
+                      {ineligibleResult.samples.map((s, i) => (
+                        <li key={i}>
+                          <strong>{s.dong || "?"}-{s.ho || "?"} {s.name}</strong>
+                          <span className="text-red-700"> — {s.reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            )}
 
             {/* 배치 업로드 진행 바 */}
             {batchBusy && batchProgress && batchProgress.total > 0 && (
