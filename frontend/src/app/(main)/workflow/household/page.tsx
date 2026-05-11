@@ -17,7 +17,7 @@ import { formatHousingCode } from "@/lib/housing-code";
 import IndividualVerifyModal from "@/components/workflow/IndividualVerifyModal";
 import {
   Users, AlertTriangle, FileSpreadsheet,
-  Loader2, CheckCircle2, UserCheck, UserMinus,
+  Loader2, CheckCircle2, UserCheck, UserMinus, FileText, ShieldAlert,
 } from "lucide-react";
 
 const step = WORKFLOW_STEPS[1]; // household
@@ -90,6 +90,97 @@ export default function HouseholdStepPage() {
     unmatched: number;
     total: number;
   } | null>(null);
+
+  /** 무주택세대구성원 중복청약·중복당첨 검색결과 PDF (Phase 2 - 자동 부적격 검출) */
+  const householdSearchRef = useRef<HTMLInputElement>(null);
+  const [uploadingHSearch, setUploadingHSearch] = useState(false);
+  const [hSearchResult, setHSearchResult] = useState<{
+    detected: number;
+    marked: number;
+    unmatched: Array<{ name: string; dong?: string; ho?: string }>;
+    samples: Array<{ name: string; dong?: string; ho?: string; with: string[] }>;
+  } | null>(null);
+
+  /** 「당첨자 및 세대원 전산검색 결과」 PDF 업로드 → Gemini 파싱 → 부적격 자동 마킹 */
+  const handleHouseholdSearchPdf = async (file: File) => {
+    if (!selected) { alert("먼저 공고를 선택해주세요"); return; }
+    setUploadingHSearch(true);
+    setHSearchResult(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/parse-household-search", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok || !json?.success) {
+        alert(json?.error || `PDF 파싱 실패 (${res.status})`);
+        return;
+      }
+      const violations: Array<any> = json.violations || [];
+      if (violations.length === 0) {
+        alert("검색결과: 1세대 1명 룰 위반자 없음. (PDF의 「총계 0명」 또는 빈 표)");
+        setHSearchResult({ detected: 0, marked: 0, unmatched: [], samples: [] });
+        return;
+      }
+
+      // 매칭: 동·호 우선, 없으면 이름(마스킹 처리됨 — 「곽*자」형식 가능)
+      const customers = localCustomers.listByAnnouncement(selected.id).filter((c) => !c.superseded);
+      const unmasked = (s: string) => (s || "").replace(/\*/g, ".");
+      let marked = 0;
+      const unmatched: Array<{ name: string; dong?: string; ho?: string }> = [];
+
+      for (const v of violations) {
+        const dong = String(v.dong || "").trim();
+        const ho = String(v.ho || "").trim();
+        const namePat = unmasked(v.name || "");
+
+        let target: LocalCustomer | undefined;
+        if (dong && ho) {
+          target = customers.find((c) => {
+            const cd = String((c as any).unit_dong || c.winner_info?.building || "").trim();
+            const ch = String((c as any).unit_ho || c.winner_info?.unit_no || "").trim();
+            return cd === dong && ch === ho;
+          });
+        }
+        // 동·호 매칭 실패 시 이름(마스킹 패턴) 매칭
+        if (!target && namePat) {
+          const re = new RegExp("^" + namePat + "$");
+          target = customers.find((c) => re.test(c.name));
+        }
+
+        if (!target) {
+          unmatched.push({ name: v.name, dong: v.dong, ho: v.ho });
+          continue;
+        }
+
+        const reason = `중복당첨 (${v.violation || "특공 이중신청"}) — 같은 세대원: ${(v.sameHouseholdWith || []).join(", ")}`;
+        const existing = (target.verification_reasons || []).filter((r) => !/중복당첨/.test(r));
+        localCustomers.update(target.id, {
+          verification_verdict: "ineligible",
+          verification_reasons: [...existing, reason],
+          verification_checked_at: new Date().toISOString(),
+        });
+        marked++;
+      }
+
+      setHSearchResult({
+        detected: violations.length,
+        marked,
+        unmatched,
+        samples: violations.slice(0, 5).map((v: any) => ({
+          name: v.name,
+          dong: v.dong,
+          ho: v.ho,
+          with: v.sameHouseholdWith || [],
+        })),
+      });
+      setReloadKey((k) => k + 1);
+    } catch (err: any) {
+      alert(err?.message || "PDF 처리 실패");
+    } finally {
+      setUploadingHSearch(false);
+      if (householdSearchRef.current) householdSearchRef.current.value = "";
+    }
+  };
 
   const evaluate = (c: LocalCustomer) => evaluateHousehold(c);
 
@@ -292,6 +383,28 @@ export default function HouseholdStepPage() {
                 if (f) handleSeparatedUpload(f);
               }}
             />
+            <button
+              onClick={() => householdSearchRef.current?.click()}
+              disabled={uploadingHSearch}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-red-600 hover:bg-red-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40"
+              title="한국부동산원 「당첨자 및 세대원 전산검색 결과」 PDF → AI가 1세대 2명 당첨자 자동 검출 + 부적합 마킹"
+            >
+              {uploadingHSearch ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> AI 분석 중…</>
+              ) : (
+                <><ShieldAlert className="w-4 h-4" /> 중복당첨 PDF</>
+              )}
+            </button>
+            <input
+              ref={householdSearchRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleHouseholdSearchPdf(f);
+              }}
+            />
           </div>
 
           <IndividualVerifyModal
@@ -320,6 +433,57 @@ export default function HouseholdStepPage() {
                   {uploadResult.errors.map((e, i) => <li key={i}>{e}</li>)}
                 </ul>
               )}
+            </div>
+          )}
+
+          {/* 중복당첨 PDF 결과 */}
+          {hSearchResult && (
+            <div className="card mb-4 p-3 text-sm bg-red-50/70 border-red-200">
+              <div className="flex items-center gap-2 flex-wrap">
+                <ShieldAlert className="w-4 h-4 text-red-700" />
+                <span className="font-semibold text-red-900">중복당첨 검색 완료</span>
+                {hSearchResult.detected === 0 ? (
+                  <span className="text-emerald-700">✓ 1세대 1명 룰 위반자 없음</span>
+                ) : (
+                  <>
+                    <span className="text-red-800">위반자 {hSearchResult.detected}명 검출</span>
+                    <span className="text-red-900 font-semibold">→ 부적합 자동 마킹 {hSearchResult.marked}건</span>
+                    {hSearchResult.unmatched.length > 0 && (
+                      <span className="text-amber-800">매칭 실패 {hSearchResult.unmatched.length}건</span>
+                    )}
+                  </>
+                )}
+              </div>
+              {hSearchResult.samples.length > 0 && (
+                <details className="mt-2 text-[11px]" open>
+                  <summary className="cursor-pointer text-red-900 font-semibold">
+                    검출 샘플 ({hSearchResult.samples.length}건)
+                  </summary>
+                  <ul className="mt-1 ml-4 space-y-0.5 text-ink-2">
+                    {hSearchResult.samples.map((s, i) => (
+                      <li key={i}>
+                        <strong>{s.dong || "?"}-{s.ho || "?"} {s.name}</strong>
+                        {s.with.length > 0 && <span className="text-red-700"> ↔ 같은 세대: {s.with.join(", ")}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              {hSearchResult.unmatched.length > 0 && (
+                <details className="mt-2 text-[11px]">
+                  <summary className="cursor-pointer text-amber-900 font-semibold">
+                    매칭 실패 ({hSearchResult.unmatched.length}건) — 1단계 명단에 없음 또는 동·호 불일치
+                  </summary>
+                  <ul className="mt-1 ml-4 space-y-0.5 text-amber-800">
+                    {hSearchResult.unmatched.map((u, i) => (
+                      <li key={i}>{u.dong || "?"}-{u.ho || "?"} {u.name}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              <div className="mt-2 text-[10.5px] text-red-800/80">
+                💡 부적합 마킹된 호수는 비어있는 상태가 됨 → 예비 승계 또는 「선착순」으로 새 계약자 등록 필요 (5단계·7단계).
+              </div>
             </div>
           )}
 
