@@ -14,6 +14,7 @@ import {
 import { getRequiredDocuments, COMMON_DOCUMENTS, SUPPLY_TYPE_DOCUMENTS } from "@/lib/document-checklist";
 import PdfEvidenceModal from "@/components/PdfEvidenceModal";
 import { lintAnnouncement, lintSummary, type LintIssue } from "@/lib/announcement-lint";
+import RuleVerificationPanel from "@/components/announcement/RuleVerificationPanel";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -1592,6 +1593,21 @@ export default function AnnouncementDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Phase A — 핵심 룰 검증 (판정 정확도의 근원) */}
+      {(() => {
+        const local = localAnnouncements.get(ann.id);
+        if (!local) return null;
+        return (
+          <RuleVerificationPanel
+            announcement={local}
+            onUpdate={(updated) => {
+              // 룰 변경 후 페이지 데이터 갱신 — 가장 단순한 방법은 reload
+              setAnn((prev) => prev ? { ...prev, eligibility_rules: updated.eligibility_rules } as any : prev);
+            }}
+          />
+        );
+      })()}
 
       {/* Phase #2 lint 배너 — 검토 필요 항목 */}
       {lintCounts.total > 0 && (
