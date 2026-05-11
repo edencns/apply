@@ -33,36 +33,68 @@ interface QueueItem {
 }
 
 /**
- * 동일 부동산 「signature」 생성. 다음 표기 차이를 모두 같은 부동산으로 묶음:
- *   - "0019 00202" vs "19동 202호" vs "1089-40번지 0019 00202"
- *   - 단지명 차이 ("해안연립" vs "해안빌라")
- *   - 면적 ±2㎡ 차이 (반올림)
- *   - 부번 0 표기 차이 ("1089-0번지" vs "1089번지")
+ * 동일 부동산 「signature」 생성 — 같은 사람의 같은 호수면 한 부동산으로 묶음.
+ *
+ * 묶음 매칭 기준:
+ *   - 같은 행정구역(시·도·읍·면·동·리)
+ *   - 같은 번지 (부번 0은 무시)
+ *   - 같은 「호 번호」 (마지막 3~5자리)
+ *   - 면적 ±2㎡ 이내
+ *
+ * 「동」은 표기 다양성이 너무 커서 signature에서 제외:
+ *   - "0001 00514" (단지코드+호)
+ *   - "5층 514호" (층+호)
+ *   - "103동 1006호" (동+호)
+ *   - "0019 00202" (코드+호)
+ * 모두 호번호만 보면 의도 명확. 같은 사람·같은 번지·같은 호 = 거의 확실히 같은 부동산.
  */
 function propSignature(address: string, areaM2?: number): string {
   let s = (address || "").trim();
-  // 행정구역 중복 prefix (강원도 강원강릉시 등)
+  // 행정구역 중복 prefix (강원도 강원강릉시 → 강원도 강릉시)
   s = s.replace(/(강원|경기|충북|충남|전북|전남|경북|경남|제주|충청|전라|경상)도\s+\1(?=\S)/g, "$1도 ");
-  // -0번지 → 번지
-  s = s.replace(/-0번지/g, "번지");
-  // 단지명 + 동/호 패턴 제거: 「단지명 1089-1번지 19동 202호」 → 핵심 부분만
-  // 1) "ddd-ddd번지" 추출
-  const jibun = s.match(/(\d+(?:-\d+)?)\s*번지/);
-  // 2) 시·군·구 + 읍·면·동·리 추출
+
+  // 1) 행정구역 토큰
   const adminMatch = s.match(/(\S+(?:특별시|광역시|특별자치도|도)\s+\S+(?:시|군|구)(?:\s+\S+(?:읍|면|동|리))?(?:\s+\S+(?:리|동))?)/);
-  // 3) 동·호 (있으면)
-  const dongho = s.match(/(\d{1,4})\s*[동층]\s*(\d{1,5})\s*호?|\s(\d{2,5})\s+(\d{2,5})\s*$/);
-  let dongHo = "";
-  if (dongho) {
-    const d = dongho[1] || dongho[3] || "";
-    const h = dongho[2] || dongho[4] || "";
-    dongHo = `${Number(d || 0)}-${Number(h || 0)}`;
-  }
   const admin = adminMatch ? adminMatch[1].replace(/\s+/g, " ") : "";
-  const jb = jibun ? jibun[1].replace(/-0$/, "") : "";
-  // 면적은 ±2㎡ 차이를 같게 처리하려고 floor(area/2)
+
+  // 2) 번지 (본번만 추출, 부번 무시)
+  //   "1089-40번지" → "1089-40"
+  //   "1089-0번지"  → "1089"
+  //   "1089번지"    → "1089"
+  const jibunMatch = s.match(/(\d+)(?:-(\d+))?\s*번지/);
+  let jibun = "";
+  if (jibunMatch) {
+    const main = jibunMatch[1];
+    const sub = jibunMatch[2];
+    jibun = sub && sub !== "0" ? `${main}-${sub}` : main;
+  }
+
+  // 3) 호 번호 추출 — 다양한 패턴
+  //   "00514" → 514
+  //   "514호" → 514
+  //   "1006호" → 1006
+  //   "0202" → 202 (00202 같은 leading-zero 형태)
+  // 호 번호는 보통 3~5자리. 끝에서 호 키워드 또는 leading-zero 5자리 추출.
+  let ho = "";
+  // 끝 부분에서 N호 찾기
+  const hoEnd = s.match(/(\d{2,5})\s*호\s*$/);
+  if (hoEnd) {
+    ho = String(Number(hoEnd[1]));
+  } else {
+    // 호 키워드 없으면 끝의 마지막 숫자 시퀀스 (4~5자리 우선)
+    const tail = s.match(/(\d{4,5})\s*$/);
+    if (tail) {
+      ho = String(Number(tail[1]));
+    } else {
+      const tail3 = s.match(/(\d{3})\s*$/);
+      if (tail3) ho = String(Number(tail3[1]));
+    }
+  }
+
+  // 4) 면적 버킷 (±2㎡)
   const aBucket = areaM2 != null ? Math.floor(areaM2 / 2) : "?";
-  return `${admin}|${jb}|${dongHo}|${aBucket}`;
+
+  return `${admin}|${jibun}|${ho}|${aBucket}`;
 }
 
 interface Props {
