@@ -397,6 +397,20 @@ export interface LocalCustomer {
     createdAt: string;              // 레코드 생성 시각
   };
   /**
+   * 최종 계약 정보 — 7단계 「최종 계약자」에서 「계약자명단(분양금 포함)」 엑셀
+   * 업로드 시 기록. 청약 자격 검증과는 별개의 「실제 계약 체결」 정보.
+   */
+  contract_info?: {
+    contractDate?: string;     // 계약일 YYYY-MM-DD
+    contractPrice?: number;    // 분양금 (원)
+    downPayment?: number;      // 계약금
+    customerPhone?: string;
+    residenceAddress?: string; // 거주지 주소
+    registeredAddress?: string;// 주민등록 주소
+    sourceFile?: string;       // 업로드 출처 파일명 (디버그용)
+    importedAt?: string;       // 가져온 시각
+  };
+  /**
    * 5단계 서류 판정용 — 각 서류별 제출된 파일.
    * key = 서류 이름 (예: "주민등록등본", "가족관계증명서").
    */
