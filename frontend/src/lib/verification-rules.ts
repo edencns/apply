@@ -556,6 +556,26 @@ export function evaluateFinal(
   submitted: Record<string, boolean>,
   requiredDocs: Array<{ name: string; conditional: boolean }>,
 ): FinalVerdict {
+  // 「선착순(잔여세대)」 계약자는 청약 자격 검증 룰 적용 안 함.
+  // 시행사가 미분양분을 직접 공개 분양한 경우라 무주택·소득·세대구성 등 조건 무관.
+  // 본인 신분증·계약서·계약금 영수증만 검토.
+  const supply = (customer.supply_type || "").trim();
+  if (supply === "선착순" || supply === "잔여세대") {
+    return {
+      verdict: "eligible",
+      reasons: [],
+      warnings: ["선착순(잔여세대) 계약자 — 청약 자격 검증 룰 미적용. 계약서·신분증 등 기본 서류만 확인"],
+      stages: {
+        registration: evaluateRegistration(customer),
+        // 나머지 단계는 N/A 처리 (missing이지만 의도된 것)
+        household:  { ok: true, reasons: [], warnings: ["선착순 — 검증 불필요"], missing: false },
+        property:   { ok: true, reasons: [], warnings: ["선착순 — 검증 불필요"], missing: false },
+        savings:    { ok: true, reasons: [], warnings: ["선착순 — 검증 불필요"], missing: false },
+        documents:  evaluateDocuments(submitted, requiredDocs),
+      },
+    };
+  }
+
   const stages = {
     registration: evaluateRegistration(customer),
     household: evaluateHousehold(customer),
