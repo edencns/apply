@@ -682,7 +682,8 @@ export default function DocumentPageMapper({
                             )
                           )}
 
-                          {/* AI 제안 표시 — 아직 지정 안 된 제안 페이지만 노출 */}
+                          {/* AI 제안 표시 — 아직 지정 안 된 제안 페이지만 노출.
+                              각 페이지 클릭 시 그 페이지로 점프해 확인 가능. 확인 후 [+] 버튼으로 확정. */}
                           {!isAutoVerified && (() => {
                             const suggested = suggestedPagesForDoc(d).filter((p) => !pages.includes(p));
                             if (suggested.length === 0) return null;
@@ -693,23 +694,58 @@ export default function DocumentPageMapper({
                               : minConf === "med"
                                 ? "text-amber-800 bg-amber-50 border-amber-200"
                                 : "text-red-700 bg-red-50 border-red-200";
+                            // 현재 보고 있는 페이지가 제안된 페이지 중 하나라면 → 「다음 제안」 버튼으로 순환
+                            const curIdx = suggested.indexOf(currentPage);
+                            const nextSuggested = curIdx >= 0 && suggested.length > 1
+                              ? suggested[(curIdx + 1) % suggested.length]
+                              : null;
                             return (
                               <div className={`mt-1 p-1 rounded border text-[10px] ${confColor}`}>
-                                <div className="flex items-center justify-between gap-1">
-                                  <span className="font-semibold">
-                                    🤖 AI 제안: {suggested.map((p) => `${p}p`).join(", ")}
-                                    <span className="ml-1 opacity-70">
-                                      ({minConf === "high" ? "신뢰↑" : minConf === "med" ? "확인 필요" : "저신뢰"})
-                                    </span>
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  <span className="font-semibold">🤖 AI 제안:</span>
+                                  {suggested.map((p) => {
+                                    const sug = aiSuggestions.get(p);
+                                    const isCur = p === currentPage;
+                                    return (
+                                      <button
+                                        key={p}
+                                        onClick={() => jumpTo(p)}
+                                        className={`px-1.5 py-0.5 rounded font-mono font-semibold text-[10px] ${
+                                          isCur
+                                            ? "bg-indigo-600 text-white ring-1 ring-indigo-300"
+                                            : "bg-white/80 hover:bg-white border border-current"
+                                        }`}
+                                        title={`${p}p로 이동 — ${sug?.reason || sug?.docType || ""} (${sug?.confidence || "?"})`}
+                                      >
+                                        {p}p
+                                      </button>
+                                    );
+                                  })}
+                                  {nextSuggested && (
+                                    <button
+                                      onClick={() => jumpTo(nextSuggested)}
+                                      className="px-1.5 py-0.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-[9.5px] font-semibold whitespace-nowrap"
+                                      title={`다음 제안 페이지(${nextSuggested}p)로 이동`}
+                                    >
+                                      ↻ 다음
+                                    </button>
+                                  )}
+                                  <span className="opacity-70">
+                                    ({minConf === "high" ? "신뢰↑" : minConf === "med" ? "확인 필요" : "저신뢰"})
                                   </span>
                                   <button
                                     onClick={() => applyAllSuggestionsForDoc(d)}
-                                    className="px-1.5 py-0 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[9.5px] font-semibold whitespace-nowrap"
-                                    title="제안된 페이지 일괄 추가"
+                                    className="ml-auto px-1.5 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[9.5px] font-semibold whitespace-nowrap"
+                                    title="제안된 모든 페이지 한 번에 추가"
                                   >
-                                    ✓ 제안 적용
+                                    ✓ 일괄 적용
                                   </button>
                                 </div>
+                                {currentPage && suggested.includes(currentPage) && (
+                                  <div className="mt-0.5 text-[9.5px] opacity-80">
+                                    💡 현재 {currentPage}p 확인 중 — 맞으면 위 [+] 버튼으로 추가, 틀리면 다른 제안 페이지 클릭
+                                  </div>
+                                )}
                               </div>
                             );
                           })()}
