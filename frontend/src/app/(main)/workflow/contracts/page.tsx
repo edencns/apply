@@ -21,6 +21,8 @@ import {
   type ContractRecord,
 } from "@/lib/contract-ingest";
 import { formatHousingCode } from "@/lib/housing-code";
+import { exportAdditionalResidentXlsx } from "@/lib/applyhome-exports";
+import OfficialDocAttachment from "@/components/workflow/OfficialDocAttachment";
 import {
   FileSpreadsheet, Loader2, ClipboardCheck, AlertTriangle, UserPlus,
 } from "lucide-react";
@@ -232,6 +234,12 @@ export default function ContractsStepPage() {
             />
           </div>
 
+          {/* [05] 예비입주자 중 추가입주자 명단 송부 관리 */}
+          <AdditionalResidentSection
+            announcement={selected}
+            onChange={() => setReloadKey((k) => k + 1)}
+          />
+
           {result && (
             <div className="card mb-4 p-3 text-sm bg-emerald-50/60 border-emerald-200">
               <div className="flex items-center gap-2 flex-wrap">
@@ -275,5 +283,153 @@ export default function ContractsStepPage() {
         </>
       )}
     </WorkflowShell>
+  );
+}
+
+/**
+ * [05] 예비입주자 중 추가입주자 명단 송부 관리.
+ *
+ * 청약홈 > 사업주체전용 > 당첨자 > 당첨자 등록 > [05]예비입주자 중 추가입주자 명단
+ * 「주택공급에 관한 규칙」 제57조제1항 — 추가입주자 발생 즉시 송부.
+ *
+ * 대상: succeeded_from 필드가 있는 고객 (예비→당첨자로 승계 완료된 자).
+ */
+function AdditionalResidentSection({
+  announcement,
+  onChange,
+}: {
+  announcement: LocalAnnouncement;
+  onChange: () => void;
+}) {
+  const announcementId = announcement.id;
+  const [reloadKey, setReloadKey] = useState(0);
+  const all = localCustomers.listByAnnouncement(announcementId);
+  const additional = all.filter(
+    (c) => c.succeeded_from !== undefined && c.succeeded_from !== null && !c.superseded,
+  );
+  if (additional.length === 0) return null;
+
+  const reported = additional.filter((c) => c.additional_resident_reported_at);
+  const pending = additional.filter((c) => !c.additional_resident_reported_at);
+
+  const markReported = (c: LocalCustomer) => {
+    localCustomers.update(c.id, { additional_resident_reported_at: new Date().toISOString() });
+    setReloadKey((k) => k + 1);
+    onChange();
+  };
+  const unmarkReported = (c: LocalCustomer) => {
+    if (!confirm("[05] 송부 완료 표시를 해제할까요?")) return;
+    localCustomers.update(c.id, { additional_resident_reported_at: undefined });
+    setReloadKey((k) => k + 1);
+    onChange();
+  };
+  const markAllPending = () => {
+    if (pending.length === 0) return;
+    if (!confirm(`${pending.length}명을 일괄 송부 완료로 표시할까요?`)) return;
+    const now = new Date().toISOString();
+    for (const c of pending) localCustomers.update(c.id, { additional_resident_reported_at: now });
+    setReloadKey((k) => k + 1);
+    onChange();
+  };
+
+  // 원당첨자 이름 조회 (succeeded_from → 원래 사람)
+  const byId = new Map(all.map((c) => [c.id, c]));
+
+  return (
+    <div className="card mb-4 p-3 bg-violet-50/60 border-violet-200" key={reloadKey}>
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <div>
+          <h3 className="text-sm font-semibold text-violet-900">
+            [05] 예비입주자 중 추가입주자 명단
+          </h3>
+          <p className="text-[11px] text-violet-800 mt-0.5">
+            청약홈 &gt; 당첨자 &gt; 당첨자 등록 &gt; [05]예비입주자 중 추가입주자 명단 — 발생 즉시 송부 (제57조제1항)
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px]">
+          <span className="px-2 py-0.5 rounded bg-white border border-violet-200 text-violet-900">
+            추가입주자 <strong>{additional.length}</strong>명
+          </span>
+          <span className="px-2 py-0.5 rounded bg-white border border-emerald-200 text-emerald-900">
+            송부 완료 <strong>{reported.length}</strong>명
+          </span>
+          {pending.length > 0 && (
+            <span className="px-2 py-0.5 rounded bg-red-100 text-red-900 font-semibold">
+              미송부 <strong>{pending.length}</strong>명
+            </span>
+          )}
+          <button
+            onClick={() => exportAdditionalResidentXlsx(all, announcement)}
+            className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-semibold"
+            title="청약홈 [05] 메뉴 송부용 엑셀 다운로드"
+          >
+            [05] 엑셀 출력
+          </button>
+          <OfficialDocAttachment announcement={announcement} menuCode="05" compact onUpdate={onChange} />
+        </div>
+      </div>
+
+      {pending.length > 0 && (
+        <div className="mb-2 flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-red-50 border border-red-200">
+          <span className="text-[11px] text-red-800">
+            🔴 추가입주자로 전환되었으나 [05] 미송부인 고객 <strong>{pending.length}명</strong>이 있습니다.
+          </span>
+          <button
+            onClick={markAllPending}
+            className="px-2 py-1 rounded bg-violet-700 hover:bg-violet-800 text-white text-[11px] font-semibold"
+          >
+            일괄 송부 완료 ({pending.length}명)
+          </button>
+        </div>
+      )}
+
+      <details className="text-[11px]">
+        <summary className="cursor-pointer text-violet-900 font-semibold">추가입주자 명단</summary>
+        <ul className="mt-2 space-y-1">
+          {additional.map((c) => {
+            const isReported = !!c.additional_resident_reported_at;
+            const original = c.succeeded_from ? byId.get(c.succeeded_from) : null;
+            return (
+              <li key={c.id} className="flex items-center justify-between p-1.5 rounded bg-white border border-violet-100">
+                <span>
+                  {isReported ? "✓ " : "○ "}
+                  <strong>{c.name}</strong> · {c.unit_type || "—"} · {c.unit_dong || "?"}-{c.unit_ho || "?"}
+                  {original && (
+                    <span className="ml-2 text-ink-3">(원당첨자: {original.name})</span>
+                  )}
+                  {isReported && (
+                    <span className="ml-2 text-emerald-700">
+                      송부 {new Date(c.additional_resident_reported_at!).toLocaleDateString()}
+                    </span>
+                  )}
+                </span>
+                {isReported ? (
+                  <button
+                    onClick={() => unmarkReported(c)}
+                    className="px-1.5 py-0.5 rounded border border-ink-300 text-[10px] text-ink-3 hover:bg-ink-50"
+                  >
+                    해제
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => markReported(c)}
+                    className="px-1.5 py-0.5 rounded bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-semibold"
+                  >
+                    송부 완료
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </details>
+
+      {/* 추가입주자의 배우자 분리세대원 - 보충 안내 */}
+      {additional.some((c) => (c.separated_household_members || []).length > 0) && (
+        <div className="mt-2 px-2 py-1.5 rounded bg-white border border-violet-200 text-[11px] text-violet-900">
+          💡 추가입주자 중 배우자 분리세대원이 있는 경우, household 단계의 [01] 메뉴를 통해 별도 송부 필요.
+        </div>
+      )}
+    </div>
   );
 }

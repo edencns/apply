@@ -3,7 +3,9 @@
 import { useEffect, useState, createContext, useContext } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { localAnnouncements, isNetworkError } from "@/lib/local-store";
+import { localAnnouncements, localCustomers, isNetworkError } from "@/lib/local-store";
+import { shouldPurge, buildPurgePatch } from "@/lib/pii-purge";
+import { alertLabel, alertColorClass } from "@/lib/deadline-alerts";
 import { announcements as sampleAnnouncements, AptAnnouncement } from "../compare/data";
 import {
   ArrowLeft, Building2, CalendarDays, MapPin, Users, Shield, Heart,
@@ -1609,6 +1611,10 @@ export default function AnnouncementDetailPage() {
         );
       })()}
 
+      {/* 추첨이후 업무 — 예비입주자 60일 파기 (제26조제9항·제26조의2제6항) */}
+      <PiiPurgeSection announcementId={ann.id} contractEnd={ann.contract_end || null} />
+
+
       {/* Phase #2 lint 배너 — 검토 필요 항목 */}
       {lintCounts.total > 0 && (
         <div className="mb-5">
@@ -1674,5 +1680,141 @@ export default function AnnouncementDetailPage() {
       )}
     </div>
     </EvidenceContext.Provider>
+  );
+}
+
+/**
+ * 예비입주자 개인정보 60일 파기 섹션.
+ * 「주택공급에 관한 규칙」 제26조제9항·제26조의2제6항.
+ *
+ * 공급계약체결마감(contract_end)으로부터 60일 경과 시 미승계 예비입주자의
+ * 식별자(이름·주민번호·전화·주소)를 마스킹. 통계/감사 데이터는 보존.
+ */
+function PiiPurgeSection({
+  announcementId,
+  contractEnd,
+}: {
+  announcementId: number;
+  contractEnd: string | null;
+}) {
+  const [reloadKey, setReloadKey] = useState(0);
+  const customers = localCustomers.listByAnnouncement(announcementId);
+  const contractEndDate = contractEnd ? new Date(contractEnd) : null;
+  if (!contractEndDate) return null; // 계약체결 마감 미정이면 표시 안 함
+
+  const dueDate = new Date(contractEndDate.getTime() + 60 * 24 * 60 * 60 * 1000);
+  const daysLeft = Math.floor((dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  const level: "critical" | "warning" | "info" | "past" =
+    daysLeft < 0 ? "past" : daysLeft <= 1 ? "critical" : daysLeft <= 3 ? "warning" : "info";
+
+  const standby = customers.filter(
+    (c) => c.is_standby && (c.succeeded_from === undefined || c.succeeded_from === null),
+  );
+  const eligible = standby.filter((c) => shouldPurge(c, contractEndDate));
+  const purged = standby.filter((c) => c.pii_purged_at);
+  const pending = standby.filter((c) => !c.pii_purged_at);
+
+  // 멀리 미래(30일 초과)면 표시 생략 — 노이즈 방지
+  if (daysLeft > 30 && purged.length === 0) return null;
+  if (standby.length === 0) return null;
+
+  const runPurge = (target: typeof customers[number]) => {
+    if (!confirm(`${target.name} 의 식별자 정보를 마스킹할까요?\n(이름·주민번호·전화·주소가 *** 로 대체되며 되돌릴 수 없습니다)`)) return;
+    const patch = buildPurgePatch(target);
+    localCustomers.update(target.id, patch as any);
+    setReloadKey((k) => k + 1);
+  };
+
+  const runBulkPurge = () => {
+    if (eligible.length === 0) {
+      alert("파기 기한이 도래한 대상이 없습니다.");
+      return;
+    }
+    if (!confirm(`${eligible.length}명의 식별자 정보를 일괄 마스킹할까요?\n(되돌릴 수 없습니다)`)) return;
+    for (const c of eligible) {
+      const patch = buildPurgePatch(c);
+      localCustomers.update(c.id, patch as any);
+    }
+    setReloadKey((k) => k + 1);
+    alert(`${eligible.length}명 마스킹 완료`);
+  };
+
+  return (
+    <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50/40 p-4" key={reloadKey}>
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <div>
+          <h3 className="text-sm font-bold text-amber-900">
+            추첨이후 업무 — 예비입주자 60일 파기
+          </h3>
+          <p className="text-[11px] text-amber-800 mt-0.5">
+            「주택공급에 관한 규칙」 제26조제9항·제26조의2제6항 — 공급계약체결마감 +60일 경과 시 식별자 마스킹
+          </p>
+        </div>
+        <div className={`px-2 py-1 rounded border text-xs font-bold ${alertColorClass(level)}`}>
+          {alertLabel(daysLeft)} · 기한 {dueDate.getFullYear()}.{String(dueDate.getMonth() + 1).padStart(2, "0")}.{String(dueDate.getDate()).padStart(2, "0")}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 text-[11px] mt-3">
+        <span className="px-2 py-0.5 rounded bg-white border border-amber-200 text-amber-900">
+          예비입주자 <strong>{standby.length}</strong>명
+        </span>
+        <span className="px-2 py-0.5 rounded bg-white border border-amber-200 text-amber-900">
+          파기 기한 도래 <strong>{eligible.length}</strong>명
+        </span>
+        <span className="px-2 py-0.5 rounded bg-white border border-emerald-200 text-emerald-900">
+          파기 완료 <strong>{purged.length}</strong>명
+        </span>
+        <span className="px-2 py-0.5 rounded bg-white border border-ink-100 text-ink-2">
+          미파기 <strong>{pending.length}</strong>명
+        </span>
+      </div>
+
+      {eligible.length > 0 && (
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <p className="text-[11px] text-red-800">
+            🔴 파기 기한이 도래한 예비입주자 <strong>{eligible.length}명</strong>의 식별자를 마스킹해야 합니다.
+          </p>
+          <button
+            onClick={runBulkPurge}
+            className="px-3 py-1.5 rounded bg-red-700 hover:bg-red-800 text-white text-xs font-semibold"
+          >
+            일괄 마스킹 ({eligible.length}명)
+          </button>
+        </div>
+      )}
+
+      {standby.length > 0 && (
+        <details className="mt-3 text-[11px]">
+          <summary className="cursor-pointer text-amber-900 font-semibold">예비입주자 목록</summary>
+          <ul className="mt-2 space-y-1">
+            {standby.map((c) => {
+              const due = shouldPurge(c, contractEndDate);
+              return (
+                <li key={c.id} className="flex items-center justify-between p-1.5 rounded bg-white border border-amber-100">
+                  <span>
+                    {c.pii_purged_at ? "🔒 " : due ? "🔴 " : "○ "}
+                    <strong>{c.name}</strong> · {c.unit_type || "—"} · 예비 {c.standby_rank || "—"}순위
+                    {c.pii_purged_at && (
+                      <span className="ml-2 text-emerald-700">
+                        파기 {new Date(c.pii_purged_at).toLocaleDateString()}
+                      </span>
+                    )}
+                  </span>
+                  {!c.pii_purged_at && due && (
+                    <button
+                      onClick={() => runPurge(c)}
+                      className="px-2 py-0.5 rounded bg-red-600 hover:bg-red-700 text-white text-[10px] font-semibold"
+                    >
+                      마스킹
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </details>
+      )}
+    </div>
   );
 }

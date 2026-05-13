@@ -31,6 +31,19 @@ export interface LocalAnnouncement {
   document_submit_start?: string | null;
   document_submit_end?: string | null;
   eligibility_rules?: Record<string, any>;
+  /**
+   * 청약홈 사업주체전용 송부용 공문 첨부 — 메뉴 ID별로 1개.
+   *   "01": 당첨자 배우자 분리세대 세대원 검색요청
+   *   "05": 예비입주자 중 추가입주자 명단
+   *   "08": 부적격당첨자 명단
+   * 공문양식: "청약홈 > 사업주체전용 > 업무처리안내 > 관련양식" 참고.
+   */
+  applyhome_documents?: Record<string, {
+    url: string;
+    filename: string;
+    uploadedAt: string;
+    fileId?: number;
+  }>;
   created_at: string;
 }
 
@@ -259,6 +272,11 @@ export interface LocalCustomer {
   succeeded_from?: number;       // (예비→당첨 승계된 경우) 원래 당첨자 ID
   supersede_reason?: string;     // 포기·부적합 사유 요약
   supersede_at?: string;         // 승계 시각 ISO
+  /**
+   * 청약홈 [05]예비입주자 중 추가입주자 명단 송부 시각 (제57조제1항).
+   * succeeded_from이 있는 고객(=예비에서 추가입주자로 전환됨)에 대해 발생 즉시 청약홈에 송부.
+   */
+  additional_resident_reported_at?: string;
   // ── 등록 경로 ──
   /**
    * 어떤 경로로 이 고객이 등록됐는지.
@@ -274,7 +292,25 @@ export interface LocalCustomer {
   verification_verdict?: "eligible" | "ineligible" | "pending";
   verification_score?: number;
   verification_checked_at?: string;
-  verification_reasons?: string[];  // 부적합 사유 (없으면 적합)
+  verification_reasons?: string[];  // 부적합 사유 자유 텍스트 (없으면 적합)
+  /**
+   * 부적격 사유 분류 코드 (제55·54·28·58·4·52조 등) — 청약홈 [08]부적격 명단 양식과
+   * 7일 기한 추적 알림에 사용. ineligible-ingest가 엑셀 "오류내용" 자유 텍스트에서 자동 매핑하고
+   * 담당자가 documents 페이지에서 수동 추가/삭제 가능.
+   * 자세한 정의는 lib/ineligible-reasons.ts 참조.
+   */
+  verification_reason_codes?: string[];   // IneligibleReasonCode 배열 (순환 import 회피 위해 string)
+  /**
+   * 「당첨자 명단 삭제·계좌 부활」을 위해 청약홈 [08] 메뉴로 송부한 시각.
+   * 송부 완료 시 기록되며, 부적격 마킹일(verification_checked_at)로부터 7일 기한을 추적.
+   */
+  ineligible_reported_at?: string;
+  /**
+   * 개인정보 파기 시각 (제26조제9항·제26조의2제6항).
+   * 예비입주자 선정 후 공급계약체결일로부터 60일 경과 시 식별자(이름·주민번호·전화·주소 등)를
+   * 마스킹하면서 이 시각을 기록. 통계/감사용 메타데이터는 보존.
+   */
+  pii_purged_at?: string;
   /** Phase #8 — 청약홈 당첨사실 확인서 기반 과거 당첨 이력 */
   past_winnings?: Array<{
     /** 당첨 공고명 */
@@ -355,6 +391,12 @@ export interface LocalCustomer {
   }>;
   /** 분리세대 명단 업로드 시각 — 없으면 "분리세대 없음"으로 간주 */
   separated_checked_at?: string;
+  /**
+   * 청약홈 [01]당첨자 배우자 분리세대 세대원 검색요청 송부 시각.
+   * separated_household_members가 있고 이 필드가 없으면 "[01] 송부 필요" 알림.
+   * 분리세대 회신(separated_property_checked_at)이 들어오면 자동으로 송부 완료로 간주.
+   */
+  separated_reported_at?: string;
   /** 분리세대원 주택소유 결과 (청약홈 분리세대 회신 PDF 파싱) */
   separated_properties?: Array<{
     ownerRrn: string;
