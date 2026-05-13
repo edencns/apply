@@ -12,12 +12,11 @@ import {
 import { ensureXlsx, parseHouseholdMembers } from "@/lib/winner-ingest";
 import { toIdentity, sameIdentity } from "@/lib/identity";
 import { ingestForStage, type WorkflowIngestResult } from "@/lib/workflow-ingest";
-import { parseSeparatedExcel } from "@/lib/separated-ingest";
 import { formatHousingCode } from "@/lib/housing-code";
 import IndividualVerifyModal from "@/components/workflow/IndividualVerifyModal";
 import {
   Users, AlertTriangle, FileSpreadsheet,
-  Loader2, CheckCircle2, UserCheck, UserMinus, FileText, ShieldAlert,
+  Loader2, CheckCircle2, UserCheck, ShieldAlert,
 } from "lucide-react";
 
 const step = WORKFLOW_STEPS[1]; // household
@@ -83,13 +82,6 @@ export default function HouseholdStepPage() {
   >(null);
   const [indivOpen, setIndivOpen] = useState(false);
   const xlsxRef = useRef<HTMLInputElement>(null);
-  const separatedRef = useRef<HTMLInputElement>(null);
-  const [uploadingSep, setUploadingSep] = useState(false);
-  const [sepResult, setSepResult] = useState<{
-    attached: number;
-    unmatched: number;
-    total: number;
-  } | null>(null);
 
   /** 한국부동산원 「전산검색 결과」 PDF (7가지 부적격 카테고리 자동 검출) */
   const householdSearchRef = useRef<HTMLInputElement>(null);
@@ -262,65 +254,6 @@ export default function HouseholdStepPage() {
     }
   };
 
-  /** 분리세대 명단 엑셀 업로드 */
-  const handleSeparatedUpload = async (file: File) => {
-    if (!selected) { alert("먼저 공고를 선택해주세요"); return; }
-    setUploadingSep(true);
-    setSepResult(null);
-    try {
-      const buf = await file.arrayBuffer();
-      const parsed = parseSeparatedExcel(buf);
-      const customers = localCustomers.listByAnnouncement(selected.id);
-      let attached = 0;
-      let unmatched = 0;
-
-      // 각 당첨자에게 분리세대원 정보 부착
-      parsed.byWinnerRrn.forEach((rows, rrnFrontKey) => {
-        const target = customers.find((c) => c.rrn_front === rrnFrontKey);
-        if (!target) {
-          unmatched++;
-          return;
-        }
-        const members = rows.map((r: any) => ({
-          name: r.memberName,
-          rrn: r.memberRrn,
-          relation: r.relation,
-          note: r.note,
-        }));
-        localCustomers.update(target.id, {
-          separated_household_members: members,
-          separated_checked_at: new Date().toISOString(),
-        });
-        attached++;
-      });
-
-      // 분리세대원이 없는 것으로 확인된 나머지 고객들도 "확인 완료" 표시
-      const checkedCustomerIds = new Set(
-        Array.from(parsed.byWinnerRrn.keys())
-          .map((f) => customers.find((c) => c.rrn_front === f)?.id)
-          .filter(Boolean),
-      );
-      for (const c of customers) {
-        if (checkedCustomerIds.has(c.id)) continue;
-        if (c.superseded) continue;
-        // 이미 분리세대 정보 있으면 건드리지 않음
-        if (c.separated_checked_at) continue;
-        localCustomers.update(c.id, {
-          separated_household_members: [],
-          separated_checked_at: new Date().toISOString(),
-        });
-      }
-
-      setSepResult({ attached, unmatched, total: parsed.totalRows });
-      setReloadKey((k) => k + 1);
-    } catch (err: any) {
-      alert(err?.message || "분리세대 파일 처리 실패");
-    } finally {
-      setUploadingSep(false);
-      if (separatedRef.current) separatedRef.current.value = "";
-    }
-  };
-
   const handleVerify = () => {
     if (!selected) return;
     const customers = localCustomers
@@ -379,28 +312,6 @@ export default function HouseholdStepPage() {
             >
               <UserCheck className="w-4 h-4" /> 추가 검증
             </button>
-            <button
-              onClick={() => separatedRef.current?.click()}
-              disabled={uploadingSep}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40"
-              title="분리세대 명단 엑셀 업로드 (배우자 분리세대 등)"
-            >
-              {uploadingSep ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> 분석 중…</>
-              ) : (
-                <><UserMinus className="w-4 h-4" /> 분리세대 명단</>
-              )}
-            </button>
-            <input
-              ref={separatedRef}
-              type="file"
-              accept=".xlsx,.xls,.xlsm"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleSeparatedUpload(f);
-              }}
-            />
             <button
               onClick={() => householdSearchRef.current?.click()}
               disabled={uploadingHSearch}
@@ -517,25 +428,6 @@ export default function HouseholdStepPage() {
               )}
               <div className="mt-2 text-[10.5px] text-red-800/80">
                 💡 7가지 부적격 카테고리 (가점제2년·당첨5년·중복청약·재당첨일반/특공·특공1회·사전청약) 자동 검출. 부적합 호수는 예비 승계 또는 선착순으로 처리.
-              </div>
-            </div>
-          )}
-
-          {/* 분리세대 업로드 결과 */}
-          {sepResult && (
-            <div className="card mb-4 p-3 text-sm bg-amber-50/70 border-amber-200">
-              <div className="flex items-center gap-2 flex-wrap">
-                <UserMinus className="w-4 h-4 text-amber-800" />
-                <span className="font-semibold text-amber-900">분리세대 명단 연결 완료</span>
-                <span className="text-amber-800">
-                  {sepResult.attached}명에게 분리세대원 정보 부착 · 총 {sepResult.total}건
-                </span>
-                {sepResult.unmatched > 0 && (
-                  <span className="text-red-700">매칭 실패 {sepResult.unmatched}명</span>
-                )}
-              </div>
-              <div className="mt-1 text-xs text-amber-800/80">
-                💡 다음 단계(주택소유 조회)에서 분리세대 청약홈 회신 PDF를 업로드해 주세요.
               </div>
             </div>
           )}
