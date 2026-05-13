@@ -91,14 +91,15 @@ export default function HouseholdStepPage() {
     total: number;
   } | null>(null);
 
-  /** 무주택세대구성원 중복청약·중복당첨 검색결과 PDF (Phase 2 - 자동 부적격 검출) */
+  /** 한국부동산원 「전산검색 결과」 PDF (7가지 부적격 카테고리 자동 검출) */
   const householdSearchRef = useRef<HTMLInputElement>(null);
   const [uploadingHSearch, setUploadingHSearch] = useState(false);
   const [hSearchResult, setHSearchResult] = useState<{
     detected: number;
     marked: number;
-    unmatched: Array<{ name: string; dong?: string; ho?: string }>;
-    samples: Array<{ name: string; dong?: string; ho?: string; with: string[] }>;
+    unmatched: Array<{ name: string; dong?: string; ho?: string; category?: string }>;
+    samples: Array<{ category?: string; name: string; dong?: string; ho?: string; with: string[]; violation: string }>;
+    byCategory: Record<string, number>;
   } | null>(null);
 
   /** 「당첨자 및 세대원 전산검색 결과」 PDF 업로드 → Gemini 파싱 → 부적격 자동 마킹 */
@@ -116,19 +117,25 @@ export default function HouseholdStepPage() {
         return;
       }
       const violations: Array<any> = json.violations || [];
+      const totals: Record<string, number> = json.perCategoryTotals || {};
+
       if (violations.length === 0) {
-        alert("검색결과: 1세대 1명 룰 위반자 없음. (PDF의 「총계 0명」 또는 빈 표)");
-        setHSearchResult({ detected: 0, marked: 0, unmatched: [], samples: [] });
+        const totalsLine = Object.entries(totals)
+          .map(([k, v]) => `${k}=${v || 0}`)
+          .join(" · ");
+        alert(`검색결과: 모든 카테고리 위반자 없음.\\n${totalsLine || ""}`);
+        setHSearchResult({ detected: 0, marked: 0, unmatched: [], samples: [], byCategory: totals });
         return;
       }
 
-      // 매칭: 동·호 우선, 없으면 이름(마스킹 처리됨 — 「곽*자」형식 가능)
       const customers = localCustomers.listByAnnouncement(selected.id).filter((c) => !c.superseded);
       const unmasked = (s: string) => (s || "").replace(/\*/g, ".");
       let marked = 0;
-      const unmatched: Array<{ name: string; dong?: string; ho?: string }> = [];
+      const unmatched: Array<{ name: string; dong?: string; ho?: string; category?: string }> = [];
+      const byCategory: Record<string, number> = {};
 
       for (const v of violations) {
+        byCategory[v.category || "기타"] = (byCategory[v.category || "기타"] || 0) + 1;
         const dong = String(v.dong || "").trim();
         const ho = String(v.ho || "").trim();
         const namePat = unmasked(v.name || "");
@@ -141,19 +148,27 @@ export default function HouseholdStepPage() {
             return cd === dong && ch === ho;
           });
         }
-        // 동·호 매칭 실패 시 이름(마스킹 패턴) 매칭
         if (!target && namePat) {
           const re = new RegExp("^" + namePat + "$");
           target = customers.find((c) => re.test(c.name));
         }
 
         if (!target) {
-          unmatched.push({ name: v.name, dong: v.dong, ho: v.ho });
+          unmatched.push({ name: v.name, dong: v.dong, ho: v.ho, category: v.category });
           continue;
         }
 
-        const reason = `중복당첨 (${v.violation || "특공 이중신청"}) — 같은 세대원: ${(v.sameHouseholdWith || []).join(", ")}`;
-        const existing = (target.verification_reasons || []).filter((r) => !/중복당첨/.test(r));
+        // 카테고리별 사유 구성
+        let reason = `부적격 (${v.category || "기타"})`;
+        if (v.category === "중복청약" && v.sameHouseholdWith?.length) {
+          reason += ` — 같은 세대원: ${v.sameHouseholdWith.join(", ")}`;
+        } else if (v.violatedHistory) {
+          reason += ` — 이력: ${v.violatedHistory}`;
+        } else if (v.violation) {
+          reason += ` — ${v.violation}`;
+        }
+
+        const existing = (target.verification_reasons || []).filter((r) => !/부적격|중복당첨/.test(r));
         localCustomers.update(target.id, {
           verification_verdict: "ineligible",
           verification_reasons: [...existing, reason],
@@ -166,12 +181,15 @@ export default function HouseholdStepPage() {
         detected: violations.length,
         marked,
         unmatched,
-        samples: violations.slice(0, 5).map((v: any) => ({
+        samples: violations.slice(0, 8).map((v: any) => ({
+          category: v.category,
           name: v.name,
           dong: v.dong,
           ho: v.ho,
           with: v.sameHouseholdWith || [],
+          violation: v.violation || "",
         })),
+        byCategory,
       });
       setReloadKey((k) => k + 1);
     } catch (err: any) {
@@ -387,12 +405,12 @@ export default function HouseholdStepPage() {
               onClick={() => householdSearchRef.current?.click()}
               disabled={uploadingHSearch}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-red-600 hover:bg-red-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40"
-              title="한국부동산원 「당첨자 및 세대원 전산검색 결과」 PDF → AI가 1세대 2명 당첨자 자동 검출 + 부적합 마킹"
+              title="한국부동산원 「전산검색 결과」 PDF (1~7페이지) → AI가 7가지 부적격 카테고리(가점제2년·당첨5년·중복청약·재당첨·특공1회·사전청약) 자동 검출 + 부적합 마킹"
             >
               {uploadingHSearch ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> AI 분석 중…</>
               ) : (
-                <><ShieldAlert className="w-4 h-4" /> 중복당첨 PDF</>
+                <><ShieldAlert className="w-4 h-4" /> 전산검색 결과 PDF</>
               )}
             </button>
             <input
@@ -436,14 +454,14 @@ export default function HouseholdStepPage() {
             </div>
           )}
 
-          {/* 중복당첨 PDF 결과 */}
+          {/* 전산검색 결과 PDF 결과 (7가지 카테고리) */}
           {hSearchResult && (
             <div className="card mb-4 p-3 text-sm bg-red-50/70 border-red-200">
               <div className="flex items-center gap-2 flex-wrap">
                 <ShieldAlert className="w-4 h-4 text-red-700" />
-                <span className="font-semibold text-red-900">중복당첨 검색 완료</span>
+                <span className="font-semibold text-red-900">전산검색 결과 분석 완료</span>
                 {hSearchResult.detected === 0 ? (
-                  <span className="text-emerald-700">✓ 1세대 1명 룰 위반자 없음</span>
+                  <span className="text-emerald-700">✓ 모든 카테고리 위반자 없음</span>
                 ) : (
                   <>
                     <span className="text-red-800">위반자 {hSearchResult.detected}명 검출</span>
@@ -454,6 +472,18 @@ export default function HouseholdStepPage() {
                   </>
                 )}
               </div>
+
+              {/* 카테고리별 카운트 */}
+              {Object.keys(hSearchResult.byCategory).length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1 text-[10.5px]">
+                  {Object.entries(hSearchResult.byCategory).map(([cat, n]) => (
+                    <span key={cat} className="px-1.5 py-0.5 rounded bg-red-100 text-red-900 font-medium">
+                      {cat}: {n}건
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {hSearchResult.samples.length > 0 && (
                 <details className="mt-2 text-[11px]" open>
                   <summary className="cursor-pointer text-red-900 font-semibold">
@@ -462,8 +492,12 @@ export default function HouseholdStepPage() {
                   <ul className="mt-1 ml-4 space-y-0.5 text-ink-2">
                     {hSearchResult.samples.map((s, i) => (
                       <li key={i}>
+                        <span className="text-[9.5px] px-1 py-0 rounded bg-red-200 text-red-900 font-semibold mr-1">
+                          {s.category || "기타"}
+                        </span>
                         <strong>{s.dong || "?"}-{s.ho || "?"} {s.name}</strong>
-                        {s.with.length > 0 && <span className="text-red-700"> ↔ 같은 세대: {s.with.join(", ")}</span>}
+                        {s.with.length > 0 && <span className="text-red-700"> ↔ 세대원: {s.with.join(", ")}</span>}
+                        {s.violation && <span className="text-red-700"> — {s.violation}</span>}
                       </li>
                     ))}
                   </ul>
@@ -476,13 +510,13 @@ export default function HouseholdStepPage() {
                   </summary>
                   <ul className="mt-1 ml-4 space-y-0.5 text-amber-800">
                     {hSearchResult.unmatched.map((u, i) => (
-                      <li key={i}>{u.dong || "?"}-{u.ho || "?"} {u.name}</li>
+                      <li key={i}>[{u.category || "기타"}] {u.dong || "?"}-{u.ho || "?"} {u.name}</li>
                     ))}
                   </ul>
                 </details>
               )}
               <div className="mt-2 text-[10.5px] text-red-800/80">
-                💡 부적합 마킹된 호수는 비어있는 상태가 됨 → 예비 승계 또는 「선착순」으로 새 계약자 등록 필요 (5단계·7단계).
+                💡 7가지 부적격 카테고리 (가점제2년·당첨5년·중복청약·재당첨일반/특공·특공1회·사전청약) 자동 검출. 부적합 호수는 예비 승계 또는 선착순으로 처리.
               </div>
             </div>
           )}
