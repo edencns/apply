@@ -262,6 +262,14 @@ function CustomerDetailInner() {
             )}
           </div>
           <div className="flex items-center gap-3 text-sm text-ink-3 flex-wrap">
+            {((customer as any).unit_dong || customer.winner_info?.building || (customer as any).unit_ho || customer.winner_info?.unit_no) && (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-900 font-mono text-[13px] font-bold"
+                title="당첨 동·호수"
+              >
+                🏠 {(customer as any).unit_dong || customer.winner_info?.building || "?"}동 {(customer as any).unit_ho || customer.winner_info?.unit_no || "?"}호
+              </span>
+            )}
             <span>{fmtRRN(customer.rrn_front, customer.rrn_back)}</span>
             {customer.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {formatPhone(customer.phone)}</span>}
             {customer.unit_type && <span className="flex items-center gap-1"><Home className="w-3.5 h-3.5" /> {customer.unit_type}{customer.unit_area ? ` · ${customer.unit_area}` : ""}</span>}
