@@ -33,3 +33,5 @@ backend/uploads/
 
 # Docker
 *.override.yml
+.vercel
+.env*.local
