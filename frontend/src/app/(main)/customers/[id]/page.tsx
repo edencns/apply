@@ -566,7 +566,11 @@ function DocumentsStage({
    *   page=undefined → 해당 서류의 페이지 지정 전체 해제
    */
   const handleAssignPage = (docName: string, page: number | undefined) => {
-    const nextFiles = { ...(customer.document_files || {}) };
+    // ★ stale state 회피 — 매번 localStorage에서 최신 customer 읽기.
+    //   applyAllSuggestionsForDoc 처럼 동기 루프로 여러 번 호출될 때 React state는
+    //   아직 갱신 전이라 누락 발생. localStorage는 즉시 반영됨.
+    const latest = localCustomers.get(customer.id) || customer;
+    const nextFiles = { ...(latest.document_files || {}) };
     const prev: any = nextFiles[docName] || {};
     if (page === undefined) {
       // 전체 해제 — 메타데이터(파일/체크포인트)는 유지하되 페이지 매핑만 제거
@@ -607,11 +611,12 @@ function DocumentsStage({
       setLocalSubmitted((p) => ({ ...p, [docName]: nextPages.length > 0 }));
     }
     const isNowSubmitted = !!(nextFiles[docName] as any)?.pages?.length;
+    // documents_submitted도 latest 기준으로 갱신 (stale localSubmitted 회피)
+    const latestSubmitted = { ...(latest.documents_submitted || {}) };
+    latestSubmitted[docName] = isNowSubmitted;
     const updated = localCustomers.update(customer.id, {
       document_files: nextFiles,
-      documents_submitted: !isNowSubmitted
-        ? { ...localSubmitted, [docName]: false }
-        : { ...localSubmitted, [docName]: true },
+      documents_submitted: latestSubmitted,
     } as any);
     if (updated) onUpdate(updated);
   };
