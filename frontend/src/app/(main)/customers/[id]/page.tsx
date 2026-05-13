@@ -28,6 +28,8 @@ import {
 } from "@/lib/document-checklist";
 import { calculateSubscriptionScore } from "@/lib/score-calculator";
 import { formatPhoneInput, formatPhone } from "@/lib/housing-code";
+import { INELIGIBLE_REASONS, reasonLabel, reasonArticle, type IneligibleReasonCode } from "@/lib/ineligible-reasons";
+import { alertLabel, alertColorClass } from "@/lib/deadline-alerts";
 import { evaluateFinal } from "@/lib/verification-rules";
 import { getCheckpointsForDocument } from "@/lib/document-checkpoints";
 import { getDocumentGuide } from "@/lib/document-guides";
@@ -233,6 +235,13 @@ function CustomerDetailInner() {
       <a href="/workflow/registration" className="inline-flex items-center gap-1 text-sm text-ink-3 hover:text-ink-2 mb-3">
         <ArrowLeft className="w-3.5 h-3.5" /> 당첨자 목록
       </a>
+
+      {customer.pii_purged_at && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-gray-100 border border-gray-300 text-xs text-gray-700 flex items-center gap-2">
+          🔒 <strong>개인정보 파기됨</strong> · {new Date(customer.pii_purged_at).toLocaleString()} ·
+          예비입주자 60일 경과로 식별자 마스킹 완료 (제26조제9항·제26조의2제6항)
+        </div>
+      )}
 
       <div className="flex items-start justify-between mb-5 flex-wrap gap-3">
         <div>
@@ -656,23 +665,15 @@ function DocumentsStage({
     }
   };
 
-  const handleRemoveDoc = (docName: string) => {
-    if (!confirm(`${docName} 파일 연결을 해제할까요? (원본은 유지됩니다)`)) return;
-    const nextFiles = { ...(customer.document_files || {}) };
-    delete nextFiles[docName];
-    const updated = localCustomers.update(customer.id, {
-      document_files: nextFiles,
-    } as any);
-    if (updated) onUpdate(updated);
-  };
-
   /** 체크포인트 상태 변경 (pass/fail/pending) + 메모 저장 */
   const handleCheckpointChange = (
     docName: string,
     cpKey: string,
     next: { status?: "pass" | "fail" | "pending"; note?: string },
   ) => {
-    const nextFiles = { ...(customer.document_files || {}) };
+    // handleAssignPage와 동일 — stale React state 회피
+    const latest = localCustomers.get(customer.id) || customer;
+    const nextFiles = { ...(latest.document_files || {}) };
     const entry = nextFiles[docName] || {
       url: "",
       filename: "",
@@ -804,6 +805,11 @@ function DocumentsStage({
           </div>
         </div>
       </div>
+
+      {/* 부적격 사유 코드 편집 — [08]부적격당첨자 명단 송부용 분류 */}
+      {finalVerdict.verdict === "ineligible" && (
+        <IneligibleCodesEditor customer={customer} onUpdate={onUpdate} />
+      )}
 
       {/* 예비 승계 섹션 — 당첨자가 부적합이거나 이미 포기/승계 완료된 경우 */}
       {/* Phase #5 — 판정 결과 면책 디스클레이머 */}
@@ -1628,5 +1634,149 @@ export default function CustomerDetailPage() {
     <Suspense fallback={<div className="p-6 text-ink-4">로딩 중...</div>}>
       <CustomerDetailInner />
     </Suspense>
+  );
+}
+
+/**
+ * 부적격 사유 코드 편집기
+ *
+ * 청약홈 [08]부적격당첨자 명단으로 송부할 때 필요한 사유 분류를 관리.
+ * 자동 매핑(ineligible-ingest)된 코드 + 담당자 수동 추가/삭제.
+ */
+function IneligibleCodesEditor({
+  customer,
+  onUpdate,
+}: {
+  customer: LocalCustomer;
+  onUpdate: (c: LocalCustomer) => void;
+}) {
+  const codes = (customer.verification_reason_codes || []) as IneligibleReasonCode[];
+  const [picking, setPicking] = useState<IneligibleReasonCode | "">("");
+
+  const addCode = (code: IneligibleReasonCode) => {
+    if (!code || codes.includes(code)) return;
+    const updated = localCustomers.update(customer.id, {
+      verification_reason_codes: [...codes, code],
+    });
+    if (updated) onUpdate(updated);
+    setPicking("");
+  };
+
+  const removeCode = (code: IneligibleReasonCode) => {
+    const updated = localCustomers.update(customer.id, {
+      verification_reason_codes: codes.filter((c) => c !== code),
+    });
+    if (updated) onUpdate(updated);
+  };
+
+  const markReported = () => {
+    const updated = localCustomers.update(customer.id, {
+      ineligible_reported_at: new Date().toISOString(),
+    });
+    if (updated) onUpdate(updated);
+  };
+
+  const unmarkReported = () => {
+    if (!confirm("[08] 송부 완료 표시를 해제할까요? 7일 기한 알림이 다시 표시됩니다.")) return;
+    const updated = localCustomers.update(customer.id, {
+      ineligible_reported_at: undefined,
+    });
+    if (updated) onUpdate(updated);
+  };
+
+  // 7일 기한 계산
+  const markedAt = customer.verification_checked_at ? new Date(customer.verification_checked_at) : null;
+  const reportedAt = customer.ineligible_reported_at ? new Date(customer.ineligible_reported_at) : null;
+  const due = markedAt ? new Date(markedAt.getTime() + 7 * 24 * 60 * 60 * 1000) : null;
+  const daysLeft = due ? Math.floor((due.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
+  const level = !markedAt ? "info" : daysLeft < 0 ? "past" : daysLeft <= 1 ? "critical" : daysLeft <= 3 ? "warning" : "info";
+
+  const available = INELIGIBLE_REASONS.filter((r) => !codes.includes(r.code));
+
+  return (
+    <div className="rounded-lg border border-red-200 bg-red-50/50 p-3">
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <h4 className="text-sm font-semibold text-red-900">
+          부적격 사유 분류 ([08]명단 송부용)
+        </h4>
+        <span className="text-[10px] text-ink-3">
+          「주택공급에 관한 규칙」 조항 기준
+        </span>
+      </div>
+      {/* 7일 기한 추적 — 제58조제1항 */}
+      {markedAt && (
+        <div className={`mb-2 px-2 py-1.5 rounded border text-[11px] flex items-center justify-between gap-2 flex-wrap ${alertColorClass(level)}`}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold">{reportedAt ? "✓ 송부 완료" : alertLabel(daysLeft)}</span>
+            <span>
+              {reportedAt
+                ? `${reportedAt.getFullYear()}.${String(reportedAt.getMonth() + 1).padStart(2, "0")}.${String(reportedAt.getDate()).padStart(2, "0")} [08] 송부됨`
+                : `부적격 마킹 ${markedAt.getFullYear()}.${String(markedAt.getMonth() + 1).padStart(2, "0")}.${String(markedAt.getDate()).padStart(2, "0")} → 7일 이내 송부 (제58조제1항)`}
+            </span>
+          </div>
+          {reportedAt ? (
+            <button
+              onClick={unmarkReported}
+              className="px-2 py-0.5 rounded border border-current text-[10px] font-semibold hover:bg-black/5"
+            >
+              해제
+            </button>
+          ) : (
+            <button
+              onClick={markReported}
+              className="px-2 py-0.5 rounded bg-red-700 hover:bg-red-800 text-white text-[10px] font-semibold"
+              title="청약홈 [08]부적격당첨자 명단 송부 완료로 표시"
+            >
+              [08] 송부 완료
+            </button>
+          )}
+        </div>
+      )}
+      {codes.length === 0 ? (
+        <p className="text-[11px] text-ink-3 italic">분류된 사유 없음. 아래에서 추가하세요.</p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {codes.map((c) => (
+            <span
+              key={c}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-red-300 text-[11px] text-red-900"
+              title={reasonArticle(c)}
+            >
+              {reasonLabel(c)}
+              <button
+                onClick={() => removeCode(c)}
+                className="ml-0.5 text-red-500 hover:text-red-700"
+                title="삭제"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {available.length > 0 && (
+        <div className="mt-2 flex items-center gap-2">
+          <select
+            value={picking}
+            onChange={(e) => setPicking(e.target.value as IneligibleReasonCode)}
+            className="flex-1 text-[11px] px-2 py-1 rounded border border-red-200 bg-white"
+          >
+            <option value="">사유 추가 선택…</option>
+            {available.map((r) => (
+              <option key={r.code} value={r.code}>
+                {r.label} ({r.article})
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => picking && addCode(picking)}
+            disabled={!picking}
+            className="px-2 py-1 rounded bg-red-600 hover:bg-red-700 disabled:bg-ink-4 text-white text-[11px] font-semibold"
+          >
+            추가
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

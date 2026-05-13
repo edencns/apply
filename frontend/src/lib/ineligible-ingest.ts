@@ -12,14 +12,16 @@
 
 import type { LocalCustomer } from "./local-store";
 import { ensureXlsx } from "./winner-ingest";
+import { classifyIneligibleReason, type IneligibleReasonCode } from "./ineligible-reasons";
 
 export interface IneligibleRecord {
   dong?: string;
   ho?: string;
   name: string;
   rrn?: string;
-  errorReason?: string; // "오류내용" 컬럼
-  result?: string;      // "결과" 컬럼 (부적격/적합 등)
+  errorReason?: string;            // "오류내용" 컬럼
+  result?: string;                 // "결과" 컬럼 (부적격/적합 등)
+  reasonCodes: IneligibleReasonCode[]; // 자동 분류된 사유 코드
   rawRow: Record<string, string>;
 }
 
@@ -98,6 +100,7 @@ export async function parseIneligibleExcel(buf: ArrayBuffer): Promise<{
       rrn: (cell(sheet, r, cRrn) || "").replace(/\D/g, "") || undefined,
       errorReason: errorReason || undefined,
       result: result || undefined,
+      reasonCodes: classifyIneligibleReason(`${errorReason} ${result}`),
       rawRow: Object.fromEntries(
         Object.entries(cols).map(([k, c]) => [k, cell(sheet, r, c)]),
       ),

@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { pushAll, pullAll, checkCloudStatus } from "@/lib/cloud-sync";
 import { useRealtimeSync } from "@/lib/realtime/useRealtimeSync";
-import { allDeadlineAlerts, alertLabel, alertColorClass } from "@/lib/deadline-alerts";
+import { allDeadlineAlerts, alertLabel, alertColorClass, ineligibleReportAlerts, piiPurgeAlerts } from "@/lib/deadline-alerts";
 
 const WORKFLOW_STEPS_META = [
   { n: 1, key: "registration", label: "당첨자 등록",      href: "/workflow/registration" },
@@ -356,15 +356,23 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Phase #4 — 마감일 자동 알림 배너 */}
+      {/* Phase #4 — 마감일 자동 알림 배너 + 추첨이후 업무 기한 (7일·60일) */}
       {(() => {
         const customersByAnn = new Map<number | string, LocalCustomer[]>();
+        const allCustomers: LocalCustomer[] = [];
         for (const a of announcements) {
-          customersByAnn.set(a.id, localCustomers.listByAnnouncement(a.id as any));
+          const list = localCustomers.listByAnnouncement(a.id as any);
+          customersByAnn.set(a.id, list);
+          allCustomers.push(...list);
         }
+        const annTitleById = new Map(announcements.map((a) => [a.id, a.title]));
         const alerts = allDeadlineAlerts(announcements, customersByAnn);
-        if (alerts.length === 0) return null;
+        const ineligible = ineligibleReportAlerts(allCustomers);
+        const purge = piiPurgeAlerts(announcements as any, customersByAnn);
+        if (alerts.length === 0 && ineligible.length === 0 && purge.length === 0) return null;
         const top = alerts.slice(0, 4);
+        const topIneligible = ineligible.slice(0, 3);
+        const topPurge = purge.slice(0, 2);
         return (
           <div className="mb-4 space-y-1.5">
             {top.map((a, i) => (
@@ -392,8 +400,50 @@ export default function DashboardPage() {
                 </div>
               </Link>
             ))}
-            {alerts.length > top.length && (
-              <div className="text-[10.5px] text-ink-3 px-1">… 그 외 {alerts.length - top.length}건 더</div>
+            {topIneligible.map((a, i) => (
+              <Link
+                key={`ineli-${i}`}
+                href={`/customers/${a.customerId}`}
+                className={`block border rounded-lg px-3 py-2 text-xs transition-colors hover:bg-black/5 ${alertColorClass(a.level)}`}
+              >
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-sm">{alertLabel(a.daysLeft)}</span>
+                    <span className="font-semibold">[08] 부적격 명단 송부</span>
+                    <span className="text-[11px] opacity-80">
+                      · 기한 {a.dueDate.getFullYear()}.{String(a.dueDate.getMonth() + 1).padStart(2, "0")}.{String(a.dueDate.getDate()).padStart(2, "0")}
+                    </span>
+                  </div>
+                  <span className="text-[11px] opacity-90 truncate max-w-[260px]">
+                    {a.customerName} · {annTitleById.get(a.announcementId) || ""}
+                  </span>
+                </div>
+              </Link>
+            ))}
+            {topPurge.map((a, i) => (
+              <Link
+                key={`purge-${i}`}
+                href={`/announcements/${a.announcementId}`}
+                className={`block border rounded-lg px-3 py-2 text-xs transition-colors hover:bg-black/5 ${alertColorClass(a.level)}`}
+              >
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-sm">{alertLabel(a.daysLeft)}</span>
+                    <span className="font-semibold">예비 60일 파기</span>
+                    <span className="text-[11px] opacity-80">
+                      · 계약체결마감 +60일 {a.dueDate.getFullYear()}.{String(a.dueDate.getMonth() + 1).padStart(2, "0")}.{String(a.dueDate.getDate()).padStart(2, "0")}
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-medium">
+                    파기 대상 <strong>{a.pendingCount}</strong>/{a.totalStandby}명
+                  </span>
+                </div>
+              </Link>
+            ))}
+            {(alerts.length > top.length || ineligible.length > topIneligible.length || purge.length > topPurge.length) && (
+              <div className="text-[10.5px] text-ink-3 px-1">
+                … 그 외 {alerts.length - top.length + ineligible.length - topIneligible.length + purge.length - topPurge.length}건 더
+              </div>
             )}
           </div>
         );

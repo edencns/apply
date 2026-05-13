@@ -153,6 +153,95 @@ export function alertLabel(days: number): string {
   return `D-${days}`;
 }
 
+/**
+ * 부적격 당첨자 [08]명단 송부 기한 — 「주택공급에 관한 규칙」 제58조제1항.
+ * 부적격 마킹(verification_checked_at)으로부터 7일 이내에 청약홈 [08] 메뉴로 송부.
+ * 송부 완료(ineligible_reported_at) 시 알림 종료.
+ */
+export interface IneligibleReportAlert {
+  customerId: number;
+  customerName: string;
+  announcementId: number;
+  markedAt: Date;
+  dueDate: Date;
+  daysLeft: number;
+  level: AlertLevel;
+}
+
+export function ineligibleReportAlerts(
+  customers: LocalCustomer[],
+  now: Date = new Date(),
+): IneligibleReportAlert[] {
+  const alerts: IneligibleReportAlert[] = [];
+  for (const c of customers) {
+    if (c.verification_verdict !== "ineligible") continue;
+    if (c.ineligible_reported_at) continue; // 이미 송부 완료
+    if (c.superseded) continue;             // 이미 승계로 처리된 자리
+    const marked = parseDate(c.verification_checked_at || null);
+    if (!marked) continue;
+    const due = new Date(marked.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const days = daysBetween(now, due);
+    alerts.push({
+      customerId: c.id,
+      customerName: c.name,
+      announcementId: c.announcement_id,
+      markedAt: marked,
+      dueDate: due,
+      daysLeft: days,
+      level: classifyLevel(days, "부적격송부"),
+    });
+  }
+  alerts.sort((a, b) => a.daysLeft - b.daysLeft);
+  return alerts;
+}
+
+/**
+ * 60일 경과 예비입주자 개인정보 파기 알림 — 「주택공급에 관한 규칙」 제26조제9항·제26조의2제6항.
+ * 공급계약체결일(announcement.contract_end)로부터 60일 경과 시 지위가 소멸되어
+ * 식별자(이름·주민번호·전화·주소)를 마스킹해야 함. pii_purged_at 기록 시 알림 종료.
+ */
+export interface PiiPurgeAlert {
+  announcementId: number;
+  announcementTitle: string;
+  contractEnd: Date;
+  dueDate: Date;       // contractEnd + 60일
+  daysLeft: number;
+  level: AlertLevel;
+  pendingCount: number; // 아직 파기 안된 예비입주자 수
+  totalStandby: number;
+}
+
+export function piiPurgeAlerts(
+  announcements: LocalAnnouncement[],
+  customersByAnn: Map<number | string, LocalCustomer[]>,
+  now: Date = new Date(),
+): PiiPurgeAlert[] {
+  const alerts: PiiPurgeAlert[] = [];
+  for (const ann of announcements) {
+    const contractEnd = parseDate(ann.contract_end);
+    if (!contractEnd) continue;
+    const due = new Date(contractEnd.getTime() + 60 * 24 * 60 * 60 * 1000);
+    const days = daysBetween(now, due);
+    if (days > 30) continue; // 너무 먼 미래는 표시 안 함
+    const customers = customersByAnn.get(ann.id) || [];
+    const standby = customers.filter((c) => c.is_standby && !c.succeeded_from);
+    const pending = standby.filter((c) => !c.pii_purged_at);
+    if (standby.length === 0) continue;
+    alerts.push({
+      announcementId: typeof ann.id === "string" ? parseInt(ann.id, 10) || 0 : ann.id,
+      announcementTitle: ann.title,
+      contractEnd,
+      dueDate: due,
+      daysLeft: days,
+      level: classifyLevel(days, "60일파기"),
+      pendingCount: pending.length,
+      totalStandby: standby.length,
+    });
+  }
+  alerts.sort((a, b) => a.daysLeft - b.daysLeft);
+  return alerts;
+}
+
 export function alertColorClass(level: AlertLevel): string {
   switch (level) {
     case "critical": return "bg-red-50 border-red-300 text-red-900";

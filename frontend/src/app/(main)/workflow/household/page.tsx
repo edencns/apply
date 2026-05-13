@@ -10,6 +10,9 @@ import {
   type LocalCustomer,
 } from "@/lib/local-store";
 import { ensureXlsx, parseHouseholdMembers } from "@/lib/winner-ingest";
+import { parseSeparatedExcel } from "@/lib/separated-ingest";
+import { exportSeparatedReportXlsx } from "@/lib/applyhome-exports";
+import OfficialDocAttachment from "@/components/workflow/OfficialDocAttachment";
 import { toIdentity, sameIdentity } from "@/lib/identity";
 import { ingestForStage, type WorkflowIngestResult } from "@/lib/workflow-ingest";
 import { formatHousingCode } from "@/lib/housing-code";
@@ -442,6 +445,12 @@ export default function HouseholdStepPage() {
             </div>
           )}
 
+          {/* [01] 당첨자 배우자 분리세대 세대원 검색요청 송부 관리 */}
+          <SeparatedReportSection
+            announcement={selected}
+            onChange={() => setReloadKey((k) => k + 1)}
+          />
+
           <StageCustomerList
             key={reloadKey}
             announcement={selected}
@@ -452,5 +461,247 @@ export default function HouseholdStepPage() {
         </>
       )}
     </WorkflowShell>
+  );
+}
+
+/**
+ * [01] 당첨자 배우자 분리세대 세대원 검색요청 송부 관리
+ *
+ * 청약홈 > 사업주체전용 > 당첨자 > 배우자분리세대 세대원 검색요청 > [01]당첨자 명단
+ * 분리세대원이 등록된 당첨자 목록을 보여주고 송부 완료 마킹 관리.
+ */
+function SeparatedReportSection({
+  announcement,
+  onChange,
+}: {
+  announcement: LocalAnnouncement;
+  onChange: () => void;
+}) {
+  const announcementId = announcement.id;
+  const [reloadKey, setReloadKey] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<{ matched: number; unmatched: number; total: number } | null>(null);
+  const uploadRef = useRef<HTMLInputElement>(null);
+  const all = localCustomers.listByAnnouncement(announcementId).filter((c) => !c.superseded);
+  const withSeparated = all.filter((c) => (c.separated_household_members || []).length > 0);
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    setUploadResult(null);
+    try {
+      const buf = await file.arrayBuffer();
+      const result = parseSeparatedExcel(buf);
+      const customers = localCustomers.listByAnnouncement(announcementId);
+      let matched = 0;
+      let unmatched = 0;
+      const nowIso = new Date().toISOString();
+      for (const [winnerRrnFront, rows] of result.byWinnerRrn.entries()) {
+        let target = customers.find((c) => (c.rrn_front || "").slice(0, 6) === winnerRrnFront);
+        if (!target) {
+          const first = rows[0];
+          target = customers.find(
+            (c) =>
+              c.name === first.winnerName &&
+              String(c.unit_dong || "") === String(first.winnerDong || "") &&
+              String(c.unit_ho || "") === String(first.winnerHo || ""),
+          );
+        }
+        if (!target) { unmatched++; continue; }
+        const members = rows.map((r) => ({
+          name: r.memberName,
+          rrn: r.memberRrn,
+          relation: r.relation,
+          ...(r.note ? { note: r.note } : {}),
+        }));
+        localCustomers.update(target.id, {
+          separated_household_members: members,
+          separated_checked_at: nowIso,
+        });
+        matched++;
+      }
+      setUploadResult({ matched, unmatched, total: result.byWinnerRrn.size });
+      setReloadKey((k) => k + 1);
+      onChange();
+    } catch (err: any) {
+      alert(err?.message || "분리세대 명단 파싱 실패");
+    } finally {
+      setUploading(false);
+      if (uploadRef.current) uploadRef.current.value = "";
+    }
+  };
+
+  if (withSeparated.length === 0 && !uploadResult) {
+    // 분리세대원이 아직 등록 안 된 상태 — 업로드만 유도
+    return (
+      <div className="card mb-4 p-3 bg-sky-50/60 border-sky-200">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h3 className="text-sm font-semibold text-sky-900">
+              [01] 당첨자 배우자 분리세대 세대원 검색요청 (선택)
+            </h3>
+            <p className="text-[11px] text-sky-800 mt-0.5">
+              청약홈 자동조회 대상이 아닌 배우자 분리세대원이 있다면 명단 엑셀을 업로드하세요.
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <input
+              ref={uploadRef}
+              type="file"
+              accept=".xlsx,.xls,.xlsm"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); }}
+            />
+            <button
+              onClick={() => uploadRef.current?.click()}
+              disabled={uploading}
+              className="px-3 py-1.5 rounded bg-sky-600 hover:bg-sky-700 disabled:opacity-40 text-white text-xs font-semibold"
+            >
+              {uploading ? "업로드 중…" : "분리세대 명단 업로드"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // separated_property_checked_at(회신 들어옴)이 있으면 자동으로 송부 완료로 간주
+  const pending = withSeparated.filter(
+    (c) => !c.separated_reported_at && !c.separated_property_checked_at,
+  );
+  const reported = withSeparated.filter(
+    (c) => c.separated_reported_at || c.separated_property_checked_at,
+  );
+
+  const markReported = (c: LocalCustomer) => {
+    localCustomers.update(c.id, { separated_reported_at: new Date().toISOString() });
+    setReloadKey((k) => k + 1);
+    onChange();
+  };
+  const unmarkReported = (c: LocalCustomer) => {
+    if (!confirm("[01] 송부 완료 표시를 해제할까요?")) return;
+    localCustomers.update(c.id, { separated_reported_at: undefined });
+    setReloadKey((k) => k + 1);
+    onChange();
+  };
+  const markAllPending = () => {
+    if (pending.length === 0) return;
+    if (!confirm(`${pending.length}명을 일괄 송부 완료로 표시할까요?`)) return;
+    const now = new Date().toISOString();
+    for (const c of pending) localCustomers.update(c.id, { separated_reported_at: now });
+    setReloadKey((k) => k + 1);
+    onChange();
+  };
+
+  return (
+    <div className="card mb-4 p-3 bg-sky-50/60 border-sky-200" key={reloadKey}>
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <div>
+          <h3 className="text-sm font-semibold text-sky-900">
+            [01] 당첨자 배우자 분리세대 세대원 검색요청
+          </h3>
+          <p className="text-[11px] text-sky-800 mt-0.5">
+            청약홈 &gt; 당첨자 &gt; 배우자분리세대 세대원 검색요청 &gt; [01]당첨자 명단 — 확인 즉시 송부
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px]">
+          <span className="px-2 py-0.5 rounded bg-white border border-sky-200 text-sky-900">
+            대상 <strong>{withSeparated.length}</strong>명
+          </span>
+          <span className="px-2 py-0.5 rounded bg-white border border-emerald-200 text-emerald-900">
+            송부 완료 <strong>{reported.length}</strong>명
+          </span>
+          {pending.length > 0 && (
+            <span className="px-2 py-0.5 rounded bg-red-100 text-red-900 font-semibold">
+              미송부 <strong>{pending.length}</strong>명
+            </span>
+          )}
+          <input
+            ref={uploadRef}
+            type="file"
+            accept=".xlsx,.xls,.xlsm"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); }}
+          />
+          <button
+            onClick={() => uploadRef.current?.click()}
+            disabled={uploading}
+            className="px-2 py-0.5 rounded bg-sky-600 hover:bg-sky-700 disabled:opacity-40 text-white text-[10px] font-semibold"
+            title="분리세대 명단 엑셀 추가 업로드"
+          >
+            {uploading ? "업로드 중" : "+ 명단 추가"}
+          </button>
+          <button
+            onClick={() => exportSeparatedReportXlsx(withSeparated, announcement)}
+            className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-semibold"
+            title="청약홈 [01] 메뉴 송부용 엑셀 다운로드"
+          >
+            [01] 엑셀 출력
+          </button>
+          <OfficialDocAttachment announcement={announcement} menuCode="01" compact onUpdate={onChange} />
+        </div>
+      </div>
+
+      {uploadResult && (
+        <div className="mb-2 px-2 py-1 rounded bg-sky-100 border border-sky-300 text-[11px] text-sky-900">
+          분리세대 명단 업로드 — 당첨자 {uploadResult.total}명 중 매칭 <strong>{uploadResult.matched}명</strong>
+          {uploadResult.unmatched > 0 && <span className="text-red-700"> · 실패 {uploadResult.unmatched}명 (당첨자 미등록 또는 이름·동호 불일치)</span>}
+        </div>
+      )}
+
+      {pending.length > 0 && (
+        <div className="mb-2 flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-red-50 border border-red-200">
+          <span className="text-[11px] text-red-800">
+            🔴 분리세대원이 등록되어 있으나 [01] 미송부인 당첨자 <strong>{pending.length}명</strong>이 있습니다.
+          </span>
+          <button
+            onClick={markAllPending}
+            className="px-2 py-1 rounded bg-sky-700 hover:bg-sky-800 text-white text-[11px] font-semibold"
+          >
+            일괄 송부 완료 ({pending.length}명)
+          </button>
+        </div>
+      )}
+
+      <details className="text-[11px]">
+        <summary className="cursor-pointer text-sky-900 font-semibold">송부 명단 펼치기</summary>
+        <ul className="mt-2 space-y-1">
+          {withSeparated.map((c) => {
+            const isReported = !!(c.separated_reported_at || c.separated_property_checked_at);
+            const memberCount = (c.separated_household_members || []).length;
+            return (
+              <li key={c.id} className="flex items-center justify-between p-1.5 rounded bg-white border border-sky-100">
+                <span>
+                  {isReported ? "✓ " : "○ "}
+                  <strong>{c.name}</strong> · {c.unit_type || "—"} · 분리세대원 {memberCount}명
+                  {c.separated_property_checked_at && (
+                    <span className="ml-2 text-emerald-700">회신 수신됨</span>
+                  )}
+                  {c.separated_reported_at && !c.separated_property_checked_at && (
+                    <span className="ml-2 text-sky-700">
+                      송부 {new Date(c.separated_reported_at).toLocaleDateString()}
+                    </span>
+                  )}
+                </span>
+                {isReported && !c.separated_property_checked_at ? (
+                  <button
+                    onClick={() => unmarkReported(c)}
+                    className="px-1.5 py-0.5 rounded border border-ink-300 text-[10px] text-ink-3 hover:bg-ink-50"
+                  >
+                    해제
+                  </button>
+                ) : !isReported ? (
+                  <button
+                    onClick={() => markReported(c)}
+                    className="px-1.5 py-0.5 rounded bg-sky-600 hover:bg-sky-700 text-white text-[10px] font-semibold"
+                  >
+                    송부 완료
+                  </button>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      </details>
+    </div>
   );
 }

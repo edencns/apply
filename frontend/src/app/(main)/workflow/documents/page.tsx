@@ -9,6 +9,9 @@ import { localCustomers, type LocalAnnouncement, type LocalCustomer } from "@/li
 import { ingestAutoStage, stageLabel, type WorkflowIngestResult } from "@/lib/workflow-ingest";
 import { uploadFileViaClient } from "@/lib/client-upload";
 import { parseIneligibleExcel, matchIneligibleToCustomer } from "@/lib/ineligible-ingest";
+import { reasonLabel, reasonArticle, type IneligibleReasonCode } from "@/lib/ineligible-reasons";
+import { exportIneligibleXlsx } from "@/lib/applyhome-exports";
+import OfficialDocAttachment from "@/components/workflow/OfficialDocAttachment";
 import {
   CheckCircle2, XCircle, Clock, FileText, FileSpreadsheet, Loader2, Gavel,
   FolderUp, ShieldCheck, FileQuestion, PauseCircle, UserX,
@@ -256,7 +259,8 @@ export default function DocumentsStepPage() {
     detected: number;
     marked: number;
     unmatched: number;
-    samples: Array<{ name: string; dong?: string; ho?: string; reason: string }>;
+    samples: Array<{ name: string; dong?: string; ho?: string; reason: string; codes: IneligibleReasonCode[] }>;
+    codeBreakdown: Record<string, number>; // code → count
   } | null>(null);
 
   const handleIneligibleExcel = async (file: File) => {
@@ -268,29 +272,36 @@ export default function DocumentsStepPage() {
       const { records } = await parseIneligibleExcel(buf);
       if (records.length === 0) {
         alert("부적격 처리할 행이 없습니다. (오류내용/결과 컬럼 확인)");
-        setIneligibleResult({ detected: 0, marked: 0, unmatched: 0, samples: [] });
+        setIneligibleResult({ detected: 0, marked: 0, unmatched: 0, samples: [], codeBreakdown: {} });
         return;
       }
       const customers = localCustomers.listByAnnouncement(selected.id).filter((c) => !c.superseded);
       let marked = 0;
       let unmatched = 0;
-      const samples: Array<{ name: string; dong?: string; ho?: string; reason: string }> = [];
+      const samples: Array<{ name: string; dong?: string; ho?: string; reason: string; codes: IneligibleReasonCode[] }> = [];
+      const codeBreakdown: Record<string, number> = {};
       for (const rec of records) {
+        for (const code of rec.reasonCodes) {
+          codeBreakdown[code] = (codeBreakdown[code] || 0) + 1;
+        }
         const target = matchIneligibleToCustomer(rec, customers);
         if (!target) { unmatched++; continue; }
         const reason = `부적격 (${rec.errorReason || rec.result || "사유 미상"})`;
         const existing = (target.verification_reasons || []).filter((r) => !/부적격/.test(r));
+        // 기존 코드와 합치되 중복 제거
+        const codeSet = new Set<string>([...(target.verification_reason_codes || []), ...rec.reasonCodes]);
         localCustomers.update(target.id, {
           verification_verdict: "ineligible",
           verification_reasons: [...existing, reason],
+          verification_reason_codes: Array.from(codeSet),
           verification_checked_at: new Date().toISOString(),
         });
         marked++;
         if (samples.length < 5) {
-          samples.push({ name: rec.name, dong: rec.dong, ho: rec.ho, reason: rec.errorReason || rec.result || "" });
+          samples.push({ name: rec.name, dong: rec.dong, ho: rec.ho, reason: rec.errorReason || rec.result || "", codes: rec.reasonCodes });
         }
       }
-      setIneligibleResult({ detected: records.length, marked, unmatched, samples });
+      setIneligibleResult({ detected: records.length, marked, unmatched, samples, codeBreakdown });
       setReloadKey((k) => k + 1);
     } catch (err: any) {
       alert(err?.message || "엑셀 파싱 실패");
@@ -859,6 +870,24 @@ export default function DocumentsStepPage() {
                   if (f) handleIneligibleExcel(f);
                 }}
               />
+              <button
+                onClick={() => {
+                  if (!selected) return;
+                  const list = localCustomers.listByAnnouncement(selected.id);
+                  exportIneligibleXlsx(list, selected);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm"
+                title="청약홈 [08]부적격당첨자 명단 송부용 엑셀 다운로드"
+              >
+                <FileSpreadsheet className="w-4 h-4" /> [08] 엑셀 출력
+              </button>
+              {selected && (
+                <OfficialDocAttachment
+                  announcement={selected}
+                  menuCode="08"
+                  onUpdate={() => setReloadKey((k) => k + 1)}
+                />
+              )}
             </div>
 
             {/* 부적격 명단 일괄 처리 결과 */}
@@ -873,6 +902,21 @@ export default function DocumentsStepPage() {
                     <span className="text-amber-800">매칭 실패 {ineligibleResult.unmatched}건</span>
                   )}
                 </div>
+                {Object.keys(ineligibleResult.codeBreakdown).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                    {Object.entries(ineligibleResult.codeBreakdown)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([code, count]) => (
+                        <span
+                          key={code}
+                          className="px-1.5 py-0.5 rounded bg-white border border-red-300 text-red-900"
+                          title={`${reasonArticle(code as IneligibleReasonCode)} — 자동 분류`}
+                        >
+                          {reasonLabel(code as IneligibleReasonCode)} <strong>{count}</strong>
+                        </span>
+                      ))}
+                  </div>
+                )}
                 {ineligibleResult.samples.length > 0 && (
                   <details className="mt-2 text-[11px]" open>
                     <summary className="cursor-pointer text-red-900 font-semibold">샘플</summary>
@@ -881,6 +925,11 @@ export default function DocumentsStepPage() {
                         <li key={i}>
                           <strong>{s.dong || "?"}-{s.ho || "?"} {s.name}</strong>
                           <span className="text-red-700"> — {s.reason}</span>
+                          {s.codes.length > 0 && (
+                            <span className="ml-1 text-ink-3">
+                              [{s.codes.map((c) => reasonLabel(c)).join(", ")}]
+                            </span>
+                          )}
                         </li>
                       ))}
                     </ul>
