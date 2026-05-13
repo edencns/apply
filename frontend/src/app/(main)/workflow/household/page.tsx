@@ -495,7 +495,8 @@ function SeparatedReportSection({
       let matched = 0;
       let unmatched = 0;
       const nowIso = new Date().toISOString();
-      for (const [winnerRrnFront, rows] of result.byWinnerRrn.entries()) {
+      const entries = Array.from(result.byWinnerRrn.entries());
+      for (const [winnerRrnFront, rows] of entries) {
         let target = customers.find((c) => (c.rrn_front || "").slice(0, 6) === winnerRrnFront);
         if (!target) {
           const first = rows[0];
@@ -507,7 +508,7 @@ function SeparatedReportSection({
           );
         }
         if (!target) { unmatched++; continue; }
-        const members = rows.map((r) => ({
+        const members = rows.map((r: any) => ({
           name: r.memberName,
           rrn: r.memberRrn,
           relation: r.relation,
