@@ -16,6 +16,7 @@
 
 import type { LocalCustomer, LocalAnnouncement } from "./local-store";
 import { classifyAddress } from "./region-classifier";
+import { countHouses } from "./property-classifier";
 
 /** 단계별 판정 결과 */
 export interface StageVerdict {
@@ -320,22 +321,24 @@ export function evaluateProperty(
     );
   }
 
-  /** 합산 룰 적용 — 단독·다가구는 1로 합산, 그 외 행 단위 */
-  const collapseDetachedHouses = (props: typeof afterInheritance): number => {
-    const detached = props.filter((p) => /단독주택/.test(p.usage || ""));
-    const dagagu   = props.filter((p) => /다가구주택/.test(p.usage || ""));
-    const others   = props.filter((p) =>
-      !/단독주택/.test(p.usage || "") &&
-      !/다가구주택/.test(p.usage || ""),
-    );
-    return (detached.length > 0 ? 1 : 0)
-         + (dagagu.length   > 0 ? 1 : 0)
-         + others.length;
-  };
+  /**
+   * 합산 룰 — 「주택소유정보 판정기준」 적용 (property-classifier.countHouses).
+   *   - 공동주택(아파트·연립·다세대): 지번+동+호 unique
+   *   - 단독계열(단독·다가구·전업농어가): 지번 unique (호실 분리 금지)
+   *   - 비주택·부속(오피스텔·창고·지하대피소): 카운트 제외 + 수동확인
+   */
+  const collapseDetachedHouses = (props: typeof afterInheritance): number =>
+    countHouses(props.map((p) => ({ address: p.address, usage: p.usage }))).count;
   const current = afterInheritance;
-  const currentEffective = collapseDetachedHouses(current);
-  const detachedCollapsed = current.filter((p) => /단독주택/.test(p.usage || "")).length;
+  const currentResult = countHouses(current.map((p) => ({ address: p.address, usage: p.usage })));
+  const currentEffective = currentResult.count;
+  // 경고 메시지용 — 같은 물건키로 묶여 줄어든 행 수
+  const detachedCollapsed = current.filter((p) => /단독주택|다가구주택|전업농어가/.test(p.usage || "")).length;
   const dagaguCollapsed   = current.filter((p) => /다가구주택/.test(p.usage || "")).length;
+  // 비주택·부속·동호미완성 등 수동확인 항목 경고
+  for (const mr of currentResult.manualReviewItems) {
+    exceptionWarnings.push(`주택 분류 수동확인 — ${mr.usage || "용도미상"}: ${mr.reason} (${mr.address.slice(0, 30)})`);
+  }
 
   // ── 분리세대 주택 합산 ──
   // 배우자 분리세대 = 법적 같은 세대 → 본인 판정에 합산
