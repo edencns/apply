@@ -129,10 +129,10 @@ const COMMON: ReviewerRole = {
   ],
   ruleChecks: [
     { key: "household_homeless", label: "세대원 전원 무주택", description: "세대 구성원 전원이 주택 미소유여야 함 (특공). 분리 배우자·그 세대원 포함. (일반공급은 소형·저가 예외 별도)", severity: "must", usesFields: ["householdMembers"] },
-    { key: "region_priority_general", label: "지역 우선 (일반/특공 선정)", description: "일반공급·각 특공 당첨자 선정은 강릉시 6개월 이상 거주자 우선. 전입일·주소이력으로 산정.", severity: "verify", usesFields: ["moveInDate", "addressHistory"] },
-    { key: "region_priority_1year", label: "지역 1순위 우선 (1년)", description: "공통 문구상 공고일 기준 최근 1년 계속 거주 시 1순위 중 우선공급 대상. 위 6개월 기준과 별도 필드로 관리.", severity: "info", usesFields: ["moveInDate", "addressHistory"] },
-    { key: "overseas_90", label: "해외 90일 연속 초과", description: "직전 N년 내 연속 90일 초과 해외체류 시 부정당첨(자격 박탈). 입국 후 7일내 동일국 재출국은 연속 합산.", severity: "must", usesFields: ["overseasContinuous90"] },
-    { key: "overseas_183", label: "연간 183일 초과", description: "183일 초과 연도는 거주기간에서 차감(그 해 거주 미인정).", severity: "verify", usesFields: ["overseasYearly183"] },
+    { key: "region_priority", label: "지역 우선 (강릉 6개월)", description: "강릉시 6개월 이상 계속 거주자 우선공급 (공고일 2022.03.25 기준 = 2021.09.25 이전부터 계속 거주). 잔여 시 강원 거주자. 전입일·주소이력으로 산정. (원문에 1년 기준 없음 — 6개월로 통일)", severity: "verify", usesFields: ["moveInDate", "addressHistory"] },
+    { key: "overseas_90", label: "해외 90일 연속 초과", description: "연속 90일 초과 국외거주 기간은 국내거주로 미인정 → 해당지역(강릉) 우선공급 불인정 가능. 현재 해외체류 상태·기간에 따라 기타지역 청약까지 제한될 수 있음. 입국 후 7일내 동일국 재출국은 연속 합산. 단기체류·생업 직접종사(파견·취업 등 증빙)는 예외.", severity: "verify", usesFields: ["overseasContinuous90"] },
+    { key: "overseas_183", label: "연간 183일 초과", description: "연간 183일 초과 국외거주는 그 기간 국내거주 미인정 → 거주기간 산정에서 차감.", severity: "verify", usesFields: ["overseasYearly183"] },
+    { key: "duplicate_apply", label: "중복청약 무효 규칙", description: "당첨자발표일 동일 주택은 1인 1건만. 같은 단지 특공1건+일반1건 가능하나 특공 당첨 시 일반 제외. 특공 유형 간 중복청약은 둘 다 무효. 당첨 통장은 계약 여부 무관 재사용 불가.", severity: "info", usesFields: [] },
     { key: "subscription_6m", label: "청약통장 6개월+예치금", description: "가입 6개월 경과 + 지역·면적별 예치금 이상. (강릉/강원: 85㎡↓200만/102㎡↓300만/135㎡↓400만/전면적500만). 기관추천 일부(국가유공자·보훈·장애인·도시재생부지제공자·철거인) 면제.", severity: "must", usesFields: ["joinMonths", "depositAmount"] },
     { key: "doc_after_announce", label: "서류 공고일 이후 발행", description: "모든 증명서류(인감증명서 포함)는 최초 입주자모집공고일(2022.03.25) 이후 발행분이어야 함. (원문에 3개월 기준 없음)", severity: "verify", usesFields: ["issueDate"] },
     { key: "id_match", label: "신분증 본인 일치", description: "신분증(주민등록증·운전면허증·여권) 성명·주민번호가 신청 정보와 일치. 유효성은 운영 검증.", severity: "must", usesFields: ["name", "rrnFront", "validUntil"] },
@@ -141,11 +141,10 @@ const COMMON: ReviewerRole = {
 - 입주자모집공고일(2022.03.25) 기준으로 모든 자격 판정.
 - 비투기과열·비청약과열 지역: 일반공급은 1주택자도 1순위 가능. 단 특별공급은 무주택 요건 별도 적용.
 - 무주택세대구성원 = 신청자 + 배우자 + (세대별 주민등록표에 함께 등재된) 직계존속·직계비속·배우자 직계비속 전원이 무주택. 분리 배우자·그 세대원도 무주택이어야 함.
-- 거주 우선 (유형별 분리 관리):
-  · 일반공급·각 특공 당첨자 선정 = 강릉시 6개월 이상 거주자 우선.
-  · 공통 문구상 1순위 중 우선공급 = 공고일 기준 최근 1년 계속 거주.
-- 해외체류: ① 연속 90일 초과 = 부정당첨(자격 박탈), 입국 후 7일내 동일국 재출국은 연속 합산. ② 연간 183일 초과 = 그 해 거주기간 미인정(차감).
-- 청약통장: 가입 6개월 경과 + 지역·면적별 예치금 이상이 1순위. 기관추천 일부 대상자(국가유공자·국가보훈대상자·장애인·도시재생 부지제공자·철거인) 면제.
+- 거주 우선: 강릉시 6개월 이상 계속 거주자 우선 (공고일 2022.03.25 기준 = 2021.09.25 이전부터 계속 거주). 잔여 시 강원 거주자. ★ 원문에 「1년」 기준 없음 — 6개월로 통일.
+- 해외체류 (자격박탈로 단정 X): ① 연속 90일 초과 국외거주 = 국내거주 미인정 → 해당지역(강릉) 우선공급 불인정 가능, 현재 체류 상태·기간 따라 기타지역 청약까지 제한 가능. 입국 후 7일내 동일국 재출국은 연속 합산. ② 연간 183일 초과 = 그 기간 거주 미인정(차감). 단기체류·생업 직접종사(파견·취업 증빙)는 예외.
+- 청약통장: 가입 6개월 경과 + 지역·면적별 예치금 이상이 1순위. 기관추천 일부 대상자(국가유공자·국가보훈대상자·장애인·도시재생 부지제공자·철거민) 면제.
+- 중복청약: 당첨자발표일 동일 주택 1인 1건(2건+ 무효). 같은 단지 특공1건+일반1건 가능하나 특공 당첨 시 일반 제외. 특공 유형 간 중복은 둘 다 무효. 과거 2년내 가점제 당첨 세대는 일반 1순위 가점제 제외(추첨 포함). 당첨 통장 재사용 불가(계약 여부 무관).
 - 분양권 등 주택소유 판정:
   · 신규 계약자 = 「공급계약 체결일」 기준 주택 소유. 단 미분양(선착순·잔여세대) 최초 공급받은 경우 제외.
   · 매수자 = 「매매대금 완납일」(부동산거래계약 신고서상) 기준 주택 소유. (매수자는 미분양 제외 혜택 없음)
@@ -422,7 +421,7 @@ const GENERAL: ReviewerRole = {
     },
   ],
   ruleChecks: [
-    { key: "subscription_rank", label: "청약 순위·예치금 (자격검증)", description: "1순위(6개월+예치금) 또는 2순위. 지역·면적별 예치금 충족. 자격검증 항목이며 일반공급 제출서류 목록과는 구분.", severity: "must", usesFields: ["rank", "joinMonths", "depositAmount"] },
+    { key: "subscription_rank", label: "청약 순위·예치금 (자격검증)", description: "1순위 = 가입 6개월 경과 + 지역·면적별 예치금 충족. 2순위 = 입주자저축 가입자(★예치금 무관 — 1순위 규칙 적용 금지). 자격검증 항목이며 일반공급 제출서류 목록과는 구분.", severity: "must", usesFields: ["rank", "joinMonths", "depositAmount"] },
     { key: "gajeom_chumcheom", label: "가점제·추첨제 비율", description: "전용 85㎡ 이하: 가점제 40% + 추첨제 60%. 가점제 낙첨자는 추첨제로 자동 전환.", severity: "info", usesFields: [] },
     { key: "small_low_exempt", label: "소형·저가 무주택 인정 (소명)", description: "전용 60㎡ 이하 + 공시가격 한도 이하 주택 1호만 보유 = 일반공급에선 무주택 인정 (특공은 불인정). 부적격 통보 후 소명 단계 서류로 증빙.", severity: "verify", usesFields: ["smallLowHouse", "ownedHomes"] },
     { key: "region_priority", label: "지역 우선", description: "강릉시 6개월 이상 거주자 우선. 잔여 시 강원 거주자.", severity: "verify", usesFields: [] },
@@ -430,7 +429,7 @@ const GENERAL: ReviewerRole = {
   knowledge: `[일반공급 — 117세대]
 - 대상: 공고일 현재 강릉/강원 거주 만19세 이상(또는 세대주 미성년자) 중 청약통장 순위 자격 갖춘 자. 재외동포·외국인 포함.
 - 우선: 강릉시 6개월 이상 거주자. 잔여 시 강릉 6개월 미만·강원 거주자.
-- 1순위: 가입 6개월 경과 + 지역·면적별 예치금 이상. 2순위: 그 외.
+- 1순위: 가입 6개월 경과 + 지역·면적별 예치금 이상. ★ 2순위: 입주자저축 가입자(예치금 무관 — 1순위와 같은 6개월+예치금 규칙 적용하면 안 됨).
 - 가점제·추첨제: 전용 85㎡ 이하 가점제 40% + 추첨제 60%. 가점제 낙첨자는 추첨제로 자동 전환.
 - 소형·저가 특례 (일반공급만 무주택 인정): 전용 60㎡ 이하 + 공시가격 수도권 1.3억(비수도권 8천만) 이하 주택/분양권 1호 또는 1세대만 소유한 세대는 보유기간 동안 무주택으로 봄. 공시가격은 공고일에 가장 가까운 날 기준.
 - 공유지분 주택도 전체 면적 기준으로 소유 판정.
