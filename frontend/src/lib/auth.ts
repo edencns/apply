@@ -6,7 +6,8 @@
  * - 세션: httpOnly Secure 쿠키 'apply_session'
  */
 
-import { SignJWT, jwtVerify } from "jose";
+import { SignJWT } from "jose/jwt/sign";
+import { jwtVerify } from "jose/jwt/verify";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { cookies } from "next/headers";

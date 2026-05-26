@@ -9,6 +9,8 @@ import { encryptField, decryptField } from "@/lib/field-crypto";
 
 export const runtime = "nodejs";
 
+type IdRouteContext = { params: Promise<{ id: string }> };
+
 /** 저장·전달 시 rrn_back 암호화 마킹. 조회 시 복호화. */
 function decryptCustomer(c: any): any {
   if (!c) return c;
@@ -46,12 +48,13 @@ async function fetchOne(id: number) {
   return decryptCustomer(parsed);
 }
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: IdRouteContext) {
   try {
     await ensureSchema();
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
-    const c = await fetchOne(Number(params.id));
+    const { id: rawId } = await params;
+    const c = await fetchOne(Number(rawId));
     if (!c) return NextResponse.json({ error: "not found" }, { status: 404 });
     return NextResponse.json(c);
   } catch (err: any) {
@@ -59,14 +62,15 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   }
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: IdRouteContext) {
   try {
     await ensureSchema();
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
     const guard = guardRequest(req, "customer-mutation", { max: 120, windowMs: 60_000 }, String(session.sub));
     if (!guard.ok) return guard.response;
-    const id = Number(params.id);
+    const { id: rawId } = await params;
+    const id = Number(rawId);
     const patch = await req.json();
     const existing = await fetchOne(id);
     if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -188,7 +192,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: IdRouteContext) {
   try {
     await ensureSchema();
     const session = await getSession();
@@ -196,7 +200,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const guard = guardRequest(req, "customer-mutation", { max: 120, windowMs: 60_000 }, String(session.sub));
     if (!guard.ok) return guard.response;
     const db = getDb();
-    const id = Number(params.id);
+    const { id: rawId } = await params;
+    const id = Number(rawId);
     const existing = await fetchOne(id);
     await db.execute({
       sql: "DELETE FROM customers WHERE id=?",

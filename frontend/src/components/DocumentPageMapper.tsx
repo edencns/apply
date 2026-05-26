@@ -214,7 +214,7 @@ export default function DocumentPageMapper({
         const pdfjs: any = await import("pdfjs-dist/legacy/build/pdf.mjs");
         // worker 설정
         try {
-          // @ts-ignore
+          // @ts-expect-error Next's bundler resolves the worker URL suffix at build time.
           pdfjs.GlobalWorkerOptions.workerSrc = (await import("pdfjs-dist/legacy/build/pdf.worker.mjs?url")).default;
         } catch {
           // legacy CDN fallback

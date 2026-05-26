@@ -45,7 +45,10 @@ function missing(extra: Partial<StageVerdict> = {}): StageVerdict {
 /** 주거용 용도 판별 — 주택소유 레코드의 `용도 등` 필드 기준 */
 export function isResidentialUse(usage?: string): boolean {
   if (!usage) return true; // 미상은 보수적으로 주거용 간주
-  if (/토지|임야|전|답|상가|사무실|공장|창고/.test(usage)) return false;
+  const text = String(usage).replace(/\s+/g, "");
+  if (/주택|아파트|연립|다세대|다가구|단독|공동주택|주거/.test(text)) return true;
+  if (/토지|임야|대지|상가|사무실|공장|창고|근린생활시설/.test(text)) return false;
+  if (/^(전|답)$/.test(text)) return false;
   return true;
 }
 
@@ -110,9 +113,91 @@ export function calcAge(birth: Date, ref: Date = new Date()): number {
   return yearsBetween(birth, ref);
 }
 
+function getAnnouncementRefDate(announcement?: LocalAnnouncement | null): Date {
+  const rules = announcement?.eligibility_rules || {};
+  return parseAnyDate(
+    (rules as any).announcement_base_date ||
+    (rules as any).announcement_date ||
+    (announcement as any)?.announcement_date,
+  ) || new Date();
+}
+
+function numberOrNull(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function formatWon(n: number | null): string {
+  if (n == null) return "공고 룰 미입력";
+  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(2).replace(/\.00$/, "")}억`;
+  if (n >= 10_000) return `${Math.floor(n / 10_000)}만`;
+  return `${n}원`;
+}
+
+function isSpecialSupplyType(supplyType: string): boolean {
+  const s = (supplyType || "").trim();
+  if (!s || /일반공급/.test(s)) return false;
+  if (/선착순|잔여세대/.test(s)) return false;
+  return true;
+}
+
+function isHeldAtReference(p: any, refDate: Date): boolean {
+  const acquired = parseAnyDate(p.acquiredDate || p.contractDate || p.changeDate);
+  if (acquired && acquired > refDate) return false;
+  const transferred = parseAnyDate(p.transferredDate);
+  if (transferred && transferred <= refDate) return false;
+  return isResidentialUse(p.usage);
+}
+
+function effectivePropertyStats(props: any[]) {
+  const result = countHouses(props.map((p) => ({ address: p.address, usage: p.usage })));
+  const counted = result.classified.filter(
+    (p) => p.category === "공동주택" || p.category === "단독계열",
+  );
+  const groupCounts = new Map<string, number>();
+  for (const p of counted) {
+    groupCounts.set(p.propertyKey, (groupCounts.get(p.propertyKey) || 0) + 1);
+  }
+
+  const detachedRows = counted.filter((p) => /단독주택|전업농어가/.test(p.usage || "")).length;
+  const dagaguRows = counted.filter((p) => /다가구주택/.test(p.usage || "")).length;
+  const detachedGroups = new Set(
+    counted.filter((p) => /단독주택|전업농어가/.test(p.usage || "")).map((p) => p.propertyKey),
+  ).size;
+  const dagaguGroups = new Set(
+    counted.filter((p) => /다가구주택/.test(p.usage || "")).map((p) => p.propertyKey),
+  ).size;
+  const duplicateGroups = Array.from(groupCounts.values()).filter((n) => n > 1).length;
+  const duplicateRows = Array.from(groupCounts.values()).reduce(
+    (sum, n) => sum + Math.max(0, n - 1),
+    0,
+  );
+
+  const notes: string[] = [];
+  if (detachedRows > detachedGroups) notes.push(`단독주택 ${detachedRows}행을 주소별 ${detachedGroups}주택`);
+  if (dagaguRows > dagaguGroups) notes.push(`다가구주택 ${dagaguRows}행을 주소별 ${dagaguGroups}주택`);
+  if (duplicateRows > 0) notes.push(`동일 매물 후보 ${duplicateGroups}그룹/${duplicateRows}행 병합`);
+
+  return {
+    count: result.count,
+    rawCount: props.length,
+    detachedRows,
+    dagaguRows,
+    detachedGroups,
+    dagaguGroups,
+    duplicateGroups,
+    duplicateRows,
+    manualReviewItems: result.manualReviewItems,
+    notes,
+  };
+}
+
 /* ─── Stage 1: 당첨자 등록 ─────────────────────────── */
 
-export function evaluateRegistration(customer: LocalCustomer): StageVerdict {
+export function evaluateRegistration(
+  customer: LocalCustomer,
+  announcement?: LocalAnnouncement | null,
+): StageVerdict {
   // 필수 필드: 성명, 주민번호 앞자리
   if (!customer.name) return fail(["성명 미입력"]);
   if (!customer.rrn_front || customer.rrn_front.length < 6) {
@@ -123,7 +208,8 @@ export function evaluateRegistration(customer: LocalCustomer): StageVerdict {
   if (!customer.supply_type) ctx.note = "공급유형 미지정";
 
   // 무주택 기간 자동 검증 — 신고값과 자동계산값 비교
-  const auto = calculateNoHomeYears(customer);
+  const refDate = getAnnouncementRefDate(announcement);
+  const auto = calculateNoHomeYears(customer, refDate);
   if (auto != null) {
     ctx.noHomeYearsAuto = auto;
     const declared = (customer as any).no_home_years;
@@ -148,11 +234,13 @@ export function evaluateRegistration(customer: LocalCustomer): StageVerdict {
  *
  * 만 30세 미만이고 미혼이면 0 반환 (무주택 기간 산정 대상 아님).
  */
-export function calculateNoHomeYears(customer: LocalCustomer): number | null {
+export function calculateNoHomeYears(
+  customer: LocalCustomer,
+  refDate: Date = new Date(),
+): number | null {
   const birth = birthFromRrn(customer.rrn_front, customer.rrn_back);
   if (!birth) return null;
-  const today = new Date();
-  const age = calcAge(birth, today);
+  const age = calcAge(birth, refDate);
   const marriage = parseAnyDate((customer as any).marriage_date);
 
   // 만30세 도달일
@@ -169,17 +257,17 @@ export function calculateNoHomeYears(customer: LocalCustomer): number | null {
   } else {
     return 0; // 만30세 미만 + 미혼 → 산정 대상 아님
   }
-  if (start > today) return 0;
+  if (start > refDate) return 0;
 
   // 현재 보유 주택이 있으면 0 (단, 예외 룰 적용된 후 effective count 기준 — 여기선
   // 보수적으로 모든 properties 카운트)
   const properties = customer.properties || [];
   const hasActive = properties.some(
-    (p) => !p.transferredDate && isResidentialUse(p.usage),
+    (p) => isHeldAtReference(p, refDate),
   );
   if (hasActive) return 0;
 
-  return Math.max(0, yearsBetween(start, today));
+  return Math.max(0, yearsBetween(start, refDate));
 }
 
 /* ─── Stage 2: 세대원 확인 ─────────────────────────── */
@@ -201,6 +289,7 @@ export function evaluateProperty(
   announcement?: LocalAnnouncement | null,
 ): StageVerdict {
   const properties = customer.properties || [];
+  const refDate = getAnnouncementRefDate(announcement);
   // 주택소유 전산검색 파일이 업로드된 적 있으면, 레코드 없는 사람은 "무주택"으로 확정
   if (properties.length === 0 && !customer.property_checked_at) {
     return missing();
@@ -208,18 +297,20 @@ export function evaluateProperty(
 
   // 현재 보유 + 주거용만 카운트 (본인+세대원)
   const beforeExceptions = properties.filter(
-    (p) => !p.transferredDate && isResidentialUse(p.usage),
+    (p) => isHeldAtReference(p, refDate),
   );
 
   // ─── 무주택 예외 룰 (eligibility_rules 의 임계값 사용) ───────────
   const rules = announcement?.eligibility_rules || {};
   const SMALL_AREA_MAX     = Number(rules.small_low_house_area_max) || 60;
-  // 수도권/비수도권 별도 한도 (주택공급에 관한 규칙 기준).
-  // - 수도권(서울·인천·경기): 1.6억
-  // - 비수도권: 1억
-  // 공고에 명시 없으면 단일값 small_low_house_price_max → 양쪽 동일 fallback.
-  const SMALL_PRICE_MAX_METRO     = Number(rules.small_low_house_price_max_metro)     || Number(rules.small_low_house_price_max) || 160_000_000;
-  const SMALL_PRICE_MAX_NON_METRO = Number(rules.small_low_house_price_max_non_metro) || Number(rules.small_low_house_price_max) || 100_000_000;
+  // 수도권/비수도권 한도는 반드시 공고에서 확정된 값을 사용한다.
+  // 값이 없으면 자동 예외를 적용하지 않고 수동 확인 경고로 남긴다.
+  const commonSmallLimit = numberOrNull((rules as any).small_low_house_price_max);
+  const SMALL_PRICE_MAX_METRO =
+    numberOrNull((rules as any).small_low_house_price_max_metro) ?? commonSmallLimit;
+  const SMALL_PRICE_MAX_NON_METRO =
+    numberOrNull((rules as any).small_low_house_price_max_non_metro) ?? commonSmallLimit;
+  const hasSmallLowLimits = SMALL_PRICE_MAX_METRO != null && SMALL_PRICE_MAX_NON_METRO != null;
   // 「주택공급에 관한 규칙」 53조 9호: 소형·저가주택은 「1호 또는 1세대」만 무주택 인정.
   // 즉 2호 이상 보유 시 첫 1호만 예외, 나머지는 일반 주택으로 카운트.
   // 공고에 별도 명시되면 그 값으로 오버라이드 가능.
@@ -227,11 +318,10 @@ export function evaluateProperty(
   const INHERITANCE_MONTHS = Number(rules.inheritance_grace_months) || 6;
   const TEMP_2HOUSE_MONTHS = Number(rules.temporary_2housing_grace_months) || 36;
 
-  const today = new Date();
   const exceptionWarnings: string[] = [];
 
   /** 1) 소형·저가주택 예외 — 60㎡ 이하 + 공시가격 한도 이하면 무주택 인정.
-   *  수도권(서울·인천·경기) 1.6억 / 비수도권 1억으로 분기.
+   *  수도권/비수도권 한도는 공고 원문에서 추출·검증된 eligibility_rules 값을 사용.
    *  「주택공급에 관한 규칙」 53조 9호 — 1세대 1호만 인정 (SMALL_COUNT_MAX).
    *
    *  ⚠ 일반공급에만 적용 — 특별공급 신청자는 「유주택자 = 부적격」이므로
@@ -239,10 +329,12 @@ export function evaluateProperty(
    *  사람이 직접 부적격 처리. */
   const supplyType = (customer.supply_type || "일반공급").trim();
   const isGeneralSupply = /일반공급/.test(supplyType) || supplyType === "";
+  const isSpecialSupply = isSpecialSupplyType(supplyType);
   let smallLowApplied = 0;
   let smallLowExcessCount = 0;
   let smallAreaButPriceUnknown = 0;
-  const priceMaxForProperty = (p: any): number => {
+  let smallAreaButRuleMissing = 0;
+  const priceMaxForProperty = (p: any): number | null => {
     const region = p?.regionType || classifyAddress(p?.address);
     return region === "non_metro" ? SMALL_PRICE_MAX_NON_METRO : SMALL_PRICE_MAX_METRO;
   };
@@ -251,6 +343,10 @@ export function evaluateProperty(
         const isSmall = (p.areaM2 ?? Infinity) > 0 && (p.areaM2 ?? Infinity) <= SMALL_AREA_MAX;
         if (!isSmall) return true;
         const limit = priceMaxForProperty(p);
+        if (limit == null || !hasSmallLowLimits) {
+          smallAreaButRuleMissing++;
+          return true;
+        }
         if ((p as any).officialPrice != null) {
           // 공시가격 데이터 있음 → 자동 판정
           if ((p as any).officialPrice <= limit) {
@@ -277,7 +373,7 @@ export function evaluateProperty(
   }
   if (smallLowApplied > 0) {
     exceptionWarnings.push(
-      `소형·저가주택 ${smallLowApplied}건 자동 무주택 예외 적용 (≤${SMALL_AREA_MAX}㎡ + 공시가격: 수도권 ≤${(SMALL_PRICE_MAX_METRO/100_000_000).toFixed(1)}억 / 비수도권 ≤${(SMALL_PRICE_MAX_NON_METRO/100_000_000).toFixed(1)}억) — 일반공급 한정, ${SMALL_COUNT_MAX}호 한도`,
+      `소형·저가주택 ${smallLowApplied}건 자동 무주택 예외 적용 (≤${SMALL_AREA_MAX}㎡ + 공시가격: 수도권 ≤${formatWon(SMALL_PRICE_MAX_METRO)} / 비수도권 ≤${formatWon(SMALL_PRICE_MAX_NON_METRO)}) — 일반공급 한정, ${SMALL_COUNT_MAX}호 한도`,
     );
   }
   if (smallLowExcessCount > 0) {
@@ -287,7 +383,12 @@ export function evaluateProperty(
   }
   if (smallAreaButPriceUnknown > 0) {
     exceptionWarnings.push(
-      `소형 주택 ${smallAreaButPriceUnknown}건 — 면적 ≤${SMALL_AREA_MAX}㎡ 충족하나 공시가격 미상으로 자동 판정 불가. 수동 확인 후 가격 입력 필요 (수도권 ≤${(SMALL_PRICE_MAX_METRO/100_000_000).toFixed(1)}억 / 비수도권 ≤${(SMALL_PRICE_MAX_NON_METRO/100_000_000).toFixed(1)}억 이하면 예외 적용)`,
+      `소형 주택 ${smallAreaButPriceUnknown}건 — 면적 ≤${SMALL_AREA_MAX}㎡ 충족하나 공시가격 미상으로 자동 판정 불가. 수동 확인 후 가격 입력 필요 (수도권 ≤${formatWon(SMALL_PRICE_MAX_METRO)} / 비수도권 ≤${formatWon(SMALL_PRICE_MAX_NON_METRO)} 이하면 예외 적용)`,
+    );
+  }
+  if (smallAreaButRuleMissing > 0) {
+    exceptionWarnings.push(
+      `소형 주택 ${smallAreaButRuleMissing}건 — 공고의 소형·저가 가격 한도가 입력되지 않아 자동 무주택 예외 미적용. 공고 원문 한도 입력 후 재검증 필요`,
     );
   }
 
@@ -302,7 +403,7 @@ export function evaluateProperty(
       inheritedApplied++;
       return false;
     }
-    const months = monthsBetween(inheritDate, today);
+    const months = monthsBetween(inheritDate, refDate);
     if (months <= INHERITANCE_MONTHS) {
       inheritedApplied++;
       return false;
@@ -322,23 +423,14 @@ export function evaluateProperty(
   }
 
   /**
-   * 합산 룰 — 「주택소유정보 판정기준」 적용 (property-classifier.countHouses).
-   *   - 공동주택(아파트·연립·다세대): 지번+동+호 unique
-   *   - 단독계열(단독·다가구·전업농어가): 지번 unique (호실 분리 금지)
-   *   - 비주택·부속(오피스텔·창고·지하대피소): 카운트 제외 + 수동확인
+   * 합산 룰 — 「주택소유정보 판정기준」 적용.
+   * 공동주택은 지번+동+호, 단독·다가구 계열은 지번 단위로 산정한다.
    */
-  const collapseDetachedHouses = (props: typeof afterInheritance): number =>
-    countHouses(props.map((p) => ({ address: p.address, usage: p.usage }))).count;
   const current = afterInheritance;
-  const currentResult = countHouses(current.map((p) => ({ address: p.address, usage: p.usage })));
-  const currentEffective = currentResult.count;
-  // 경고 메시지용 — 같은 물건키로 묶여 줄어든 행 수
-  const detachedCollapsed = current.filter((p) => /단독주택|다가구주택|전업농어가/.test(p.usage || "")).length;
-  const dagaguCollapsed   = current.filter((p) => /다가구주택/.test(p.usage || "")).length;
-  // 비주택·부속·동호미완성 등 수동확인 항목 경고
-  for (const mr of currentResult.manualReviewItems) {
-    exceptionWarnings.push(`주택 분류 수동확인 — ${mr.usage || "용도미상"}: ${mr.reason} (${mr.address.slice(0, 30)})`);
-  }
+  const currentStats = effectivePropertyStats(current);
+  const currentEffective = currentStats.count;
+  const detachedCollapsed = currentStats.detachedRows;
+  const dagaguCollapsed   = currentStats.dagaguRows;
 
   // ── 분리세대 주택 합산 ──
   // 배우자 분리세대 = 법적 같은 세대 → 본인 판정에 합산
@@ -359,19 +451,29 @@ export function evaluateProperty(
     if (spouseRrns.has(rrnFront)) return true;
     if (/배우자/.test(p.relation || "")) return true;
     return false;
-  }).filter((p) => !p.transferredDate && isResidentialUse(p.usage));
+  }).filter((p) => isHeldAtReference(p, refDate));
 
   const nonSpouseSeparatedProps = separatedProperties.filter(
-    (p) => !spouseProps.includes(p) && !p.transferredDate && isResidentialUse(p.usage),
+    (p) => !spouseProps.includes(p) && isHeldAtReference(p, refDate),
   );
 
-  // 본인 + 배우자 합산 — 단독주택 합산 규칙은 본인·배우자 각각 적용 후 더함
-  const spouseEffective = collapseDetachedHouses(spouseProps);
+  // 본인 + 배우자 합산 — 주소 정규화 키로 중복 후보를 보수적으로 병합
+  const spouseStats = effectivePropertyStats(spouseProps);
+  const spouseEffective = spouseStats.count;
   const combinedCount = currentEffective + spouseEffective;
   const regulation = (announcement?.eligibility_rules?.regulation as string) || "";
 
   const warnings: string[] = [...exceptionWarnings];
   const reasons: string[] = [];
+  const combinedNotes = [...currentStats.notes, ...spouseStats.notes];
+  if (combinedNotes.length > 0) {
+    warnings.push(
+      `${combinedNotes.join(", ")} — 같은 주소 표기 차이·다가구/단독 유형은 등기부와 건축물대장으로 최종 확인`,
+    );
+  }
+  for (const mr of [...currentStats.manualReviewItems, ...spouseStats.manualReviewItems]) {
+    warnings.push(`주택 분류 수동확인 — ${mr.usage || "용도미상"}: ${mr.reason} (${mr.address.slice(0, 30)})`);
+  }
 
   /** 3) 일시적 2주택 감지 — 정확히 2주택 + 최근 취득이 grace 기간 이내 */
   let temporaryTwoHousing = false;
@@ -382,7 +484,7 @@ export function evaluateProperty(
       .filter((d): d is Date => !!d);
     if (acquireDates.length > 0) {
       const mostRecent = acquireDates.reduce((a, b) => (a > b ? a : b));
-      const monthsAgo = monthsBetween(mostRecent, today);
+      const monthsAgo = monthsBetween(mostRecent, refDate);
       if (monthsAgo >= 0 && monthsAgo <= TEMP_2HOUSE_MONTHS) {
         temporaryTwoHousing = true;
         warnings.push(
@@ -396,19 +498,28 @@ export function evaluateProperty(
 
   // 합산 안내 — 행 수와 effective count가 다르면 사용자에게 명시
   const collapseNotes: string[] = [];
-  if (detachedCollapsed >= 2) collapseNotes.push(`단독주택 ${detachedCollapsed}행을 1주택`);
-  if (dagaguCollapsed >= 2)   collapseNotes.push(`다가구주택 ${dagaguCollapsed}호(행)을 1주택`);
+  if (currentStats.detachedRows > currentStats.detachedGroups) {
+    collapseNotes.push(`단독주택 ${currentStats.detachedRows}행을 주소별 ${currentStats.detachedGroups}주택`);
+  }
+  if (currentStats.dagaguRows > currentStats.dagaguGroups) {
+    collapseNotes.push(`다가구주택 ${currentStats.dagaguRows}행을 주소별 ${currentStats.dagaguGroups}주택`);
+  }
   const detachedNote = collapseNotes.length > 0
-    ? ` (${collapseNotes.join(", ")}으로 합산)`
+    ? ` (${collapseNotes.join(", ")})`
     : "";
 
-  if (regulation === "투기과열" || regulation === "청약과열") {
-    // 강화 규제: 1건이라도 보유 시 부적합
+  const strictRegulation = regulation === "투기과열" || regulation === "청약과열";
+  const requiresHomeless = isSpecialSupply || (rules as any).homeless_household_required === true || strictRegulation;
+
+  if (requiresHomeless) {
     if (combinedCount > 0) {
       const sources: string[] = [];
       if (currentEffective > 0) sources.push(`본인 세대 ${currentEffective}건${detachedNote}`);
       if (spouseEffective > 0) sources.push(`배우자 분리세대 ${spouseEffective}건`);
-      reasons.push(`${regulation}지구 — 주택 보유 ${combinedCount}건 (${sources.join(" + ")})`);
+      const basis = isSpecialSupply
+        ? `${supplyType} — 무주택세대구성원 요건`
+        : `${regulation || "공고"} — 무주택 요건`;
+      reasons.push(`${basis}: 주택 보유 ${combinedCount}건 (${sources.join(" + ")})`);
     }
   } else {
     // 비규제 / 미지정: 2주택 이상 부적격, 1주택은 경고
@@ -429,7 +540,7 @@ export function evaluateProperty(
     );
     warnings.push(
       `분리세대원(${owners.join(", ")}) 주택 ${nonSpouseSeparatedProps.length}건 발견 — ` +
-      `원칙상 본인 판정 무관이나 60세 미만 직계존속 등 특수 조건은 수동 확인 권장`,
+      `원칙상 본인 판정 무관이나 노부모부양·부양가족 산정 등 공급유형별 특수 조건은 수동 확인 권장`,
     );
   }
 
@@ -450,6 +561,10 @@ export function evaluateProperty(
         regulation,
         detachedCollapsed,
         dagaguCollapsed,
+        detachedGroups: currentStats.detachedGroups,
+        dagaguGroups: currentStats.dagaguGroups,
+        duplicateGroups: currentStats.duplicateGroups + spouseStats.duplicateGroups,
+        duplicateRows: currentStats.duplicateRows + spouseStats.duplicateRows,
         smallLowApplied,
         inheritedApplied,
         temporaryTwoHousing,
@@ -471,6 +586,10 @@ export function evaluateProperty(
       regulation: regulation || "비규제",
       detachedCollapsed,
       dagaguCollapsed,
+      detachedGroups: currentStats.detachedGroups,
+      dagaguGroups: currentStats.dagaguGroups,
+      duplicateGroups: currentStats.duplicateGroups + spouseStats.duplicateGroups,
+      duplicateRows: currentStats.duplicateRows + spouseStats.duplicateRows,
       smallLowApplied,
       inheritedApplied,
       temporaryTwoHousing,
@@ -569,7 +688,7 @@ export function evaluateFinal(
       reasons: [],
       warnings: ["선착순(잔여세대) 계약자 — 청약 자격 검증 룰 미적용. 계약서·신분증 등 기본 서류만 확인"],
       stages: {
-        registration: evaluateRegistration(customer),
+        registration: evaluateRegistration(customer, announcement),
         // 나머지 단계는 N/A 처리 (missing이지만 의도된 것)
         household:  { ok: true, reasons: [], warnings: ["선착순 — 검증 불필요"], missing: false },
         property:   { ok: true, reasons: [], warnings: ["선착순 — 검증 불필요"], missing: false },
@@ -580,7 +699,7 @@ export function evaluateFinal(
   }
 
   const stages = {
-    registration: evaluateRegistration(customer),
+    registration: evaluateRegistration(customer, announcement),
     household: evaluateHousehold(customer),
     property: evaluateProperty(customer, announcement),
     savings: evaluateSavings(customer, announcement),

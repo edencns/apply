@@ -14,7 +14,7 @@ export const maxDuration = 30;
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     await ensureSchema();
@@ -22,7 +22,8 @@ export async function GET(
     if (!session) {
       return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
     }
-    const id = Number(params.id);
+    const { id: rawId } = await params;
+    const id = Number(rawId);
     if (!Number.isFinite(id)) {
       return NextResponse.json({ error: "invalid id" }, { status: 400 });
     }

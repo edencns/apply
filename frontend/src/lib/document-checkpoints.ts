@@ -335,10 +335,10 @@ function makeSealCertChecks(): DocumentCheckpoint[] {
   return [
     {
       key: "seal_recent",
-      label: "발급일 3개월 이내",
+      label: "공고 기준 발급일 충족",
       source: "공고 요건",
       severity: "must",
-      hint: "발급일자가 3개월 경과 시 재발급 요구",
+      hint: "공고 원문 기준 우선. 별도 유효기간이 없으면 입주자모집공고일 이후 발급분인지 확인",
     },
   ];
 }

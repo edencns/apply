@@ -11,7 +11,7 @@
  *   - 사용자가 「이 룰 이 값이 맞나?」 사전 검증할 수 있어야 신뢰 가능
  *
  * 검증 대상 (가장 영향 큰 9가지):
- *   1. regulation — 투기과열/청약과열/비규제 (1주택 가능 여부)
+ *   1. regulation — 투기과열/청약과열/비규제 (일반공급 1순위·1주택 가능 여부)
  *   2. announcement_base_date — 모든 날짜 계산 기준
  *   3. household_head_required — 세대주 필수 여부 (곽미자 케이스 원인)
  *   4. homeless_household_required — 무주택세대구성원 필수
@@ -55,7 +55,7 @@ const CRITICAL_FIELDS: CriticalField[] = [
     key: "regulation",
     label: "규제 지역 구분",
     type: "regulation",
-    why: "투기과열·청약과열은 1주택 보유 시 1순위 불가. 비규제는 1주택도 가능.",
+    why: "일반공급 1순위·추첨제 기준에 영향. 특별공급 무주택 요건은 공급유형 기준을 별도로 우선 적용.",
     options: [
       { value: "투기과열", label: "투기과열지구" },
       { value: "청약과열", label: "청약과열지역" },
@@ -123,7 +123,7 @@ const CRITICAL_FIELDS: CriticalField[] = [
     key: "small_low_house_price_max_metro",
     label: "소형·저가 한도 (수도권)",
     type: "number",
-    why: "수도권 60㎡ + 공시가격 한도 이하 보유 주택은 무주택 예외. 기본 1.6억.",
+    why: "수도권 60㎡ 이하 + 공고의 공시가격 한도 이하 보유 주택은 일반공급에서만 무주택 예외 후보.",
     unit: "원",
     placeholder: "160000000",
   },
@@ -131,7 +131,7 @@ const CRITICAL_FIELDS: CriticalField[] = [
     key: "small_low_house_price_max_non_metro",
     label: "소형·저가 한도 (비수도권)",
     type: "number",
-    why: "비수도권 60㎡ + 공시가격 한도 이하 보유 주택은 무주택 예외. 기본 1억.",
+    why: "비수도권 60㎡ 이하 + 공고의 공시가격 한도 이하 보유 주택은 일반공급에서만 무주택 예외 후보.",
     unit: "원",
     placeholder: "100000000",
   },

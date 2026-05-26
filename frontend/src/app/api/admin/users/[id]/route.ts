@@ -6,13 +6,16 @@ import { validatePassword } from "@/lib/password-policy";
 
 export const runtime = "nodejs";
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+type IdRouteContext = { params: Promise<{ id: string }> };
+
+export async function DELETE(req: NextRequest, { params }: IdRouteContext) {
   try {
     const session = await getSession();
     const guard = requireAdmin(session);
     if (!guard.ok) return guard.response;
     await ensureSchema();
-    const id = Number(params.id);
+    const { id: rawId } = await params;
+    const id = Number(rawId);
     // 자기 자신 삭제 방지 (관리자 lockout 예방)
     if (String(guard.session.sub) === String(id)) {
       return NextResponse.json({ error: "자기 자신은 삭제할 수 없습니다" }, { status: 400 });
@@ -34,13 +37,14 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 }
 
 /** 비밀번호 재설정 / 이름 변경 — 관리자 전용 */
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: IdRouteContext) {
   try {
     const session = await getSession();
     const guard = requireAdmin(session);
     if (!guard.ok) return guard.response;
     await ensureSchema();
-    const id = Number(params.id);
+    const { id: rawId } = await params;
+    const id = Number(rawId);
     const { password, name } = await req.json();
     const db = getDb();
 

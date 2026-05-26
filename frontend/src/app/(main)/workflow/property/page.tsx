@@ -80,6 +80,22 @@ const columns: StageColumn[] = [
   },
 ];
 
+function fmtMoney(n?: number | null): string {
+  if (!n) return "미입력";
+  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(2).replace(/\.00$/, "")}억`;
+  if (n >= 10_000) return `${Math.floor(n / 10_000)}만`;
+  return `${n}원`;
+}
+
+function smallLowLimitText(announcement: LocalAnnouncement | null): string {
+  const rules = announcement?.eligibility_rules || {};
+  const common = Number((rules as any).small_low_house_price_max) || null;
+  const metro = Number((rules as any).small_low_house_price_max_metro) || common;
+  const nonMetro = Number((rules as any).small_low_house_price_max_non_metro) || common;
+  if (!metro || !nonMetro) return "공고 룰 미입력";
+  return `수도권 ≤${fmtMoney(metro)} / 비수도권 ≤${fmtMoney(nonMetro)}`;
+}
+
 export default function PropertyStepPage() {
   const [selected, setSelected] = useState<LocalAnnouncement | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -100,6 +116,7 @@ export default function PropertyStepPage() {
 
   const evaluate = (c: LocalCustomer, a: LocalAnnouncement) => evaluateProperty(c, a);
   const regulation = (selected?.eligibility_rules?.regulation as string) || undefined;
+  const smallLowLimits = smallLowLimitText(selected);
 
   /** 공시가격 일괄 조회 — 모든 등록 당첨자의 60㎡ 이하 + 가격 미상 보유 주택 자동 조회.
    *  병렬 5개씩, 진행률 + 결과 토스트 표시. */
@@ -449,8 +466,8 @@ export default function PropertyStepPage() {
             <div className="mb-3 p-3 rounded-lg bg-indigo-50 border border-indigo-100 text-xs text-indigo-800">
               <strong>공고 규제: {regulation}</strong> ·{" "}
               {regulation === "투기과열" || regulation === "청약과열"
-                ? "주택 1건도 보유 시 부적합"
-                : "2주택 이상 부적합, 1주택은 가점 감점 경고"}
+                ? "규제지역 일반공급은 1주택 보유 시 1순위 제한. 특별공급은 공급유형별 무주택 요건 우선"
+                : "일반공급은 1주택 가능 여부를 공고 기준으로 확인. 특별공급은 세대 전원 무주택 여부 우선"}
             </div>
           )}
 
@@ -616,8 +633,8 @@ export default function PropertyStepPage() {
               )}
 
               <div className="mt-2 text-[11px] text-indigo-800/80">
-                💡 「소형·저가 예외」 기준(수도권 ≤1.6억 / 비수도권 ≤1억) 자동 비교돼 1주택자가 무주택으로 재판정될 수 있어요.
-                개별 주택은 「검증」 버튼으로 다시 평가하세요.
+                💡 「소형·저가 예외」 기준({smallLowLimits})은 공고 룰이 입력된 경우에만 자동 비교됩니다.
+                특별공급은 소형·저가 예외를 자동 적용하지 않으며, 개별 주택은 「검증」 버튼으로 다시 평가하세요.
               </div>
             </div>
           )}

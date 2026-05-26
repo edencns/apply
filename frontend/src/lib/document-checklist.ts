@@ -2,7 +2,8 @@
  * 공급유형별 필요 서류 체크리스트
  *
  * 공고 PDF에서 파싱된 서류 목록이 있으면 우선 사용하고,
- * 없으면 이 기본 매핑을 적용합니다.
+ * 없으면 이 기본 매핑을 적용합니다. 기본값은 안전한 fallback일 뿐이며,
+ * 실제 검수는 공고 원문에서 추출·검증한 required_documents를 우선합니다.
  */
 
 /**
@@ -18,14 +19,14 @@ export const APPLYHOME_AUTO_VERIFIED_DOCUMENTS = [
 ];
 
 /**
- * 공통 제출서류 (모든 유형 공통).
+ * 특별공급 공통 제출서류 fallback.
  *
  * 공고 표 「공통서류」 컬럼 구분:
  *   필수 ─ 본인 발급 9종 (입주자모집공고 표준 양식 기준)
  *   추가(해당자) ─ "(해당 시 — 조건)"으로 표기. parseDocumentName이 "해당 시"를
  *     인식해 conditional 플래그를 자동으로 켭니다.
  */
-export const COMMON_DOCUMENTS = [
+export const SPECIAL_COMMON_DOCUMENTS = [
   // ─── 필수 ───
   '특별공급신청서, 무주택 서약서',
   '인감증명서 또는 본인서명사실확인서',
@@ -43,6 +44,35 @@ export const COMMON_DOCUMENTS = [
 ];
 
 /**
+ * 일반공급 공통 제출서류 fallback.
+ *
+ * 특별공급신청서·무주택서약서·청약통장 순위확인서는 청약홈 신청/전산조회
+ * 성격이 강하므로 일반공급 fallback 필수 제출서류로 고정하지 않는다.
+ */
+export const GENERAL_COMMON_DOCUMENTS = [
+  '인감증명서 또는 본인서명사실확인서',
+  '신분증',
+  '개인정보 수집·이용 동의서',
+  '주민등록등본 (상세, 본인)',
+  '주민등록초본 (상세, 본인)',
+  '가족관계증명서 (상세, 본인)',
+  '출입국사실증명원 (본인)',
+  '혼인관계증명서 (해당 시 — 단독세대 또는 만30세 이전 혼인 인정받고자 하는 경우)',
+  '배우자 주민등록등본 (해당 시 — 배우자 분리세대인 경우)',
+];
+
+export const COMMON_DOCUMENTS = SPECIAL_COMMON_DOCUMENTS;
+
+function fallbackCommonDocuments(supplyType: string): string[] {
+  if (/선착순|잔여세대/.test(supplyType)) return [];
+  if (/일반공급/.test(supplyType)) return GENERAL_COMMON_DOCUMENTS;
+  if (/기관추천/.test(supplyType)) {
+    return SPECIAL_COMMON_DOCUMENTS.filter((doc) => !doc.includes('출입국사실증명원'));
+  }
+  return SPECIAL_COMMON_DOCUMENTS;
+}
+
+/**
  * 공급유형별 추가 필요서류.
  * 공통서류 외에 각 유형 신청자만 추가 제출하는 항목.
  *   "(해당 시 — 조건)" 표기는 추가(해당자)로 자동 분류됩니다.
@@ -54,7 +84,7 @@ export const SUPPLY_TYPE_DOCUMENTS: Record<string, string[]> = {
     '혼인관계증명서 (상세, 본인)',
     '건강보험자격득실확인서 (부부 각각)',
     '소득증빙서류 (근로소득원천징수영수증 등)',
-    '건강보험료 납부확인서 (최근 6개월)',
+    '건강보험료 납부확인서 (해당 시 — 공고 또는 소득산정 방식에서 요구하는 경우)',
     // 추가(해당자)
     '임신진단서 (해당 시 — 임신 중인 경우)',
     '출생증명서 (해당 시 — 2세 이내 자녀)',
@@ -97,6 +127,7 @@ export const SUPPLY_TYPE_DOCUMENTS: Record<string, string[]> = {
   '기관추천': [
     '기관추천서 (해당 기관 발급)',
     '자격확인서 (해당 기관)',
+    '복무확인서 (해당 시 — 군인 등 추천유형 확인)',
   ],
   '신생아': [
     // 필수
@@ -125,10 +156,9 @@ export const SUPPLY_TYPE_DOCUMENTS: Record<string, string[]> = {
     '주민등록등본 (본인)',
   ],
   '일반공급': [
-    // 필수
-    '청약통장 가입확인서',
-    '무주택기간 확인 서류',
     // 추가(해당자)
+    '소형·저가주택 증빙서류 (해당 시 — 일반공급 무주택 인정 신청자)',
+    '가점 산정 증빙서류 (해당 시 — 가점제 신청자)',
     '배우자 청약 당첨사실 확인서 (해당 시 — 가점제 신청자)',
   ],
 };
@@ -150,7 +180,7 @@ export function getRequiredDocuments(
 
   const common = parsedCommon && parsedCommon.length >= 3
     ? parsedCommon
-    : COMMON_DOCUMENTS;
+    : fallbackCommonDocuments(supplyType);
 
   const typeSpecific = parsedType && parsedType.length >= 2
     ? parsedType

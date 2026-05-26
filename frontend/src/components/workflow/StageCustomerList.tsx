@@ -67,7 +67,7 @@ function evaluatePriorStage(
   ann: LocalAnnouncement,
 ): StageVerdict {
   switch (stage) {
-    case "registration": return evaluateRegistration(c);
+    case "registration": return evaluateRegistration(c, ann);
     case "household":    return evaluateHousehold(c);
     case "property":     return evaluateProperty(c, ann);
     case "savings":      return evaluateSavings(c, ann);

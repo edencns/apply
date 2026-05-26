@@ -509,7 +509,7 @@ export function PropertyPanel({
       <VerdictBox verdict={verdict} />
 
       <p className="text-[11px] text-ink-3 mt-3">
-        * 판정 기준: 현재 보유 + 주거용만 카운트. 공고가 <strong>투기과열/청약과열</strong>이면 1건도 불가, 그 외 지역은 2주택부터 부적격.
+        * 판정 기준: 입주자모집공고일 기준 보유 + 주거용만 카운트. 특별공급은 공급유형별 무주택세대구성원 요건을 우선 적용하고, 일반공급은 공고의 규제지역·1주택 허용 기준을 적용합니다.
         <strong className="ml-1">배우자 분리세대</strong>의 주택은 본인 세대에 합산, 그 외 분리세대(자녀·부모 등)는 경고만 표시.
       </p>
     </div>

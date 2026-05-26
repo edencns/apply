@@ -3,7 +3,7 @@
  * 비밀번호 해시(scrypt 등 Node crypto)는 포함하지 않음 — jose만 사용.
  */
 
-import { jwtVerify } from "jose";
+import { jwtVerify } from "jose/jwt/verify";
 import type { NextRequest } from "next/server";
 
 const SESSION_COOKIE = "apply_session";

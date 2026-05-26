@@ -22,7 +22,7 @@ export const maxDuration = 60;
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     await ensureSchema();
@@ -41,7 +41,8 @@ export async function GET(
     );
     if (!guard.ok) return guard.response;
 
-    const id = Number(params.id);
+    const { id: rawId } = await params;
+    const id = Number(rawId);
     if (!Number.isFinite(id)) {
       return new Response(JSON.stringify({ error: "invalid id" }), { status: 400 });
     }
