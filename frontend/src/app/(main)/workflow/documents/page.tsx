@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import WorkflowShell, { WORKFLOW_STEPS } from "@/components/workflow/WorkflowShell";
 import StageCustomerList, { StageColumn } from "@/components/workflow/StageCustomerList";
@@ -219,7 +219,7 @@ function computeReviewStatus(
   return "uploaded";
 }
 
-export default function DocumentsStepPage() {
+function DocumentsStepInner() {
   // 사이드바 sub-tab(?supply=신혼부부 등)에서 공급유형 초기 필터 주입
   const searchParams = useSearchParams();
   const supplyParam = searchParams?.get("supply") || "all";
@@ -1247,5 +1247,14 @@ export default function DocumentsStepPage() {
         </>
       )}
     </WorkflowShell>
+  );
+}
+
+// useSearchParams는 Next.js 15에서 반드시 Suspense 경계 안에서 호출돼야 prerender 가능
+export default function DocumentsStepPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-ink-4">로딩 중...</div>}>
+      <DocumentsStepInner />
+    </Suspense>
   );
 }
