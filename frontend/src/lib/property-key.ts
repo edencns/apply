@@ -21,6 +21,7 @@
  */
 
 import type { PropertyOwnershipRecord } from "./winner-ingest";
+import { normalizeAdministrativeAddress } from "./address-normalizer";
 
 export interface PropertyKey {
   front: string;
@@ -59,7 +60,7 @@ function stripApartmentName(s: string): string {
 
 /** 주소 본문 정규화 — 단지명·도로명·"-0번지"·행정구역 중복 prefix 처리 */
 function normalizeFront(s: string): string {
-  let out = stripApartmentName(s);
+  let out = stripApartmentName(normalizeAdministrativeAddress(s));
   out = out
     // -0번지 → 번지 (부번 0 표기 일관화)
     .replace(/-0번지/g, "번지")

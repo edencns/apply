@@ -1,5 +1,7 @@
 // 주택소유 레코드를 「판정기준」에 따라 분류·정규화하고 주택 수를 산정하는 모듈
 
+import { normalizeAdministrativeAddress } from "./address-normalizer";
+
 /**
  * 주택 분류·주택수 산정 — 사용자 「주택소유정보_주소유형_검토.xlsx / 판정기준」 시트 기준.
  *
@@ -42,7 +44,7 @@ export interface ClassifiedProperty {
 
 /** 시도명 중복·약칭·공백·-0번지·동호 선행 0 정리 → 정규화 문자열 */
 export function normalizeAddress(raw: string): string {
-  let s = (raw || "").trim();
+  let s = normalizeAdministrativeAddress(raw || "");
   // 행정구역 중복 prefix: "강원도 강원강릉시" → "강원도 강릉시"
   s = s.replace(/(강원|경기|충북|충남|전북|전남|경북|경남|제주|충청|전라|경상)도\s+\1(?=\S)/g, "$1도 ");
   // "-0번지" → "번지"

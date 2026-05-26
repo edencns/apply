@@ -16,6 +16,8 @@
 
 import { useState } from "react";
 import { localCustomers, type LocalCustomer } from "@/lib/local-store";
+import { getPropertyKey } from "@/lib/property-key";
+import { normalizeAdministrativeAddress } from "@/lib/address-normalizer";
 import { ExternalLink, Save, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
 interface QueueItem {
@@ -48,53 +50,21 @@ interface QueueItem {
  *   - "0019 00202" (코드+호)
  * 모두 호번호만 보면 의도 명확. 같은 사람·같은 번지·같은 호 = 거의 확실히 같은 부동산.
  */
-function propSignature(address: string, areaM2?: number): string {
-  let s = (address || "").trim();
-  // 행정구역 중복 prefix (강원도 강원강릉시 → 강원도 강릉시)
-  s = s.replace(/(강원|경기|충북|충남|전북|전남|경북|경남|제주|충청|전라|경상)도\s+\1(?=\S)/g, "$1도 ");
+function propSignature(address: string, areaM2?: number, usage?: string): string {
+  const normalizedAddress = normalizeAdministrativeAddress(address || "");
+  const key = getPropertyKey({
+    ownerRrn: "",
+    ownerName: "",
+    address: normalizedAddress,
+    usage,
+  });
+  const detached = /단독주택|다가구주택|전업농어가/.test(usage || "");
 
-  // 1) 행정구역 토큰
-  const adminMatch = s.match(/(\S+(?:특별시|광역시|특별자치도|도)\s+\S+(?:시|군|구)(?:\s+\S+(?:읍|면|동|리))?(?:\s+\S+(?:리|동))?)/);
-  const admin = adminMatch ? adminMatch[1].replace(/\s+/g, " ") : "";
+  if (detached) return `detached|${key.front}`;
 
-  // 2) 번지 (본번만 추출, 부번 무시)
-  //   "1089-40번지" → "1089-40"
-  //   "1089-0번지"  → "1089"
-  //   "1089번지"    → "1089"
-  const jibunMatch = s.match(/(\d+)(?:-(\d+))?\s*번지/);
-  let jibun = "";
-  if (jibunMatch) {
-    const main = jibunMatch[1];
-    const sub = jibunMatch[2];
-    jibun = sub && sub !== "0" ? `${main}-${sub}` : main;
-  }
-
-  // 3) 호 번호 추출 — 다양한 패턴
-  //   "00514" → 514
-  //   "514호" → 514
-  //   "1006호" → 1006
-  //   "0202" → 202 (00202 같은 leading-zero 형태)
-  // 호 번호는 보통 3~5자리. 끝에서 호 키워드 또는 leading-zero 5자리 추출.
-  let ho = "";
-  // 끝 부분에서 N호 찾기
-  const hoEnd = s.match(/(\d{2,5})\s*호\s*$/);
-  if (hoEnd) {
-    ho = String(Number(hoEnd[1]));
-  } else {
-    // 호 키워드 없으면 끝의 마지막 숫자 시퀀스 (4~5자리 우선)
-    const tail = s.match(/(\d{4,5})\s*$/);
-    if (tail) {
-      ho = String(Number(tail[1]));
-    } else {
-      const tail3 = s.match(/(\d{3})\s*$/);
-      if (tail3) ho = String(Number(tail3[1]));
-    }
-  }
-
-  // 4) 면적 버킷 (±2㎡)
+  // 공동주택은 같은 지번·동·호이면서 면적이 거의 같은 경우만 같은 물건으로 묶는다.
   const aBucket = areaM2 != null ? Math.floor(areaM2 / 2) : "?";
-
-  return `${admin}|${jibun}|${ho}|${aBucket}`;
+  return `unit|${key.front}|${key.dong || 0}|${key.ho || 0}|${aBucket}`;
 }
 
 interface Props {
@@ -135,7 +105,7 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
     // 2차: signature로 그룹핑 → 1 row per group
     const groups = new Map<string, typeof eligible>();
     for (const e of eligible) {
-      const sig = propSignature(e.address, e.areaM2);
+      const sig = propSignature(e.address, e.areaM2, e.usage);
       const arr = groups.get(sig) || [];
       arr.push(e);
       groups.set(sig, arr);
@@ -231,7 +201,8 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
         <div className="mt-2 space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
           {items.map((item) => {
             const key = `${item.customerId}-${item.propIdxList.join(",")}`;
-            const allimiUrl = `https://www.realtyprice.kr:447/notice/main/mainBody.htm?addr=${encodeURIComponent(item.address)}`;
+            const lookupAddress = normalizeAdministrativeAddress(item.address);
+            const allimiUrl = `https://www.realtyprice.kr:447/notice/main/mainBody.htm?addr=${encodeURIComponent(lookupAddress)}`;
             return (
               <div
                 key={key}
@@ -241,8 +212,8 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
                   {item.unitDong || "?"}-{item.unitHo || "?"}
                 </span>
                 <span className="font-medium text-ink-2 whitespace-nowrap">{item.customerName}</span>
-                <span className="truncate text-ink-2" title={item.address}>
-                  📍 {item.address}
+                <span className="truncate text-ink-2" title={lookupAddress}>
+                  📍 {lookupAddress}
                   {item.groupSize > 1 && (
                     <span
                       className="ml-1 text-[9.5px] px-1 py-0 rounded bg-indigo-100 text-indigo-800 font-semibold"

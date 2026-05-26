@@ -1,3 +1,5 @@
+import { normalizeAdministrativeAddress } from "./address-normalizer";
+
 /**
  * 주소 → PNU(필지고유번호 19자리) 변환 — juso.go.kr 도로명주소 API 활용
  *
@@ -67,7 +69,7 @@ function extractDongHo(address: string): { dongNm?: string; hoNm?: string; strip
  *   4) "도로명" 명칭이 의심스러운 토큰("부영5", "부업사람으로" 등)도 단지명으로 보고 제거
  */
 function normalizeForJuso(address: string): string {
-  let kw = address.trim();
+  let kw = normalizeAdministrativeAddress(address);
 
   // (1) 행정구역 중복 prefix
   kw = kw.replace(

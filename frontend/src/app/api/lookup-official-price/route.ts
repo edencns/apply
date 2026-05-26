@@ -30,6 +30,7 @@ import {
   makePriceCacheKey,
 } from "@/lib/official-price-cache";
 import { classifyAddress, type RegionType } from "@/lib/region-classifier";
+import { normalizeAdministrativeAddress } from "@/lib/address-normalizer";
 import { addressToPnu } from "@/lib/juso-pnu";
 
 // Vercel serverless(Node.js) IP가 V-World에서 차단되는 문제 우회용으로 Edge Runtime 사용.
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
     if (!guard.ok) return guard.response;
 
     const body = await req.json().catch(() => ({}));
-    const address = String(body?.address || "").trim();
+    const address = normalizeAdministrativeAddress(String(body?.address || "").trim());
     const identifier = String(body?.identifier || "").trim();
     const usage = String(body?.usage || "").trim();
     const year = Number(body?.year) || new Date().getFullYear();
