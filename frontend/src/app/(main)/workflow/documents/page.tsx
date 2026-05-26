@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import WorkflowShell, { WORKFLOW_STEPS } from "@/components/workflow/WorkflowShell";
 import StageCustomerList, { StageColumn } from "@/components/workflow/StageCustomerList";
 import { evaluateFinal } from "@/lib/verification-rules";
@@ -219,6 +220,9 @@ function computeReviewStatus(
 }
 
 export default function DocumentsStepPage() {
+  // 사이드바 sub-tab(?supply=신혼부부 등)에서 공급유형 초기 필터 주입
+  const searchParams = useSearchParams();
+  const supplyParam = searchParams?.get("supply") || "all";
   const [selected, setSelected] = useState<LocalAnnouncement | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [uploading, setUploading] = useState(false);
@@ -1236,6 +1240,9 @@ export default function DocumentsStepPage() {
             stageNumber={5}
             // 이전 1~4단계 부적합자는 5단계에서 가림 (서류 검수 대상에서 제외)
             excludeFailedStages={["registration", "household", "property", "savings"]}
+            // 사이드바 sub-tab(?supply=신혼부부 등)에서 공급유형 초기 필터 주입
+            initialSupplyFilter={supplyParam}
+            resetStageKey="documents"
           />
         </>
       )}

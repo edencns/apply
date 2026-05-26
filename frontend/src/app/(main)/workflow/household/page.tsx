@@ -448,6 +448,7 @@ export default function HouseholdStepPage() {
             evaluate={evaluate}
             columns={columns}
             stageNumber={2}
+            resetStageKey="household"
           />
         </>
       )}

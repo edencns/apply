@@ -26,7 +26,14 @@ import {
 import { formatHousingCode } from "@/lib/housing-code";
 import {
   ChevronRight, Loader2, Search, ArrowUpDown, ArrowUp, ArrowDown,
+  Trash2, RefreshCcw,
 } from "lucide-react";
+import {
+  resetStageDataBulk,
+  STAGE_RESET_LABEL,
+  STAGE_RESET_DESCRIPTION,
+  type StageResetKey,
+} from "@/lib/stage-data-reset";
 
 export interface StageColumn {
   key: string;
@@ -58,6 +65,16 @@ interface Props {
    *     1·2단계 부적합자가 가려진다. 사용자는 토글로 다시 볼 수 있음.
    */
   excludeFailedStages?: PriorStage[];
+  /**
+   * 초기 공급유형 필터 (사이드바 sub-tab 등에서 주입).
+   * 미지정 시 "all". URL query ?supply=XXX 와 연동 가능.
+   */
+  initialSupplyFilter?: string;
+  /**
+   * 이 단계의 「작업 내용 초기화」 키. 지정하면 삭제 모드 토글 + 전체 초기화 버튼이 노출됨.
+   * 1단계(당첨자 등록)는 「고객 레코드 자체」를 다루므로 이 prop을 쓰지 않고 별도 UI 유지.
+   */
+  resetStageKey?: StageResetKey;
 }
 
 /** 특정 단계에서 명확히 fail인지 판정 (missing은 데이터 부족 — 제외 대상 아님) */
@@ -83,7 +100,7 @@ const STAGE_LABEL_KO: Record<PriorStage, string> = {
 
 export default function StageCustomerList({
   announcement, evaluate, columns, prefixColumns = [], stageNumber,
-  excludeFailedStages = [],
+  excludeFailedStages = [], initialSupplyFilter, resetStageKey,
 }: Props) {
   const router = useRouter();
   const [customers, setCustomers] = useState<LocalCustomer[]>([]);
@@ -92,12 +109,20 @@ export default function StageCustomerList({
   const [listTab, setListTab] = useState<"winners" | "standbys" | "all">("winners");
   const [statusFilter, setStatusFilter] = useState<"all" | "ok" | "fail" | "missing">("all");
   const [unitFilter, setUnitFilter] = useState<string>("all");
-  const [supplyFilter, setSupplyFilter] = useState<string>("all");
+  const [supplyFilter, setSupplyFilter] = useState<string>(initialSupplyFilter || "all");
+  // initialSupplyFilter가 바뀌면(예: 사이드바 sub-tab 클릭) 필터 동기화
+  useEffect(() => {
+    if (initialSupplyFilter !== undefined) setSupplyFilter(initialSupplyFilter);
+  }, [initialSupplyFilter]);
   /** 이전 단계 부적합자를 가려둘지 여부 (기본 true — excludeFailedStages가 있으면 자동 활성) */
   const [hidePriorFailed, setHidePriorFailed] = useState<boolean>(true);
   /** 정렬 상태 — null이면 기본 순서(서버 응답) */
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  /** 선택 삭제 모드 — resetStageKey가 있을 때만 의미 있음 */
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [resetBusy, setResetBusy] = useState(false);
 
   /** 헤더 클릭 → 정렬 토글: 같은 컬럼이면 방향 반전, 다른 컬럼이면 새 컬럼+오름차순 */
   const handleSort = (key: string) => {
@@ -369,13 +394,134 @@ export default function StageCustomerList({
             className="w-full pl-8 pr-3 py-1 rounded-md border border-border bg-surface text-[11.5px] placeholder:text-ink-4 focus:outline-none focus:ring-2 focus:ring-accent"
           />
         </div>
+
+        {/* 이 단계 작업 내용 초기화 — resetStageKey가 있을 때만 노출 */}
+        {resetStageKey && !selectMode && (
+          <div className="inline-flex items-center gap-1">
+            <button
+              onClick={() => setSelectMode(true)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11.5px] font-medium text-red-700 bg-white border border-red-200 hover:bg-red-50 transition-colors"
+              title={`「${STAGE_RESET_LABEL[resetStageKey]}」 단계 작업 내용을 선택해서 초기화합니다 (고객 레코드는 유지)`}
+            >
+              <Trash2 className="w-3 h-3" />
+              선택 초기화
+            </button>
+            <button
+              onClick={async () => {
+                if (!resetStageKey) return;
+                const targets = sorted.map((s) => s.customer.id);
+                if (targets.length === 0) {
+                  alert("초기화 대상이 없습니다 (현재 필터에 해당하는 당첨자 없음).");
+                  return;
+                }
+                const label = STAGE_RESET_LABEL[resetStageKey];
+                const desc = STAGE_RESET_DESCRIPTION[resetStageKey].map((d) => `· ${d}`).join("\n");
+                if (!confirm(
+                  `현재 표시 중인 ${targets.length}명 전체의 「${label}」 단계 작업 내용을 초기화하시겠습니까?\n\n` +
+                  `다음 항목이 비워집니다.\n${desc}\n\n` +
+                  `※ 이 작업은 되돌릴 수 없으며, 고객 레코드 자체는 유지됩니다.`,
+                )) return;
+                setResetBusy(true);
+                try {
+                  resetStageDataBulk(targets, resetStageKey);
+                  await loadCustomers();
+                } finally {
+                  setResetBusy(false);
+                }
+              }}
+              disabled={resetBusy || sorted.length === 0}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11.5px] font-medium text-amber-800 bg-white border border-amber-300 hover:bg-amber-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title={`현재 필터에 표시 중인 모든 당첨자(${sorted.length}명)의 「${STAGE_RESET_LABEL[resetStageKey]}」 단계 작업을 한 번에 초기화`}
+            >
+              {resetBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
+              전체 초기화
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* 선택 초기화 모드 — 액션 바 */}
+      {resetStageKey && selectMode && (
+        <div className="mb-3 flex items-center justify-between p-2.5 rounded-md bg-red-50 border border-red-200">
+          <div className="text-[12px] text-red-900">
+            <strong>{selectedIds.size}명</strong> 선택됨
+            {selectedIds.size === 0 && (
+              <span className="text-red-600 ml-2">— 초기화할 당첨자를 행에서 클릭하세요</span>
+            )}
+            <span className="text-ink-3 ml-2 text-[10.5px]">
+              · 대상: 「{STAGE_RESET_LABEL[resetStageKey]}」 단계 데이터만 (다른 단계 결과·고객 레코드는 유지)
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const allIds = sorted.map((s) => s.customer.id);
+                const allSelected = allIds.length > 0 && allIds.every((id) => selectedIds.has(id));
+                if (allSelected) setSelectedIds(new Set());
+                else setSelectedIds(new Set(allIds));
+              }}
+              className="text-[11px] text-red-700 hover:underline"
+            >
+              {sorted.length > 0 && sorted.every((s) => selectedIds.has(s.customer.id))
+                ? "전체 선택 해제"
+                : "전체 선택"}
+            </button>
+            <button
+              onClick={async () => {
+                if (!resetStageKey || selectedIds.size === 0) return;
+                const label = STAGE_RESET_LABEL[resetStageKey];
+                const desc = STAGE_RESET_DESCRIPTION[resetStageKey].map((d) => `· ${d}`).join("\n");
+                if (!confirm(
+                  `선택한 ${selectedIds.size}명의 「${label}」 단계 작업 내용을 초기화하시겠습니까?\n\n` +
+                  `다음 항목이 비워집니다.\n${desc}\n\n` +
+                  `※ 이 작업은 되돌릴 수 없으며, 고객 레코드 자체는 유지됩니다.`,
+                )) return;
+                setResetBusy(true);
+                try {
+                  resetStageDataBulk(Array.from(selectedIds), resetStageKey);
+                  setSelectedIds(new Set());
+                  setSelectMode(false);
+                  await loadCustomers();
+                } finally {
+                  setResetBusy(false);
+                }
+              }}
+              disabled={selectedIds.size === 0 || resetBusy}
+              className="px-3 py-1 rounded-md bg-red-600 text-white text-[11.5px] font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+            >
+              {resetBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+              선택 초기화 ({selectedIds.size})
+            </button>
+            <button
+              onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}
+              className="px-3 py-1 rounded-md bg-white border border-border text-[11.5px] text-ink-2 hover:bg-surface2"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 테이블 */}
       <div className="bg-surface border border-border rounded-lg overflow-hidden">
         <table className="w-full">
           <thead className="bg-surface2 border-b border-border">
             <tr>
+              {selectMode && resetStageKey && (
+                <th className="px-3 py-2.5 w-9">
+                  <input
+                    type="checkbox"
+                    checked={sorted.length > 0 && sorted.every((s) => selectedIds.has(s.customer.id))}
+                    onChange={() => {
+                      const allIds = sorted.map((s) => s.customer.id);
+                      const allSelected = allIds.length > 0 && allIds.every((id) => selectedIds.has(id));
+                      if (allSelected) setSelectedIds(new Set());
+                      else setSelectedIds(new Set(allIds));
+                    }}
+                    className="w-3.5 h-3.5 accent-red-600 cursor-pointer"
+                  />
+                </th>
+              )}
               {prefixColumns.map((col) => {
                 const sortable = !!col.sortValue;
                 const active = sortKey === col.key;
@@ -428,23 +574,57 @@ export default function StageCustomerList({
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={prefixColumns.length + columns.length + 2} className="text-center py-10 text-ink-4">
+              <tr><td colSpan={prefixColumns.length + columns.length + 2 + (selectMode && resetStageKey ? 1 : 0)} className="text-center py-10 text-ink-4">
                 <Loader2 className="w-4 h-4 mx-auto mb-2 animate-spin opacity-60" />
                 <span className="text-xs">불러오는 중...</span>
               </td></tr>
             ) : sorted.length === 0 ? (
-              <tr><td colSpan={prefixColumns.length + columns.length + 2} className="text-center py-10 text-ink-4 text-xs">
+              <tr><td colSpan={prefixColumns.length + columns.length + 2 + (selectMode && resetStageKey ? 1 : 0)} className="text-center py-10 text-ink-4 text-xs">
                 조건에 맞는 고객이 없습니다
               </td></tr>
             ) : sorted.map(({ customer: c, verdict: v }) => {
+              const isChecked = selectedIds.has(c.id);
+              const inSelect = selectMode && !!resetStageKey;
               return (
                 <tr
                   key={c.id}
-                  onClick={() => router.push(`/customers/${c.id}?stage=${stageNumber}`)}
-                  className={`cursor-pointer border-t border-border-soft transition-colors hover:bg-surface2 ${
-                    c.is_standby ? "bg-standby-soft/40" : ""
-                  }`}
+                  onClick={() => {
+                    if (inSelect) {
+                      setSelectedIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(c.id)) next.delete(c.id);
+                        else next.add(c.id);
+                        return next;
+                      });
+                    } else {
+                      router.push(`/customers/${c.id}?stage=${stageNumber}`);
+                    }
+                  }}
+                  className={`cursor-pointer border-t border-border-soft transition-colors ${
+                    inSelect && isChecked
+                      ? "bg-red-50 hover:bg-red-100"
+                      : "hover:bg-surface2"
+                  } ${c.is_standby && !(inSelect && isChecked) ? "bg-standby-soft/40" : ""}`}
                 >
+                  {inSelect && (
+                    <td className="px-3 py-2.5 w-9">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(c.id)) next.delete(c.id);
+                            else next.add(c.id);
+                            return next;
+                          });
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-3.5 h-3.5 accent-red-600 cursor-pointer"
+                      />
+                    </td>
+                  )}
                   {prefixColumns.map((col) => (
                     <td key={`p-${col.key}`} className={`px-3.5 py-2.5 text-[12px] text-ink-2 ${col.cls || ""}`}>
                       {col.render(c, v)}
@@ -471,7 +651,7 @@ export default function StageCustomerList({
                     </td>
                   ))}
                   <td className="px-3 py-2.5 text-right text-ink-4">
-                    <ChevronRight className="w-3.5 h-3.5 inline" />
+                    {!inSelect && <ChevronRight className="w-3.5 h-3.5 inline" />}
                   </td>
                 </tr>
               );

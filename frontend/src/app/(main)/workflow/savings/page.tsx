@@ -316,6 +316,7 @@ export default function SavingsStepPage() {
             stageNumber={4}
             // 1·2·3단계 부적합자는 4단계에서 가림
             excludeFailedStages={["registration", "household", "property"]}
+            resetStageKey="savings"
           />
         </>
       )}
