@@ -31,6 +31,15 @@ interface QueueItem {
   usage?: string;
 }
 
+type SortBy = "name" | "address";
+
+function compareKo(a?: string | null, b?: string | null): number {
+  return String(a || "").localeCompare(String(b || ""), "ko", {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
 interface Props {
   customers: LocalCustomer[];
   onUpdate: () => void;
@@ -40,6 +49,7 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
   const [open, setOpen] = useState(true);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<SortBy>("name");
 
   // 가격 입력 필요 항목 — 60㎡ 이하 + 보유 + 주거용 + 가격 미상
   // ⚠ 일반공급 신청자에 한정 — 특별공급은 「유주택자 = 부적격」이라
@@ -74,6 +84,27 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
   }
 
   if (items.length === 0) return null;
+
+  const sortedItems = items.slice().sort((a, b) => {
+    const addressA = normalizeAdministrativeAddress(a.address);
+    const addressB = normalizeAdministrativeAddress(b.address);
+
+    if (sortBy === "address") {
+      return (
+        compareKo(addressA, addressB) ||
+        compareKo(a.customerName, b.customerName) ||
+        compareKo(a.unitDong, b.unitDong) ||
+        compareKo(a.unitHo, b.unitHo)
+      );
+    }
+
+    return (
+      compareKo(a.customerName, b.customerName) ||
+      compareKo(addressA, addressB) ||
+      compareKo(a.unitDong, b.unitDong) ||
+      compareKo(a.unitHo, b.unitHo)
+    );
+  });
 
   const handleSave = async (item: QueueItem) => {
     const key = item.key;
@@ -132,7 +163,25 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
 
       {open && (
         <div className="mt-2 space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
-          {items.map((item) => {
+          <div className="sticky top-0 z-10 flex justify-end bg-amber-50/95 py-1">
+            <div className="inline-flex overflow-hidden rounded border border-amber-200 bg-white text-[11px]">
+              <button
+                type="button"
+                onClick={() => setSortBy("name")}
+                className={`px-2.5 py-1 ${sortBy === "name" ? "bg-amber-200 text-amber-950 font-semibold" : "text-amber-900 hover:bg-amber-50"}`}
+              >
+                이름순
+              </button>
+              <button
+                type="button"
+                onClick={() => setSortBy("address")}
+                className={`border-l border-amber-200 px-2.5 py-1 ${sortBy === "address" ? "bg-amber-200 text-amber-950 font-semibold" : "text-amber-900 hover:bg-amber-50"}`}
+              >
+                주소순
+              </button>
+            </div>
+          </div>
+          {sortedItems.map((item) => {
             const key = item.key;
             const lookupAddress = normalizeAdministrativeAddress(item.address);
             const allimiUrl = `https://www.realtyprice.kr:447/notice/main/mainBody.htm?addr=${encodeURIComponent(lookupAddress)}`;
