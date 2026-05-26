@@ -21,12 +21,16 @@ import { normalizeAdministrativeAddress } from "@/lib/address-normalizer";
 import { ExternalLink, Save, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
 interface QueueItem {
-  customerId: number;
-  customerName: string;
-  unitDong?: string;
-  unitHo?: string;
-  /** 묶인 properties 인덱스들 — 가격 저장 시 모든 인덱스에 동시 반영 */
-  propIdxList: number[];
+  key: string;
+  targets: Array<{
+    customerId: number;
+    customerName: string;
+    unitDong?: string;
+    unitHo?: string;
+    propIdx: number;
+  }>;
+  customerLabel: string;
+  unitLabel: string;
   address: string;
   areaM2?: number;
   usage?: string;
@@ -60,10 +64,10 @@ function propSignature(address: string, areaM2?: number, usage?: string): string
   });
   const detached = /단독주택|다가구주택|전업농어가/.test(usage || "");
 
-  if (detached) return `detached|${key.front}`;
-
   // 공동주택은 같은 지번·동·호이면서 면적이 거의 같은 경우만 같은 물건으로 묶는다.
   const aBucket = areaM2 != null ? Math.floor(areaM2 / 2) : "?";
+  if (detached) return `detached|${key.front}|${aBucket}`;
+  if (!key.ho) return `unit-raw|${normalizedAddress}|${aBucket}`;
   return `unit|${key.front}|${key.dong || 0}|${key.ho || 0}|${aBucket}`;
 }
 
@@ -83,54 +87,81 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
   //
   // 동일 부동산이 다른 표기로 중복 등록된 케이스(예: "0019 00202" vs "19동 202호"는
   // 같은 부동산) 자동 묶음 처리. 가격 저장 시 묶인 모든 인덱스에 동시 반영.
-  const items: QueueItem[] = [];
+  const groups = new Map<string, Array<{
+    customerId: number;
+    customerName: string;
+    unitDong?: string;
+    unitHo?: string;
+    idx: number;
+    address: string;
+    areaM2?: number;
+    usage?: string;
+  }>>();
+
   for (const c of customers) {
     const supplyType = (c.supply_type || "일반공급").trim();
     const isGeneralSupply = /일반공급/.test(supplyType) || supplyType === "";
     if (!isGeneralSupply) continue;
 
-    // 1차: 적격 행 수집 (인덱스 보존)
-    const eligible: Array<{ idx: number; address: string; areaM2?: number; usage?: string }> = [];
     (c.properties || []).forEach((p, idx) => {
       const isSmall = (p.areaM2 ?? Infinity) <= 60 && (p.areaM2 ?? 0) > 0;
       const noPrice = (p as any).officialPrice == null;
       const notTransferred = !p.transferredDate;
       const isRes = !p.usage || /아파트|주택|연립|다세대|단독|다가구|공동/.test(p.usage);
       if (isSmall && noPrice && notTransferred && isRes) {
-        eligible.push({ idx, address: p.address, areaM2: p.areaM2, usage: p.usage });
+        const sig = propSignature(p.address, p.areaM2, p.usage);
+        const arr = groups.get(sig) || [];
+        arr.push({
+          customerId: c.id,
+          customerName: c.name,
+          unitDong: (c as any).unit_dong,
+          unitHo: (c as any).unit_ho,
+          idx,
+          address: p.address,
+          areaM2: p.areaM2,
+          usage: p.usage,
+        });
+        groups.set(sig, arr);
       }
     });
-    if (eligible.length === 0) continue;
-
-    // 2차: signature로 그룹핑 → 1 row per group
-    const groups = new Map<string, typeof eligible>();
-    for (const e of eligible) {
-      const sig = propSignature(e.address, e.areaM2, e.usage);
-      const arr = groups.get(sig) || [];
-      arr.push(e);
-      groups.set(sig, arr);
-    }
-    groups.forEach((arr) => {
-      // 대표 항목 = 가장 정보 많아 보이는 행 (긴 주소 우선)
-      const rep = arr.slice().sort((a, b) => b.address.length - a.address.length)[0];
-      items.push({
-        customerId: c.id,
-        customerName: c.name,
-        unitDong: (c as any).unit_dong,
-        unitHo: (c as any).unit_ho,
-        propIdxList: arr.map((x) => x.idx),
-        address: rep.address,
-        areaM2: rep.areaM2,
-        usage: rep.usage,
-        groupSize: arr.length,
-      });
-    });
   }
+
+  const items: QueueItem[] = Array.from(groups.entries()).map(([key, arr]) => {
+    const rep = arr.slice().sort((a, b) => b.address.length - a.address.length)[0];
+    const customerNames = Array.from(new Set(arr.map((x) => x.customerName).filter(Boolean)));
+    const unitLabels = Array.from(
+      new Set(arr.map((x) => `${x.unitDong || "?"}-${x.unitHo || "?"}`)),
+    );
+    return {
+      key,
+      targets: arr.map((x) => ({
+        customerId: x.customerId,
+        customerName: x.customerName,
+        unitDong: x.unitDong,
+        unitHo: x.unitHo,
+        propIdx: x.idx,
+      })),
+      customerLabel: customerNames.length <= 2
+        ? customerNames.join(", ")
+        : `${customerNames[0]} 외 ${customerNames.length - 1}명`,
+      unitLabel: unitLabels.length <= 2
+        ? unitLabels.join(", ")
+        : `${unitLabels[0]} 외 ${unitLabels.length - 1}`,
+      address: rep.address,
+      areaM2: rep.areaM2,
+      usage: rep.usage,
+      groupSize: arr.length,
+    };
+  }).sort((a, b) => {
+    const byUnit = a.unitLabel.localeCompare(b.unitLabel, "ko");
+    if (byUnit !== 0) return byUnit;
+    return a.customerLabel.localeCompare(b.customerLabel, "ko");
+  });
 
   if (items.length === 0) return null;
 
   const handleSave = async (item: QueueItem) => {
-    const key = `${item.customerId}-${item.propIdxList.join(",")}`;
+    const key = item.key;
     const raw = draft[key] || "";
     const num = parsePriceInput(raw);
     if (!num || num <= 0) {
@@ -139,21 +170,30 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
     }
     setSaving(key);
     try {
-      const c = localCustomers.get(item.customerId);
-      if (!c) return;
-      const props = (c.properties || []).slice();
-      // 묶인 모든 인덱스에 동일 가격 반영
-      for (const idx of item.propIdxList) {
-        const target = props[idx];
-        if (!target) continue;
-        props[idx] = {
-          ...target,
-          officialPrice: num,
-          officialPriceYear: new Date().getFullYear(),
-          officialPriceSource: "manual",
-        } as any;
+      const byCustomer = new Map<number, number[]>();
+      for (const target of item.targets) {
+        const idxs = byCustomer.get(target.customerId) || [];
+        idxs.push(target.propIdx);
+        byCustomer.set(target.customerId, idxs);
       }
-      localCustomers.update(item.customerId, { properties: props as any });
+
+      for (const [customerId, propIdxList] of byCustomer.entries()) {
+        const c = localCustomers.get(customerId);
+        if (!c) continue;
+        const props = (c.properties || []).slice();
+        // 같은 물건으로 묶인 모든 고객·행에 동일 가격 반영
+        for (const idx of propIdxList) {
+          const target = props[idx];
+          if (!target) continue;
+          props[idx] = {
+            ...target,
+            officialPrice: num,
+            officialPriceYear: new Date().getFullYear(),
+            officialPriceSource: "manual",
+          } as any;
+        }
+        localCustomers.update(customerId, { properties: props as any });
+      }
       setDraft((d) => {
         const n = { ...d };
         delete n[key];
@@ -200,18 +240,23 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
       {open && (
         <div className="mt-2 space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
           {items.map((item) => {
-            const key = `${item.customerId}-${item.propIdxList.join(",")}`;
+            const key = item.key;
             const lookupAddress = normalizeAdministrativeAddress(item.address);
             const allimiUrl = `https://www.realtyprice.kr:447/notice/main/mainBody.htm?addr=${encodeURIComponent(lookupAddress)}`;
+            const targetTitle = item.targets
+              .map((t) => `${t.unitDong || "?"}-${t.unitHo || "?"} ${t.customerName}`)
+              .join(", ");
             return (
               <div
                 key={key}
                 className="grid grid-cols-[auto_auto_1fr_auto_auto_auto_auto] items-center gap-2 p-2 rounded bg-white border border-amber-100 text-[11.5px]"
               >
-                <span className="font-mono text-ink-3 whitespace-nowrap">
-                  {item.unitDong || "?"}-{item.unitHo || "?"}
+                <span className="font-mono text-ink-3 whitespace-nowrap" title={targetTitle}>
+                  {item.unitLabel}
                 </span>
-                <span className="font-medium text-ink-2 whitespace-nowrap">{item.customerName}</span>
+                <span className="font-medium text-ink-2 whitespace-nowrap" title={targetTitle}>
+                  {item.customerLabel}
+                </span>
                 <span className="truncate text-ink-2" title={lookupAddress}>
                   📍 {lookupAddress}
                   {item.groupSize > 1 && (
