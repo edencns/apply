@@ -164,7 +164,7 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
       {open && (
         <div className="mt-2 space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
           <div className="sticky top-0 z-10 flex justify-end bg-amber-50/95 py-1">
-            <div className="inline-flex overflow-hidden rounded border border-amber-200 bg-white text-[11px]">
+            <div className="inline-flex overflow-hidden rounded border border-amber-200 bg-surface text-[11px]">
               <button
                 type="button"
                 onClick={() => setSortBy("name")}
@@ -188,7 +188,7 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
             return (
               <div
                 key={key}
-                className="grid grid-cols-[auto_auto_1fr_auto_auto_auto_auto] items-center gap-2 p-2 rounded bg-white border border-amber-100 text-[11.5px]"
+                className="grid grid-cols-[auto_auto_1fr_auto_auto_auto_auto] items-center gap-2 p-2 rounded bg-surface border border-amber-100 text-[11.5px]"
               >
                 <span className="font-mono text-ink-3 whitespace-nowrap">
                   {item.unitDong || "?"}-{item.unitHo || "?"}
@@ -207,7 +207,7 @@ export default function ManualPriceQueue({ customers, onUpdate }: Props) {
                   href={allimiUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 whitespace-nowrap"
+                  className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-1 rounded bg-accent-soft hover:bg-surface2 text-accent border border-accent-line whitespace-nowrap"
                   title="공시가격 알리미 새 탭 열기 (해당 주소 검색)"
                 >
                   <ExternalLink className="w-3 h-3" /> 알리미

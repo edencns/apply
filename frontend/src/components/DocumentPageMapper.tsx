@@ -373,7 +373,7 @@ export default function DocumentPageMapper({
     <div className="fixed inset-0 bg-black/60 z-50 flex" onClick={onClose}>
       <div
         ref={containerRef}
-        className="bg-white w-full h-full max-w-[1700px] mx-auto my-2 rounded-lg overflow-hidden flex flex-col"
+        className="bg-surface w-full h-full max-w-[1700px] mx-auto my-2 rounded-lg overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
@@ -385,7 +385,7 @@ export default function DocumentPageMapper({
                 페이지 매퍼 {bundleFilename && <span className="text-ink-3 font-normal">· {bundleFilename}</span>}
               </h2>
               <p className="text-[10px] text-ink-3">
-                <strong>워크플로우</strong>: ① 페이지 이동 (휠/← →/숫자/썸네일) → ② 우측 서류 [+] 클릭 — 한 서류에 <strong className="text-indigo-700">여러 페이지 추가 가능</strong>
+                <strong>워크플로우</strong>: ① 페이지 이동 (휠/← →/숫자/썸네일) → ② 우측 서류 [+] 클릭 — 한 서류에 <strong className="text-accent">여러 페이지 추가 가능</strong>
               </p>
             </div>
           </div>
@@ -405,7 +405,7 @@ export default function DocumentPageMapper({
               onTouchStart={() => startRepeat(-1)}
               onTouchEnd={stopRepeat}
               disabled={currentPage <= 1}
-              className="p-1 hover:bg-white rounded disabled:opacity-30"
+              className="p-1 hover:bg-surface2 rounded disabled:opacity-30"
               title="이전 페이지 (← / PgUp · 길게 눌러 빠르게)"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -420,12 +420,12 @@ export default function DocumentPageMapper({
                 if (Number.isFinite(v)) setCurrentPage(v);
               }}
               onKeyDown={(e) => { if (e.key === "Enter") jumpTo(currentPage); }}
-              className="w-16 border-2 border-indigo-300 rounded px-1.5 py-0.5 text-sm text-center font-bold bg-white"
+              className="w-16 border-2 border-accent-line rounded px-1.5 py-0.5 text-sm text-center font-bold bg-bg"
             />
             <span className="text-ink-3 text-xs">/ {totalP}</span>
             <button
               onClick={() => jumpTo(currentPage)}
-              className="ml-1 px-2.5 py-0.5 rounded bg-indigo-600 text-white text-[11px] font-medium hover:bg-indigo-700"
+              className="ml-1 px-2.5 py-0.5 rounded bg-accent text-[#0a0a0a] text-[11px] font-medium hover:bg-accent"
             >
               이동
             </button>
@@ -436,7 +436,7 @@ export default function DocumentPageMapper({
               onTouchStart={() => startRepeat(1)}
               onTouchEnd={stopRepeat}
               disabled={currentPage >= totalP}
-              className="p-1 hover:bg-white rounded disabled:opacity-30"
+              className="p-1 hover:bg-surface2 rounded disabled:opacity-30"
               title="다음 페이지 (→ / PgDn · 길게 눌러 빠르게)"
             >
               <ChevronRight className="w-4 h-4" />
@@ -473,10 +473,10 @@ export default function DocumentPageMapper({
           {/* PDF 뷰어 */}
           <div
             ref={wheelRef}
-            className="flex-1 flex flex-col min-w-0 bg-gray-100"
+            className="flex-1 flex flex-col min-w-0 bg-surface2"
             onWheel={onWheelZone}
           >
-            <div className="px-3 py-1.5 bg-blue-50 border-b border-blue-100 text-[11px] text-blue-900 flex items-center gap-1.5">
+            <div className="px-3 py-1.5 bg-accent-soft border-b border-accent-line text-[11px] text-accent flex items-center gap-1.5">
               <span>💡</span>
               <span>
                 <strong>이동:</strong> 마우스 휠 / 키보드 ← → / 하단 썸네일 클릭. <strong>같은 서류에 여러 페이지를</strong> [+] 버튼으로 추가하세요.
@@ -485,11 +485,11 @@ export default function DocumentPageMapper({
             <iframe
               key={iframeKey}
               src={`${bundleUrl}#page=${currentPage}&toolbar=0&navpanes=0&view=FitH`}
-              className="flex-1 w-full bg-gray-200"
+              className="flex-1 w-full bg-surface2"
               title="서류 묶음 PDF"
             />
             {/* 썸네일 바 */}
-            <div className="px-2 py-2 bg-white border-t border-border max-h-44 overflow-y-auto">
+            <div className="px-2 py-2 bg-surface border-t border-border max-h-44 overflow-y-auto">
               <div className="text-[10px] text-ink-3 mb-1.5 uppercase tracking-wide font-medium flex items-center gap-2">
                 <span>썸네일</span>
                 <span className="text-ink-4">· 전체 {totalP}p · 지정됨 {pageAssignments.size}p</span>
@@ -514,10 +514,10 @@ export default function DocumentPageMapper({
                       onClick={() => jumpTo(p)}
                       className={`relative rounded border-2 overflow-hidden transition group ${
                         isCurrent
-                          ? "border-indigo-600 ring-2 ring-indigo-200"
+                          ? "border-accent ring-2 ring-accent"
                           : hasAssign
                             ? "border-emerald-400"
-                            : sugBorder ?? "border-gray-200 hover:border-indigo-300"
+                            : sugBorder ?? "border-border hover:border-accent-line"
                       }`}
                       title={
                         docs.length > 0
@@ -530,12 +530,12 @@ export default function DocumentPageMapper({
                       {thumbUrl ? (
                         <img src={thumbUrl} alt={`p${p}`} className="w-full h-auto block" />
                       ) : (
-                        <div className="w-full aspect-[3/4] bg-gray-100 flex items-center justify-center text-[10px] text-ink-4">
+                        <div className="w-full aspect-[3/4] bg-surface2 flex items-center justify-center text-[10px] text-ink-4">
                           로딩…
                         </div>
                       )}
                       <span className={`absolute top-0 left-0 px-1 text-[9px] font-bold ${
-                        isCurrent ? "bg-indigo-600 text-white" : "bg-white/90 text-ink-2"
+                        isCurrent ? "bg-accent text-[#0a0a0a]" : "bg-surface2/90 text-ink-2"
                       }`}>
                         {p}
                       </span>
@@ -565,7 +565,7 @@ export default function DocumentPageMapper({
           </div>
 
           {/* 우: 서류 목록 */}
-          <div className="w-[360px] flex-shrink-0 flex flex-col border-l border-border bg-white">
+          <div className="w-[360px] flex-shrink-0 flex flex-col border-l border-border bg-surface">
             <div className="px-3 py-2 border-b border-border bg-surface2/50">
               <div className="flex items-center justify-between gap-2 mb-1">
                 <h3 className="text-xs font-semibold text-ink-2">서류 목록</h3>
@@ -573,16 +573,16 @@ export default function DocumentPageMapper({
                   type="button"
                   onClick={runAutoClassify}
                   disabled={classifying}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold bg-accent hover:bg-accent text-[#0a0a0a] disabled:opacity-50"
                   title="Gemini Vision으로 PDF 페이지를 서류 종류로 자동 분류 (제안만, 사용자 확인 필요)"
                 >
                   {classifying ? "분석 중…" : aiSuggestions.size > 0 ? "🤖 재분석" : "🤖 AI 자동 분류"}
                 </button>
               </div>
               <p className="text-[10px] text-ink-3 leading-relaxed">
-                현재 <strong className="text-indigo-700">{currentPage}p</strong>를 [+] 버튼으로 서류에 추가/제거하세요.
+                현재 <strong className="text-accent">{currentPage}p</strong>를 [+] 버튼으로 서류에 추가/제거하세요.
                 {aiSuggestions.size > 0 && (
-                  <span className="block mt-0.5 text-indigo-700">
+                  <span className="block mt-0.5 text-accent">
                     ✨ AI가 {aiSuggestions.size}p 분류 — 각 서류의 「제안 적용」 클릭해 일괄 추가
                   </span>
                 )}
@@ -611,7 +611,7 @@ export default function DocumentPageMapper({
                         isAutoVerified
                           ? "border-emerald-300 bg-emerald-50/80"
                           : isOnCurrent
-                            ? "border-indigo-400 bg-indigo-50 ring-1 ring-indigo-200"
+                            ? "border-accent bg-accent-soft ring-1 ring-accent"
                             : pages.length > 0
                               ? "border-emerald-200 bg-emerald-50/60"
                               : "border-border"
@@ -633,7 +633,7 @@ export default function DocumentPageMapper({
                                 해당자
                               </span>
                             ) : (
-                              <span className="text-[9px] bg-blue-100 text-blue-800 px-1 py-0.5 rounded font-semibold">
+                              <span className="text-[9px] bg-accent-soft text-accent px-1 py-0.5 rounded font-semibold">
                                 필수
                               </span>
                             )}
@@ -668,7 +668,7 @@ export default function DocumentPageMapper({
                                     onClick={() => jumpTo(p)}
                                     className={`px-1 py-0 rounded text-[10px] font-mono ${
                                       p === currentPage
-                                        ? "bg-indigo-600 text-white"
+                                        ? "bg-accent text-[#0a0a0a]"
                                         : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
                                     }`}
                                     title={`${p}p 보기`}
@@ -712,8 +712,8 @@ export default function DocumentPageMapper({
                                         onClick={() => jumpTo(p)}
                                         className={`px-1.5 py-0.5 rounded font-mono font-semibold text-[10px] ${
                                           isCur
-                                            ? "bg-indigo-600 text-white ring-1 ring-indigo-300"
-                                            : "bg-white/80 hover:bg-white border border-current"
+                                            ? "bg-accent text-[#0a0a0a] ring-1 ring-accent"
+                                            : "bg-surface2/80 hover:bg-surface2 border border-current"
                                         }`}
                                         title={`${p}p로 이동 — ${sug?.reason || sug?.docType || ""} (${sug?.confidence || "?"})`}
                                       >
@@ -735,7 +735,7 @@ export default function DocumentPageMapper({
                                   </span>
                                   <button
                                     onClick={() => applyAllSuggestionsForDoc(d)}
-                                    className="ml-auto px-1.5 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[9.5px] font-semibold whitespace-nowrap"
+                                    className="ml-auto px-1.5 py-0.5 rounded bg-accent hover:bg-accent text-[#0a0a0a] text-[9.5px] font-semibold whitespace-nowrap"
                                     title="제안된 모든 페이지 한 번에 추가"
                                   >
                                     ✓ 일괄 적용
@@ -765,7 +765,7 @@ export default function DocumentPageMapper({
                                 className={`inline-flex items-center gap-0.5 px-2 py-1 rounded text-[10px] font-medium whitespace-nowrap ${
                                   isOnCurrent
                                     ? "bg-red-100 text-red-700 hover:bg-red-200"
-                                    : "bg-indigo-600 text-white hover:bg-indigo-700"
+                                    : "bg-accent text-[#0a0a0a] hover:bg-accent"
                                 }`}
                                 title={isOnCurrent ? `${currentPage}p 제거` : `${currentPage}p 추가`}
                               >
@@ -796,9 +796,9 @@ export default function DocumentPageMapper({
                         const results = df?.checkpointResults || {};
                         const doneCount = checkpoints.filter((c) => results[c.key]?.status === "pass").length;
                         return (
-                          <div className="mt-1.5 p-1.5 rounded bg-white/70 border border-blue-100 text-[10px] space-y-0.5">
+                          <div className="mt-1.5 p-1.5 rounded bg-surface2/70 border border-border text-[10px] space-y-0.5">
                             <div className="flex items-center justify-between">
-                              <div className="text-[9.5px] font-semibold text-blue-900">
+                              <div className="text-[9.5px] font-semibold text-accent">
                                 💡 담당자 확인 포인트
                               </div>
                               <div className="text-[9px] text-ink-4">
@@ -845,14 +845,14 @@ export default function DocumentPageMapper({
                                     <div className="flex flex-shrink-0 gap-0.5 items-center">
                                       <button
                                         onClick={() => onCheckpointChange(d.name, cp.key, { status: status === "pass" ? "pending" : "pass" })}
-                                        className={`px-1 py-0 rounded text-[10px] ${status === "pass" ? "bg-green-600 text-white" : "bg-gray-100 text-ink-3 hover:bg-green-100"}`}
+                                        className={`px-1 py-0 rounded text-[10px] ${status === "pass" ? "bg-green-600 text-white" : "bg-surface2 text-ink-3 hover:bg-green-100"}`}
                                         title="확인 완료"
                                       >
                                         ✓
                                       </button>
                                       <button
                                         onClick={() => onCheckpointChange(d.name, cp.key, { status: status === "fail" ? "pending" : "fail" })}
-                                        className={`px-1 py-0 rounded text-[10px] ${status === "fail" ? "bg-red-600 text-white" : "bg-gray-100 text-ink-3 hover:bg-red-100"}`}
+                                        className={`px-1 py-0 rounded text-[10px] ${status === "fail" ? "bg-red-600 text-white" : "bg-surface2 text-ink-3 hover:bg-red-100"}`}
                                         title="문제 있음"
                                       >
                                         ✗

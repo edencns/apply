@@ -281,16 +281,24 @@ export default function DashboardPage() {
     return rows.slice(0, 8);
   }, [customers, activeAnn]);
 
-  /** 카드 정의: 위에서부터 자주 보는 순서 — 실무 우선순위 반영
-   *  href는 클릭 시 해당 화면으로 이동 (필터링이 가능한 곳으로 연결) */
+  // Hero용 — 활성 공고의 가장 가까운 마감 (서류접수 우선)
+  const heroDeadline = useMemo(() => {
+    if (!activeAnn) return null;
+    const docEnd = (activeAnn as any).document_submit_end || (activeAnn as any).contract_end;
+    if (!docEnd) return null;
+    const due = new Date(docEnd);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const days = Math.round((due.getTime() - today.getTime()) / 86400000);
+    return { days, label: days >= 0 ? `D-${days}` : `D+${-days}` };
+  }, [activeAnn]);
+
+  /** 카드 정의: 미처리 3종(미제출·확인필요·부적격위험)은 Hero가 흡수 → 보조 통계 4개만 */
   const statCards = [
-    { label: "당첨자",         value: stats.winners,        tone: "neutral" as const, href: "/workflow/registration" },
-    { label: "예비",           value: stats.standbys,       tone: "neutral" as const, href: "/workflow/registration" },
-    { label: "미제출",         value: stats.notSubmitted,   tone: "warn" as const,    href: "/workflow/documents", hint: "서류 한 장도 안 올린 사람" },
-    { label: "확인 필요",      value: stats.needsReview,    tone: "warn" as const,    href: "/workflow/documents", hint: "검수 보류·미검수 합계" },
-    { label: "부적격 위험",    value: stats.atRisk,         tone: "warn" as const,    href: "/workflow/documents", hint: "단계 평가 fail이 1개 이상" },
-    { label: "계약 가능",      value: stats.contractReady,  tone: "ok" as const,      href: "/workflow/documents", hint: "최종 적합 판정자" },
-    { label: "부적격",         value: stats.ineligible,     tone: "fail" as const,    href: "/workflow/documents" },
+    { label: "당첨자",     value: stats.winners,       tone: "neutral" as const, href: "/workflow/registration" },
+    { label: "예비",       value: stats.standbys,      tone: "neutral" as const, href: "/workflow/registration" },
+    { label: "계약 가능",  value: stats.contractReady, tone: "ok" as const,      href: "/workflow/documents", hint: "최종 적합 판정자" },
+    { label: "부적격",     value: stats.ineligible,    tone: "fail" as const,    href: "/workflow/documents" },
   ];
   const toneCls: Record<string, string> = {
     ok: "text-ok",
@@ -311,7 +319,7 @@ export default function DashboardPage() {
           <div className="text-[11px] text-ink-3 uppercase tracking-[0.6px] font-medium mb-1">
             대시보드
           </div>
-          <h1 className="text-xl font-bold text-ink tracking-[-0.3px]">현장 현황</h1>
+          <h1 className="text-3xl font-bold text-ink tracking-[-0.6px]">현장 현황</h1>
         </div>
         <div className="flex gap-2 items-center flex-wrap">
           {cloudCounts && (
@@ -356,7 +364,99 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Phase #4 — 마감일 자동 알림 배너 */}
+      {/* Block B — Announcement picker (Hero가 활성 공고 기준이라 위로) */}
+      <div className="mb-3.5">
+        <AnnouncementPicker
+          announcements={announcements as any}
+          selected={activeAnn as any}
+          onSelect={(a) => setActiveAnn(a as any)}
+          onOpenDetail={() => {}}
+        />
+      </div>
+
+      {/* Hero — 처리 대기 큐 요약 → 서류검토 */}
+      <Link href="/workflow/documents" className="block mb-6">
+        <div className="rounded-xl border border-accent-line bg-accent-soft px-6 py-5 transition-colors hover:brightness-[0.98]">
+          {stats.needsReview === 0 ? (
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-ok text-white">
+                <Check className="w-5 h-5" strokeWidth={2.5} />
+              </span>
+              <div>
+                <div className="text-lg font-bold text-ink">처리 대기 0 — 모든 당첨자 검토 완료</div>
+                <div className="text-xs text-ink-3 mt-0.5">새 당첨자 등록 또는 다른 공고를 확인하세요</div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <div className="text-[11px] font-medium uppercase tracking-[0.6px] text-accent mb-1">처리 대기</div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[44px] leading-none font-bold tracking-[-1.5px] text-ink tnum">
+                    {stats.needsReview}
+                  </span>
+                  <span className="text-base text-ink-2 font-medium">건</span>
+                </div>
+                <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+                  {stats.notSubmitted > 0 && (
+                    <span className="badge-warn">미제출 {stats.notSubmitted}</span>
+                  )}
+                  {stats.atRisk > 0 && (
+                    <span className="badge-fail">부적격 위험 {stats.atRisk}</span>
+                  )}
+                  {heroDeadline && (
+                    <span
+                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-medium ${
+                        heroDeadline.days <= 5 ? "bg-fail-soft text-fail" : "bg-surface2 text-ink-3"
+                      }`}
+                    >
+                      마감 {heroDeadline.label}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <span className="btn-accent inline-flex items-center gap-1.5 text-sm px-4 py-2">
+                큐 열기 <ArrowRight className="w-4 h-4" />
+              </span>
+            </div>
+          )}
+        </div>
+      </Link>
+
+      {/* Block C — Stats grid (보조 통계 4개) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-6">
+        {statCards.map((s) => {
+          const valueCls =
+            s.tone === "ok" ? "text-ok"
+            : s.tone === "fail" ? "text-fail"
+            : "text-ink";
+          const card = (
+            <div
+              className="card !p-3.5 transition-colors hover:bg-surface2 cursor-pointer h-full"
+              title={(s as any).hint}
+            >
+              <div className="text-[11px] text-ink-3 font-medium">{s.label}</div>
+              <div className="flex items-baseline gap-2 mt-1">
+                <div className={`text-[30px] font-bold tracking-[-1px] tnum ${valueCls}`}>
+                  {s.value.toLocaleString()}
+                </div>
+              </div>
+              {(s as any).hint && (
+                <div className="text-[9.5px] text-ink-4 mt-1 leading-tight">
+                  {(s as any).hint}
+                </div>
+              )}
+            </div>
+          );
+          return (s as any).href ? (
+            <Link key={s.label} href={(s as any).href}>{card}</Link>
+          ) : (
+            <div key={s.label}>{card}</div>
+          );
+        })}
+      </div>
+
+      {/* 마감일 자동 알림 배너 (전체 공고 교차 — 보조) */}
       {(() => {
         const customersByAnn = new Map<number | string, LocalCustomer[]>();
         for (const a of announcements) {
@@ -366,12 +466,12 @@ export default function DashboardPage() {
         if (alerts.length === 0) return null;
         const top = alerts.slice(0, 4);
         return (
-          <div className="mb-4 space-y-1.5">
+          <div className="mb-6 space-y-1.5">
             {top.map((a, i) => (
               <Link
                 key={i}
                 href={`/announcements/${a.announcementId}`}
-                className={`block border rounded-lg px-3 py-2 text-xs transition-colors hover:bg-black/5 ${alertColorClass(a.level)}`}
+                className={`block border rounded-lg px-3 py-2 text-xs transition-colors hover:bg-white/5 ${alertColorClass(a.level)}`}
               >
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -399,52 +499,8 @@ export default function DashboardPage() {
         );
       })()}
 
-      {/* Block B — Announcement picker */}
-      <div className="mb-3.5">
-        <AnnouncementPicker
-          announcements={announcements as any}
-          selected={activeAnn as any}
-          onSelect={(a) => setActiveAnn(a as any)}
-          onOpenDetail={() => {}}
-        />
-      </div>
-
-      {/* Block C — Stats grid (실무 우선순위 7개 카드) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 mb-4">
-        {statCards.map((s) => {
-          const valueCls =
-            s.tone === "ok" ? "text-ok"
-            : s.tone === "warn" ? "text-warn"
-            : s.tone === "fail" ? "text-fail"
-            : "text-ink";
-          const card = (
-            <div
-              className="card !p-3.5 transition-colors hover:bg-surface2 cursor-pointer h-full"
-              title={(s as any).hint}
-            >
-              <div className="text-[11px] text-ink-3 font-medium">{s.label}</div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <div className={`text-[22px] font-bold tracking-[-0.5px] tnum ${valueCls}`}>
-                  {s.value.toLocaleString()}
-                </div>
-              </div>
-              {(s as any).hint && (
-                <div className="text-[9.5px] text-ink-4 mt-1 leading-tight">
-                  {(s as any).hint}
-                </div>
-              )}
-            </div>
-          );
-          return (s as any).href ? (
-            <Link key={s.label} href={(s as any).href}>{card}</Link>
-          ) : (
-            <div key={s.label}>{card}</div>
-          );
-        })}
-      </div>
-
       {/* Block D — Stage progress */}
-      <div className="bg-surface border border-border rounded-lg p-[18px] mb-4">
+      <div className="bg-surface border border-border rounded-lg p-[18px] mb-6">
         <div className="flex items-center justify-between mb-3.5">
           <div className="text-[13px] font-semibold text-ink">검수 진행 현황</div>
           <div className="text-[11px] text-ink-3">
@@ -469,10 +525,10 @@ export default function DashboardPage() {
                   <span
                     className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold tnum ${
                       isDone
-                        ? "bg-ok text-white"
+                        ? "bg-ok text-[#0a0a0a]"
                         : isActive
-                          ? "bg-accent text-white"
-                          : "bg-surface text-ink-3 border border-border"
+                          ? "bg-accent text-[#0a0a0a]"
+                          : "bg-surface2 text-ink-3 border border-border"
                     }`}
                   >
                     {isDone ? <Check className="w-2.5 h-2.5" strokeWidth={2.5} /> : s.n}
@@ -530,9 +586,9 @@ export default function DashboardPage() {
                 <tbody>
                   {attentionList.map((r) => {
                     const riskCls =
-                      r.risk === "high" ? "bg-fail text-white"
-                      : r.risk === "med" ? "bg-warn text-white"
-                      : "bg-ink-4 text-white";
+                      r.risk === "high" ? "bg-fail text-[#0a0a0a]"
+                      : r.risk === "med" ? "bg-warn text-[#0a0a0a]"
+                      : "bg-ink-4 text-[#0a0a0a]";
                     const riskLabel =
                       r.risk === "high" ? "높음" : r.risk === "med" ? "중간" : "낮음";
                     return (

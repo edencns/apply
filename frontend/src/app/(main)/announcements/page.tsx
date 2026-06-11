@@ -868,13 +868,13 @@ function AnnouncementsPageInner() {
             onClick={() => setTab(key)}
             className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all flex-1 ${
               tab === key
-                ? "bg-white text-accent shadow-sm"
+                ? "bg-accent-soft text-accent shadow-sm"
                 : "text-ink-3 hover:text-ink-2"
             }`}
           >
             {label}
             <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-              tab === key ? "bg-accent-soft text-accent" : "bg-gray-200 text-ink-3"
+              tab === key ? "bg-accent-soft text-accent" : "bg-surface2 text-ink-3"
             }`}>{count}</span>
           </button>
         ))}
@@ -902,7 +902,7 @@ function AnnouncementsPageInner() {
             return (
             <div
               key={ann.id}
-              className="card hover:shadow-md hover:border-blue-300 transition-all group border-l-4 border-l-blue-200"
+              className="card hover:shadow-md hover:border-accent-line transition-all group border-l-4 border-l-accent"
             >
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <a
@@ -910,9 +910,9 @@ function AnnouncementsPageInner() {
                   className="flex items-center gap-3 min-w-0 flex-1"
                 >
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${
-                    tab === "done" ? "bg-surface2 group-hover:bg-gray-200" : "bg-accent-soft group-hover:bg-accent-soft"
+                    tab === "done" ? "bg-surface2 group-hover:bg-surface2" : "bg-accent-soft group-hover:bg-accent-soft"
                   }`}>
-                    <BookOpen className={`w-5 h-5 ${tab === "done" ? "text-ink-4" : "text-blue-500"}`} />
+                    <BookOpen className={`w-5 h-5 ${tab === "done" ? "text-ink-4" : "text-accent"}`} />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -970,7 +970,7 @@ function AnnouncementsPageInner() {
                     )}
                   </button>
                   <a href={linkHref} className="flex-shrink-0">
-                    <ChevronRight className="w-4 h-4 text-ink-4 group-hover:text-blue-500 transition-colors" />
+                    <ChevronRight className="w-4 h-4 text-ink-4 group-hover:text-accent transition-colors" />
                   </a>
                 </div>
               </div>
@@ -983,8 +983,8 @@ function AnnouncementsPageInner() {
       {/* 공고 등록 모달 */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-border-soft sticky top-0 bg-white rounded-t-2xl z-10">
+          <div className="bg-surface rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-border-soft sticky top-0 bg-surface rounded-t-2xl z-10">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-lg font-semibold">모집공고 등록</h2>
                 {/* Phase #7 — 이전 공고 템플릿 복사 */}
@@ -1018,7 +1018,7 @@ function AnnouncementsPageInner() {
                       e.target.value = "";
                     }}
                     defaultValue=""
-                    className="text-xs border border-border rounded-md px-2 py-1.5 bg-white text-ink-2"
+                    className="text-xs border border-border rounded-md px-2 py-1.5 bg-bg text-ink-2"
                     title="이전 공고의 자격·규제·서류 설정을 이 공고에 복사"
                   >
                     <option value="">📋 이전 공고 복사...</option>
@@ -1031,7 +1031,7 @@ function AnnouncementsPageInner() {
             </div>
             <form onSubmit={handleCreate} className="p-6 space-y-5">
               {/* PDF 자동 입력 */}
-              <div className="rounded-lg border border-dashed border-blue-300 bg-accent-soft/50 p-4">
+              <div className="rounded-lg border border-dashed border-accent-line bg-accent-soft/50 p-4">
                 <div className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-lg bg-accent text-white flex items-center justify-center flex-shrink-0">
                     <FileUp className="w-4 h-4" />
@@ -1092,11 +1092,11 @@ function AnnouncementsPageInner() {
                           const isFailure = extendedFilled[0]?.startsWith("⚠️");
                           return (
                             <>
-                              <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded font-semibold ${isFailure ? "bg-amber-100 text-amber-800" : "bg-indigo-100 text-indigo-700"}`}>
+                              <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded font-semibold ${isFailure ? "bg-amber-100 text-amber-800" : "bg-accent-soft text-accent"}`}>
                                 고급
                               </span>
                               {extendedFilled.map((f) => (
-                                <span key={f} className={`inline-block text-[10px] px-1.5 py-0.5 rounded ${isFailure ? "bg-amber-50 text-amber-800" : "bg-indigo-50 text-indigo-700"}`}>{f}</span>
+                                <span key={f} className={`inline-block text-[10px] px-1.5 py-0.5 rounded ${isFailure ? "bg-amber-50 text-amber-800" : "bg-accent-soft text-accent"}`}>{f}</span>
                               ))}
                               {isFailure && lastPdfFile && (
                                 <button
@@ -1131,13 +1131,13 @@ function AnnouncementsPageInner() {
                 <label className="block text-sm font-medium text-ink-2 mb-1">공고명 *</label>
                 <input required value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
                   placeholder="예: 힐스테이트 광진 1차 모집공고"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
+                  className="w-full border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-ink-2 mb-1">공고번호 (부동산원)</label>
                 <input value={form.announcement_no} onChange={(e) => setForm((p) => ({ ...p, announcement_no: e.target.value }))}
                   placeholder="예: 2026-서울-0001"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
+                  className="w-full border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
               </div>
 
               {/* 일정 */}
@@ -1238,14 +1238,14 @@ function AnnouncementsPageInner() {
                     <input type="number" min={0}
                       value={form.rules.min_region_residence_months}
                       onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, min_region_residence_months: Number(e.target.value) } }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-ink-2 mb-1">청약통장 최소 납입 (개월)</label>
                     <input type="number" min={0}
                       value={form.rules.min_subscription_period}
                       onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, min_subscription_period: Number(e.target.value) } }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-ink-2 mb-1">소득 상한 (월, 원)</label>
@@ -1253,7 +1253,7 @@ function AnnouncementsPageInner() {
                       value={form.rules.income_limit}
                       onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, income_limit: e.target.value } }))}
                       placeholder="미설정 시 제한 없음"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                   </div>
                 </div>
 
@@ -1265,7 +1265,7 @@ function AnnouncementsPageInner() {
                       onChange={(e) => setForm((p) => ({ ...p, regionInput: e.target.value }))}
                       onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addRegion())}
                       placeholder="예: 서울특별시"
-                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                      className="flex-1 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                     <button type="button" onClick={addRegion} className="btn-secondary text-sm px-3">추가</button>
                   </div>
                   <div className="flex flex-wrap gap-1">
@@ -1305,32 +1305,32 @@ function AnnouncementsPageInner() {
                         <input value={(form.rules as any).housing_management_no || ""}
                           onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, housing_management_no: e.target.value } as any }))}
                           placeholder="예: 2026000049"
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                          className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-ink-2 mb-1">승인번호</label>
                         <input value={(form.rules as any).approval_no || ""}
                           onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, approval_no: e.target.value } as any }))}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                          className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-ink-2 mb-1">사업주체</label>
                         <input value={(form.rules as any).developer || ""}
                           onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, developer: e.target.value } as any }))}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                          className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-ink-2 mb-1">시공사</label>
                         <input value={(form.rules as any).builder || ""}
                           onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, builder: e.target.value } as any }))}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                          className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                       </div>
                       <div className="col-span-2">
                         <label className="block text-xs font-medium text-ink-2 mb-1">공급위치 (지번 포함)</label>
                         <input value={(form.rules as any).location_address || ""}
                           onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, location_address: e.target.value } as any }))}
                           placeholder="예: 경기도 양주시 옥정동 962-9"
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                          className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                       </div>
                       <div className="col-span-2">
                         <label className="block text-xs font-medium text-ink-2 mb-1">
@@ -1346,7 +1346,7 @@ function AnnouncementsPageInner() {
                           className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none ${
                             !(form.rules as any).announcement_base_date
                               ? "border-red-300 bg-red-50/40"
-                              : "border-gray-300"
+                              : "border-border"
                           }`}
                         />
                         {(() => {
@@ -1393,7 +1393,7 @@ function AnnouncementsPageInner() {
                                           rules: { ...p.rules, announcement_base_date: c.value } as any,
                                         }))
                                       }
-                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-white border border-red-300 text-red-700 hover:bg-red-100"
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-surface2 border border-red-300 text-red-700 hover:bg-red-100"
                                       title={c.source}
                                     >
                                       {c.label}: <span className="font-mono">{c.value.replace("T", " ")}</span>
@@ -1422,21 +1422,21 @@ function AnnouncementsPageInner() {
                         <input type="number" min={0}
                           value={(form.rules as any).general_total_units ?? ""}
                           onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, general_total_units: e.target.value === "" ? null : Number(e.target.value) } as any }))}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                          className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-ink-2 mb-1">특별공급 세대수</label>
                         <input type="number" min={0}
                           value={(form.rules as any).special_total_units ?? ""}
                           onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, special_total_units: e.target.value === "" ? null : Number(e.target.value) } as any }))}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                          className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-ink-2 mb-1">최하층 우선배정</label>
                         <input type="number" min={0}
                           value={(form.rules as any).lowest_floor_priority_units ?? ""}
                           onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, lowest_floor_priority_units: e.target.value === "" ? null : Number(e.target.value) } as any }))}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                          className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                       </div>
                     </div>
                   </div>
@@ -1451,7 +1451,7 @@ function AnnouncementsPageInner() {
                           value={(form.rules as any).min_age ?? ""}
                           onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, min_age: e.target.value === "" ? null : Number(e.target.value) } as any }))}
                           placeholder="예: 19"
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                          className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                       </div>
                       <div className="flex flex-col gap-1.5 pt-4">
                         <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -1489,14 +1489,14 @@ function AnnouncementsPageInner() {
                         <textarea rows={2}
                           value={(form.rules as any).rank1_criteria || ""}
                           onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, rank1_criteria: e.target.value } as any }))}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none" />
+                          className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none resize-none" />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-ink-2 mb-1">2순위 요건 요약</label>
                         <textarea rows={2}
                           value={(form.rules as any).rank2_criteria || ""}
                           onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, rank2_criteria: e.target.value } as any }))}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none" />
+                          className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none resize-none" />
                       </div>
                     </div>
                   </div>
@@ -1510,19 +1510,19 @@ function AnnouncementsPageInner() {
                         <input value={(form.rules as any).resale_restriction || ""}
                           onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, resale_restriction: e.target.value } as any }))}
                           placeholder="예: 3년 또는 '없음'"
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                          className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-ink-2 mb-1">재당첨 제한</label>
                         <input value={(form.rules as any).rewin_restriction || ""}
                           onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, rewin_restriction: e.target.value } as any }))}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                          className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-ink-2 mb-1">거주의무 기간</label>
                         <input value={(form.rules as any).residence_obligation || ""}
                           onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, residence_obligation: e.target.value } as any }))}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                          className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                       </div>
                       <div className="flex items-center gap-3 pt-4">
                         <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -1543,14 +1543,14 @@ function AnnouncementsPageInner() {
                         value={(form.rules as any).duplicate_application_rule || ""}
                         onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, duplicate_application_rule: e.target.value } as any }))}
                         placeholder="예: 1인 1건, 세대 내 중복 시 전원 무효"
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none" />
+                        className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none resize-none" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-ink-2 mb-1">장기 해외체류 제한</label>
                       <textarea rows={2}
                         value={(form.rules as any).long_term_overseas_restriction || ""}
                         onChange={(e) => setForm((p) => ({ ...p, rules: { ...p.rules, long_term_overseas_restriction: e.target.value } as any }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none" />
+                        className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none resize-none" />
                     </div>
                   </div>
 
@@ -1568,18 +1568,18 @@ function AnnouncementsPageInner() {
                     const has = rows.some((x) => x.count > 0);
                     if (!has) return null;
                     return (
-                      <div className="border border-indigo-200 bg-indigo-50/50 rounded-lg p-4 space-y-2">
-                        <h3 className="font-medium text-indigo-800 text-sm flex items-center gap-2">
+                      <div className="border border-accent-line bg-accent-soft rounded-lg p-4 space-y-2">
+                        <h3 className="font-medium text-accent text-sm flex items-center gap-2">
                           🤖 자동 추출된 상세 데이터 (읽기전용)
                         </h3>
-                        <p className="text-xs text-indigo-700">
+                        <p className="text-xs text-accent">
                           아래는 PDF 업로드·고급 분석으로 자동 추출된 배열 데이터입니다. 수정이 필요하면 PDF를 다시 업로드하세요.
                         </p>
                         <div className="flex flex-wrap gap-1.5">
                           {rows.filter((x) => x.count > 0).map((x) => (
-                            <span key={x.key} className="inline-flex items-center gap-1.5 text-xs bg-white border border-indigo-200 text-indigo-700 px-2.5 py-1 rounded-full">
+                            <span key={x.key} className="inline-flex items-center gap-1.5 text-xs bg-surface2 border border-accent-line text-accent px-2.5 py-1 rounded-full">
                               {x.label}
-                              <span className="inline-block bg-indigo-100 text-indigo-700 px-1.5 rounded font-semibold">{x.count}</span>
+                              <span className="inline-block bg-accent-soft text-accent px-1.5 rounded font-semibold">{x.count}</span>
                             </span>
                           ))}
                         </div>

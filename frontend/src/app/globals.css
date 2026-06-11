@@ -1,10 +1,16 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css");
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  html {
+    color-scheme: dark;
+  }
   body {
-    @apply text-ink bg-bg font-sans;
+    @apply text-ink bg-bg font-sans text-[14px];
   }
   .tnum {
     font-variant-numeric: tabular-nums;
@@ -13,16 +19,16 @@
 
 @layer components {
   .card {
-    @apply bg-surface rounded-lg border border-border p-4;
+    @apply bg-surface rounded-lg border border-border p-4 shadow-sm;
   }
   .btn-primary {
-    @apply bg-ink text-white font-medium px-3 py-1.5 rounded-md text-xs hover:bg-ink-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply bg-accent text-[#0a0a0a] font-semibold px-3 py-1.5 rounded-md text-xs hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed;
   }
   .btn-secondary {
     @apply bg-surface border border-border text-ink-2 font-medium px-3 py-1.5 rounded-md text-xs hover:bg-surface2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
   }
   .btn-accent {
-    @apply bg-accent text-white font-medium px-3 py-1.5 rounded-md text-xs hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply bg-accent text-[#0a0a0a] font-semibold px-3 py-1.5 rounded-md text-xs hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed;
   }
   .btn-danger {
     @apply bg-fail text-white font-medium px-3 py-1.5 rounded-md text-xs hover:opacity-90 transition-opacity disabled:opacity-40;

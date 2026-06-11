@@ -400,7 +400,7 @@ export default function StageCustomerList({
           <div className="inline-flex items-center gap-1">
             <button
               onClick={() => setSelectMode(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11.5px] font-medium text-red-700 bg-white border border-red-200 hover:bg-red-50 transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11.5px] font-medium text-red-700 bg-surface border border-red-200 hover:bg-red-50 transition-colors"
               title={`「${STAGE_RESET_LABEL[resetStageKey]}」 단계 작업 내용을 선택해서 초기화합니다 (고객 레코드는 유지)`}
             >
               <Trash2 className="w-3 h-3" />
@@ -430,7 +430,7 @@ export default function StageCustomerList({
                 }
               }}
               disabled={resetBusy || sorted.length === 0}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11.5px] font-medium text-amber-800 bg-white border border-amber-300 hover:bg-amber-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11.5px] font-medium text-amber-800 bg-surface border border-amber-300 hover:bg-amber-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               title={`현재 필터에 표시 중인 모든 당첨자(${sorted.length}명)의 「${STAGE_RESET_LABEL[resetStageKey]}」 단계 작업을 한 번에 초기화`}
             >
               {resetBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
@@ -494,7 +494,7 @@ export default function StageCustomerList({
             </button>
             <button
               onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}
-              className="px-3 py-1 rounded-md bg-white border border-border text-[11.5px] text-ink-2 hover:bg-surface2"
+              className="px-3 py-1 rounded-md bg-surface border border-border text-[11.5px] text-ink-2 hover:bg-surface2"
             >
               취소
             </button>

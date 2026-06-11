@@ -108,7 +108,7 @@ export default function StageSidebar({
                 onClick={() => onSelect(s.key)}
                 className={`w-full flex items-center gap-2 px-2.5 py-2.5 rounded-lg text-sm transition-colors text-left ${
                   active
-                    ? "bg-accent-soft text-accent ring-1 ring-blue-200"
+                    ? "bg-accent-soft text-accent ring-1 ring-accent"
                     : "hover:bg-surface2 text-ink-2"
                 } ${isSuperseded ? "opacity-60" : ""}`}
                 title={s.optional ? `${s.label} (선택)` : s.label}
@@ -120,7 +120,7 @@ export default function StageSidebar({
                 <span className="flex-1 min-w-0 font-medium text-[13px] truncate whitespace-nowrap flex items-center gap-1">
                   <span className="truncate">{s.label}</span>
                   {s.optional && (
-                    <span className="flex-shrink-0 text-[9px] px-1 py-0 rounded bg-gray-100 text-ink-3 font-normal">
+                    <span className="flex-shrink-0 text-[9px] px-1 py-0 rounded bg-surface2 text-ink-3 font-normal">
                       선택
                     </span>
                   )}

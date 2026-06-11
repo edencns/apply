@@ -245,13 +245,13 @@ function WalkInPageInner() {
           return (
             <div key={s} className="flex items-center gap-2">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
-                ${isActive ? "bg-accent text-white" : isDone ? "bg-green-500 text-white" : "bg-gray-200 text-ink-3"}`}>
+                ${isActive ? "bg-accent text-[#0a0a0a]" : isDone ? "bg-green-500 text-white" : "bg-surface2 text-ink-3"}`}>
                 {isDone ? "✓" : i + 1}
               </div>
               <span className={`text-sm ${isActive ? "text-accent font-medium" : "text-ink-4"}`}>
                 {labels[i]}
               </span>
-              {i < 3 && <div className="w-8 h-px bg-gray-300" />}
+              {i < 3 && <div className="w-8 h-px bg-border" />}
             </div>
           );
         })}
@@ -276,7 +276,7 @@ function WalkInPageInner() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="홍길동"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent text-lg"
+                className="w-full border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent text-lg"
                 onKeyDown={(e) => e.key === "Enter" && handleLookup()}
               />
             </div>
@@ -288,7 +288,7 @@ function WalkInPageInner() {
                 onChange={(e) => setRrnFront(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder="800101"
                 maxLength={6}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent text-lg tracking-widest"
+                className="w-full border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent text-lg tracking-widest"
                 onKeyDown={(e) => e.key === "Enter" && handleLookup()}
               />
             </div>
@@ -349,7 +349,7 @@ function WalkInPageInner() {
               <h3 className="font-semibold mb-3">납부 일정</h3>
               <div className="space-y-2">
                 {contractInfo.payment_schedule.map((item: any, i: number) => (
-                  <div key={i} className="flex justify-between items-center text-sm py-1 border-b border-gray-50">
+                  <div key={i} className="flex justify-between items-center text-sm py-1 border-b border-border-soft">
                     <span className="text-ink-2">{item.name}</span>
                     <div className="text-right">
                       <span className="font-medium">{item.amount?.toLocaleString()}원</span>
@@ -380,7 +380,7 @@ function WalkInPageInner() {
         <div className="card">
           <h2 className="text-lg font-semibold mb-2">전자서명</h2>
           <p className="text-sm text-ink-3 mb-4">아래 서명란에 서명해주세요</p>
-          <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden bg-white">
+          <div className="border-2 border-dashed border-border rounded-lg overflow-hidden bg-white">
             <SignatureCanvas
               ref={sigRef}
               penColor="black"

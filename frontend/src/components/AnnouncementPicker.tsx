@@ -57,9 +57,9 @@ export default function AnnouncementPicker({ announcements, selected, onSelect, 
   const noResult = filtered.length === 0;
 
   return (
-    <div className="mb-5 rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3">
+    <div className="mb-5 rounded-lg border border-accent-line bg-accent-soft px-4 py-3">
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="w-9 h-9 rounded-lg bg-accent text-white flex items-center justify-center flex-shrink-0">
+        <div className="w-9 h-9 rounded-lg bg-accent text-[#0a0a0a] flex items-center justify-center flex-shrink-0">
           <BookOpen className="w-4 h-4" />
         </div>
 
@@ -70,7 +70,7 @@ export default function AnnouncementPicker({ announcements, selected, onSelect, 
 
           {announcements.length === 0 ? (
             <div className="space-y-2">
-              <div className="text-sm text-ink-2">
+              <div className="text-xs text-ink-3">
                 등록된 모집공고가 없습니다.
                 <br />
                 먼저 입주자모집공고 PDF를 업로드하거나 직접 공고 정보를 입력해 주세요.
@@ -79,14 +79,14 @@ export default function AnnouncementPicker({ announcements, selected, onSelect, 
                 {/* PDF 자동 등록 — 빠른 등록 권장 경로 */}
                 <Link
                   href="/announcements?action=new&pdf=1"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-accent hover:bg-accent/90 shadow-sm whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-[#0a0a0a] bg-accent hover:bg-accent/90 shadow-sm whitespace-nowrap"
                 >
                   <FileUp className="w-3.5 h-3.5" /> PDF로 자동 등록
                 </Link>
                 {/* 직접 입력 */}
                 <Link
                   href="/announcements?action=new"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-accent bg-white border border-blue-200 hover:bg-blue-50 whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-accent bg-surface border border-border hover:bg-surface2 whitespace-nowrap"
                 >
                   <Plus className="w-3.5 h-3.5" /> 모집공고 등록
                 </Link>
@@ -104,7 +104,7 @@ export default function AnnouncementPicker({ announcements, selected, onSelect, 
                     onFocus={() => { setOpen(true); setQuery(""); }}
                     onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
                     placeholder="공고명 또는 공고번호 검색"
-                    className="w-full text-sm font-semibold text-ink bg-white/60 border border-blue-200 rounded-md pl-7 pr-7 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    className="w-full text-sm font-semibold text-ink bg-bg border border-border rounded-md pl-7 pr-7 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent"
                   />
                   {open && query && (
                     <button
@@ -122,7 +122,7 @@ export default function AnnouncementPicker({ announcements, selected, onSelect, 
                     type="checkbox"
                     checked={includeDone}
                     onChange={(e) => setIncludeDone(e.target.checked)}
-                    className="w-3.5 h-3.5 accent-blue-600"
+                    className="w-3.5 h-3.5 accent-[#48de94]"
                   />
                   완료 포함
                 </label>
@@ -130,7 +130,7 @@ export default function AnnouncementPicker({ announcements, selected, onSelect, 
 
               {/* 검색 결과 드롭다운 */}
               {open && (
-                <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-border rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                <div className="absolute z-20 left-0 right-0 mt-1 bg-surface border border-border rounded-lg shadow-lg max-h-64 overflow-y-auto">
                   {noResult ? (
                     <div className="px-3 py-4 text-sm text-ink-4 text-center">
                       {query ? "검색 결과가 없습니다" : (includeDone ? "공고가 없습니다" : "진행중인 공고가 없습니다")}

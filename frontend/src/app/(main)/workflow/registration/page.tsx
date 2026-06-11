@@ -784,7 +784,7 @@ function CustomersPageInner() {
             disabled={!selectedAnn || customers.length === 0}
             className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               selectMode
-                ? "bg-gray-700 text-white hover:bg-gray-800"
+                ? "bg-surface2 text-ink hover:bg-surface2"
                 : "text-red-600 hover:bg-red-50"
             }`}
           >
@@ -838,7 +838,7 @@ function CustomersPageInner() {
         const sum = crossCheckSummary(crossIssues);
         const borderCls = sum.error > 0 ? "border-red-200 bg-red-50"
           : sum.warning > 0 ? "border-amber-200 bg-amber-50"
-          : "border-blue-200 bg-blue-50";
+          : "border-accent-line bg-accent-soft";
         return (
           <div className={`card mb-4 border ${borderCls}`}>
             <div className="flex items-start justify-between mb-2">
@@ -846,7 +846,7 @@ function CustomersPageInner() {
                 <span className="text-sm font-semibold">🔍 교차검증 결과 · {sum.total}건</span>
                 {sum.error > 0 && <span className="text-xs text-red-700 font-semibold">🔴 오류 {sum.error}</span>}
                 {sum.warning > 0 && <span className="text-xs text-amber-700 font-semibold">🟡 경고 {sum.warning}</span>}
-                {sum.info > 0 && <span className="text-xs text-blue-700">🔵 정보 {sum.info}</span>}
+                {sum.info > 0 && <span className="text-xs text-accent">🔵 정보 {sum.info}</span>}
               </div>
               <button onClick={() => setCrossIssues(null)} className="text-ink-4 hover:text-ink-2 text-sm">×</button>
             </div>
@@ -858,11 +858,11 @@ function CustomersPageInner() {
                   <div key={i} className="flex items-start gap-2 text-xs border-l-2 border-current pl-2 py-0.5">
                     <span className="flex-shrink-0">{dot}</span>
                     <div className="flex-1">
-                      <div className="font-semibold text-gray-900">
+                      <div className="font-semibold text-ink">
                         {target?.name || `#${issue.customerId}`} — {issue.message}
                       </div>
                       {issue.recommendation && (
-                        <div className="text-gray-600 mt-0.5">→ {issue.recommendation}</div>
+                        <div className="text-ink-2 mt-0.5">→ {issue.recommendation}</div>
                       )}
                     </div>
                     {target && (
@@ -919,8 +919,8 @@ function CustomersPageInner() {
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
                   active
                     ? t.key === "standbys"
-                      ? "bg-white text-amber-700 shadow-sm"
-                      : "bg-white text-accent shadow-sm"
+                      ? "bg-surface text-amber-700 shadow-sm"
+                      : "bg-surface text-accent shadow-sm"
                     : "text-ink-2 hover:text-ink"
                 }`}
               >
@@ -941,7 +941,7 @@ function CustomersPageInner() {
         <select
           value={unitFilter}
           onChange={(e) => setUnitFilter(e.target.value)}
-          className="px-2.5 py-1.5 rounded-lg border border-border bg-white text-xs font-medium text-ink-2 focus:outline-none focus:ring-2 focus:ring-accent"
+          className="px-2.5 py-1.5 rounded-lg border border-border bg-bg text-xs font-medium text-ink-2 focus:outline-none focus:ring-2 focus:ring-accent"
         >
           <option value="all">주택형 전체</option>
           {unitOptions.map((u) => (
@@ -951,7 +951,7 @@ function CustomersPageInner() {
         <select
           value={supplyFilter}
           onChange={(e) => setSupplyFilter(e.target.value)}
-          className="px-2.5 py-1.5 rounded-lg border border-border bg-white text-xs font-medium text-ink-2 focus:outline-none focus:ring-2 focus:ring-accent"
+          className="px-2.5 py-1.5 rounded-lg border border-border bg-bg text-xs font-medium text-ink-2 focus:outline-none focus:ring-2 focus:ring-accent"
         >
           <option value="all">공급유형 전체</option>
           {supplyOptions.map((s) => (
@@ -1013,7 +1013,7 @@ function CustomersPageInner() {
             ) : filtered.map((c) => {
               const displaySupply = c.supply_type || (c.special_types && c.special_types.length > 0 ? c.special_types[0] : "일반공급");
               const supplyCls = displaySupply === "일반공급"
-                ? "bg-indigo-50 text-indigo-700"
+                ? "bg-accent-soft text-accent"
                 : "bg-purple-50 text-purple-700";
               const isChecked = selectedIds.has(c.id);
               return (
@@ -1110,8 +1110,8 @@ function CustomersPageInner() {
       {/* 업로드 충돌 검토 모달 */}
       {conflicts.length > 0 && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-border-soft flex items-center justify-between sticky top-0 bg-white z-10">
+          <div className="bg-surface rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-border-soft flex items-center justify-between sticky top-0 bg-surface z-10">
               <div>
                 <h2 className="text-lg font-semibold">변경사항 검토</h2>
                 <p className="text-xs text-ink-3 mt-0.5">
@@ -1163,9 +1163,9 @@ function CustomersPageInner() {
                     key={conflict.existing.id}
                     className={`border-2 rounded-lg p-4 transition-colors ${
                       decision === "update"
-                        ? "border-blue-300 bg-accent-soft"
+                        ? "border-accent-line bg-accent-soft"
                         : decision === "keep"
-                          ? "border-gray-300 bg-surface2"
+                          ? "border-border bg-surface2"
                           : "border-amber-200 bg-amber-50"
                     }`}
                   >
@@ -1184,7 +1184,7 @@ function CustomersPageInner() {
                           className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${
                             decision === "update"
                               ? "bg-accent text-white"
-                              : "bg-white border border-blue-300 text-accent hover:bg-accent-soft"
+                              : "bg-surface border border-accent-line text-accent hover:bg-accent-soft"
                           }`}
                         >
                           새 값으로 수정
@@ -1193,8 +1193,8 @@ function CustomersPageInner() {
                           onClick={() => setConflictDecisions((p) => ({ ...p, [conflict.existing.id]: "keep" }))}
                           className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${
                             decision === "keep"
-                              ? "bg-gray-700 text-white"
-                              : "bg-white border border-gray-300 text-ink-2 hover:bg-surface2"
+                              ? "bg-surface2 text-ink"
+                              : "bg-surface border border-border text-ink-2 hover:bg-surface2"
                           }`}
                         >
                           기존 값 유지
@@ -1214,7 +1214,7 @@ function CustomersPageInner() {
                         {conflict.diffs.map((d) => (
                           <tr key={String(d.key)} className="border-b border-border-soft last:border-0">
                             <td className="py-1.5 pr-4 font-medium text-ink-2">{d.label}</td>
-                            <td className="py-1.5 pr-4 text-ink-2 line-through decoration-gray-400">
+                            <td className="py-1.5 pr-4 text-ink-2 line-through decoration-ink-3">
                               {formatValue(d.oldValue)}
                             </td>
                             <td className="py-1.5 text-accent font-medium">
@@ -1230,7 +1230,7 @@ function CustomersPageInner() {
             </div>
 
             {/* 하단 액션 */}
-            <div className="sticky bottom-0 bg-white border-t border-border-soft px-6 py-4 flex items-center justify-between gap-2">
+            <div className="sticky bottom-0 bg-surface border-t border-border-soft px-6 py-4 flex items-center justify-between gap-2">
               <span className="text-xs text-ink-3">
                 미선택 항목은 기존 값 유지로 처리됩니다.
               </span>
@@ -1279,7 +1279,7 @@ function CustomersPageInner() {
       {/* 고객 등록 모달 */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-surface rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-border-soft flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold">
@@ -1304,7 +1304,7 @@ function CustomersPageInner() {
                 <div>
                   <label className="block text-sm font-medium text-ink-2 mb-1">성명 *</label>
                   <input required value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
+                    className="w-full border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-ink-2 mb-1">연락처</label>
@@ -1316,7 +1316,7 @@ function CustomersPageInner() {
                     onBlur={(e) => setForm((p) => ({ ...p, phone: formatPhone(e.target.value) }))}
                     placeholder="010-0000-0000"
                     maxLength={13}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+                    className="w-full border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
                   />
                 </div>
               </div>
@@ -1325,20 +1325,20 @@ function CustomersPageInner() {
                   <label className="block text-sm font-medium text-ink-2 mb-1">주민번호 앞 6자리 *</label>
                   <input required maxLength={6} value={form.rrn_front} onChange={(e) => setForm((p) => ({ ...p, rrn_front: e.target.value.replace(/\D/g,"") }))}
                     placeholder="800101"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
+                    className="w-full border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-ink-2 mb-1">주민번호 뒷 7자리 *</label>
                   <input required type="password" maxLength={7} value={form.rrn_back} onChange={(e) => setForm((p) => ({ ...p, rrn_back: e.target.value.replace(/\D/g,"") }))}
                     placeholder="•••••••"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
+                    className="w-full border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-ink-2 mb-1">주소</label>
                 <input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
                   placeholder="시·도 시·군·구 동·읍·면 번지 건물명 동·호"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
+                  className="w-full border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent" />
               </div>
               {/* 공급 관련 */}
               <div className="grid grid-cols-2 gap-3">
@@ -1360,7 +1360,7 @@ function CustomersPageInner() {
                         }));
                       }
                     }}
-                    className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                    className="w-full border border-border rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                   >
                     <option value="일반공급">일반공급</option>
                     <option value="특별공급">특별공급</option>
@@ -1374,7 +1374,7 @@ function CustomersPageInner() {
                     <select
                       value={form.unit_type}
                       onChange={(e) => setForm((p) => ({ ...p, unit_type: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                      className="w-full border border-border rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                     >
                       <option value="">선택</option>
                       {unitTypeOptions.map((o) => (
@@ -1386,7 +1386,7 @@ function CustomersPageInner() {
                       value={form.unit_type}
                       onChange={(e) => setForm((p) => ({ ...p, unit_type: e.target.value }))}
                       placeholder="예: 84.8636 또는 68A"
-                      className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                      className="w-full border border-border rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                     />
                   )}
                 </div>
@@ -1423,7 +1423,7 @@ function CustomersPageInner() {
                             className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                               selected
                                 ? "bg-purple-600 text-white border-purple-600"
-                                : "bg-white text-ink-2 border-gray-300 hover:border-purple-400"
+                                : "bg-surface text-ink-2 border-border hover:border-purple-400"
                             }`}
                           >
                             {t}
@@ -1442,24 +1442,24 @@ function CustomersPageInner() {
                   value={form.current_region}
                   onChange={(e) => setForm((p) => ({ ...p, current_region: e.target.value }))}
                   placeholder="예: 부산, 서울 등 (지역우선공급 판정용)"
-                  className="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                  className="w-full border border-border rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                 />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-ink-2 mb-1">무주택 기간 (년)</label>
                   <input type="number" min={0} value={form.no_home_years} onChange={(e) => setForm((p) => ({ ...p, no_home_years: Number(e.target.value) }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-ink-2 mb-1">부양가족 수</label>
                   <input type="number" min={0} value={form.dependents_count} onChange={(e) => setForm((p) => ({ ...p, dependents_count: Number(e.target.value) }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-ink-2 mb-1">통장 납입 (개월)</label>
                   <input type="number" min={0} value={form.subscription_months} onChange={(e) => setForm((p) => ({ ...p, subscription_months: Number(e.target.value) }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                    className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none" />
                 </div>
               </div>
 

@@ -19,12 +19,12 @@ type Reason = NonNullable<LocalCustomer["title_transfer"]>["reason"];
 
 const REASON_OPTIONS: Reason[] = ["상속", "배우자증여", "부모자녀증여", "이혼재산분할", "전매", "기타"];
 const REASON_COLORS: Record<Reason, string> = {
-  "상속": "bg-rose-100 text-rose-800",
-  "배우자증여": "bg-purple-100 text-purple-800",
-  "부모자녀증여": "bg-indigo-100 text-indigo-800",
-  "이혼재산분할": "bg-amber-100 text-amber-800",
-  "전매": "bg-emerald-100 text-emerald-800",
-  "기타": "bg-gray-100 text-gray-700",
+  "상속": "bg-fail-soft text-fail",
+  "배우자증여": "bg-surface2 text-ink-2",
+  "부모자녀증여": "bg-accent-soft text-accent",
+  "이혼재산분할": "bg-warn-soft text-warn",
+  "전매": "bg-ok-soft text-ok",
+  "기타": "bg-surface2 text-ink-2",
 };
 
 export default function TitleTransferBlock({
@@ -137,7 +137,7 @@ export default function TitleTransferBlock({
 
           {/* 명의자 흐름 */}
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex-1 min-w-[120px] p-2.5 rounded-lg bg-gray-50 border border-gray-200">
+            <div className="flex-1 min-w-[120px] p-2.5 rounded-lg bg-surface2 border border-border">
               <div className="text-[10px] text-ink-3 uppercase mb-1">기존 명의자</div>
               <div className="text-sm font-medium text-ink">{tt.oldHolder?.name || customer.name}</div>
               {tt.oldHolder?.rrn && (
@@ -145,11 +145,11 @@ export default function TitleTransferBlock({
               )}
             </div>
             <div className="text-ink-3 px-1">→</div>
-            <div className="flex-1 min-w-[120px] p-2.5 rounded-lg bg-green-50 border border-green-200">
-              <div className="text-[10px] text-green-700 uppercase mb-1">신 명의자</div>
-              <div className="text-sm font-medium text-green-900">{tt.newHolder?.name || "—"}</div>
+            <div className="flex-1 min-w-[120px] p-2.5 rounded-lg bg-ok-soft border border-border">
+              <div className="text-[10px] text-ok uppercase mb-1">신 명의자</div>
+              <div className="text-sm font-medium text-ok">{tt.newHolder?.name || "—"}</div>
               {tt.newHolder?.rrn && (
-                <div className="text-[10px] text-green-700 font-mono">{tt.newHolder.rrn}</div>
+                <div className="text-[10px] text-ok font-mono">{tt.newHolder.rrn}</div>
               )}
               {tt.newHolder?.phone && (
                 <div className="text-[10px] text-ink-3 mt-0.5">{tt.newHolder.phone}</div>
@@ -168,8 +168,8 @@ export default function TitleTransferBlock({
               <div className="text-[11px] font-semibold text-ink-3 mb-1">제출 서류 ({tt.submittedDocuments.length}종)</div>
               <div className="flex flex-wrap gap-1">
                 {tt.submittedDocuments.map((d, i) => (
-                  <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-ink-2">
-                    <CheckCircle2 className="w-2.5 h-2.5 inline mr-0.5 text-green-600" />
+                  <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-surface2 text-ink-2">
+                    <CheckCircle2 className="w-2.5 h-2.5 inline mr-0.5 text-ok" />
                     {d}
                   </span>
                 ))}
@@ -179,7 +179,7 @@ export default function TitleTransferBlock({
 
           {/* AI 특이사항 */}
           {tt.aiNotes && (
-            <div className="p-2 rounded bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-start gap-1.5">
+            <div className="p-2 rounded bg-warn-soft border border-border text-[11px] text-warn flex items-start gap-1.5">
               <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
               <span>{tt.aiNotes}</span>
             </div>
@@ -200,9 +200,9 @@ export default function TitleTransferBlock({
               )}
               {tt.aiConfidence && (
                 <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                  tt.aiConfidence === "high" ? "bg-green-100 text-green-700" :
-                  tt.aiConfidence === "med" ? "bg-amber-100 text-amber-800" :
-                  "bg-red-100 text-red-700"
+                  tt.aiConfidence === "high" ? "bg-ok-soft text-ok" :
+                  tt.aiConfidence === "med" ? "bg-warn-soft text-warn" :
+                  "bg-fail-soft text-fail"
                 }`}>
                   AI 신뢰도 {tt.aiConfidence.toUpperCase()}
                 </span>
@@ -210,7 +210,7 @@ export default function TitleTransferBlock({
             </div>
             <button
               onClick={handleRemove}
-              className="text-[11px] text-red-500 hover:text-red-700 inline-flex items-center gap-0.5"
+              className="text-[11px] text-fail hover:text-fail inline-flex items-center gap-0.5"
             >
               <Trash2 className="w-3 h-3" /> 삭제
             </button>
@@ -220,14 +220,14 @@ export default function TitleTransferBlock({
 
       {/* 수동 추가 폼 */}
       {addOpen && (
-        <div className="mt-3 border-2 border-dashed border-indigo-300 rounded-lg p-4 bg-indigo-50/30 space-y-3">
+        <div className="mt-3 border-2 border-dashed border-accent-line rounded-lg p-4 bg-accent-soft/30 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-medium text-ink-2 mb-1">사유 *</label>
               <select
                 value={draft.reason}
                 onChange={(e) => setDraft({ ...draft, reason: e.target.value as Reason })}
-                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                className="w-full border border-border rounded-md px-2 py-1.5 text-sm"
               >
                 {REASON_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
@@ -238,7 +238,7 @@ export default function TitleTransferBlock({
                 type="date"
                 value={draft.transferDate}
                 onChange={(e) => setDraft({ ...draft, transferDate: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                className="w-full border border-border rounded-md px-2 py-1.5 text-sm"
               />
             </div>
             <div className="col-span-2">
@@ -246,7 +246,7 @@ export default function TitleTransferBlock({
               <input
                 value={draft.newName}
                 onChange={(e) => setDraft({ ...draft, newName: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                className="w-full border border-border rounded-md px-2 py-1.5 text-sm"
               />
             </div>
             <div>
@@ -255,7 +255,7 @@ export default function TitleTransferBlock({
                 value={draft.newRrn}
                 onChange={(e) => setDraft({ ...draft, newRrn: e.target.value })}
                 placeholder="예: 800101-1234567"
-                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                className="w-full border border-border rounded-md px-2 py-1.5 text-sm"
               />
             </div>
             <div>
@@ -264,7 +264,7 @@ export default function TitleTransferBlock({
                 value={draft.newRelation}
                 onChange={(e) => setDraft({ ...draft, newRelation: e.target.value })}
                 placeholder="배우자 / 자녀 / 부모 등"
-                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                className="w-full border border-border rounded-md px-2 py-1.5 text-sm"
               />
             </div>
             <div>
@@ -272,7 +272,7 @@ export default function TitleTransferBlock({
               <input
                 value={draft.newPhone}
                 onChange={(e) => setDraft({ ...draft, newPhone: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                className="w-full border border-border rounded-md px-2 py-1.5 text-sm"
               />
             </div>
             <div>
@@ -280,7 +280,7 @@ export default function TitleTransferBlock({
               <input
                 value={draft.newAddress}
                 onChange={(e) => setDraft({ ...draft, newAddress: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                className="w-full border border-border rounded-md px-2 py-1.5 text-sm"
               />
             </div>
             <div className="col-span-2">
@@ -289,7 +289,7 @@ export default function TitleTransferBlock({
                 value={draft.notes}
                 onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
                 placeholder="특이사항"
-                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                className="w-full border border-border rounded-md px-2 py-1.5 text-sm"
               />
             </div>
           </div>

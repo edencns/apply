@@ -56,10 +56,10 @@ const columns: StageColumn[] = [
       const supply = c.supply_type || "—";
       const isLeftover = /선착순|잔여세대/.test(supply);
       const cls = isLeftover
-        ? "bg-amber-100 text-amber-800"
+        ? "bg-warn-soft text-warn"
         : supply === "일반공급"
-          ? "bg-indigo-50 text-indigo-700"
-          : "bg-purple-50 text-purple-700";
+          ? "bg-accent-soft text-accent"
+          : "bg-surface2 text-ink-2";
       return <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${cls}`}>{supply}</span>;
     },
   },
@@ -72,7 +72,7 @@ const columns: StageColumn[] = [
       return (
         <div className="flex flex-col gap-0.5 leading-tight">
           <span className="text-[11px] text-ink-2">{ci.contractDate}</span>
-          <span className="text-[10px] text-emerald-700 font-medium">{fmtMoney(ci.contractPrice)}</span>
+          <span className="text-[10px] text-ok font-medium">{fmtMoney(ci.contractPrice)}</span>
         </div>
       );
     },
@@ -200,7 +200,7 @@ export default function ContractsStepPage() {
     <WorkflowShell step={step} selected={selected} onSelect={setSelected}>
       {selected && (
         <>
-          <div className="mb-3 p-3 rounded-lg bg-emerald-50 border border-emerald-100 text-xs text-emerald-900 flex items-start gap-2">
+          <div className="mb-3 p-3 rounded-lg bg-ok-soft border border-border text-xs text-ok flex items-start gap-2">
             <ClipboardCheck className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
             <span>
               「계약자명단(분양금 포함)」 엑셀 업로드 → 기존 당첨자에 계약 정보 추가. 동·호 매칭 안 되거나 이름 다른 사람은 <strong>「선착순」</strong> 공급유형으로 자동 등록 (자격 검증 룰 미적용).
@@ -233,26 +233,26 @@ export default function ContractsStepPage() {
           </div>
 
           {result && (
-            <div className="card mb-4 p-3 text-sm bg-emerald-50/60 border-emerald-200">
+            <div className="card mb-4 p-3 text-sm bg-ok-soft/60 border-border">
               <div className="flex items-center gap-2 flex-wrap">
-                <ClipboardCheck className="w-4 h-4 text-emerald-700" />
-                <span className="font-semibold text-emerald-900">계약자명단 처리 완료</span>
-                <span className="text-emerald-800">총 {result.total}건</span>
-                <span className="text-blue-800">✓ 기존 매칭 {result.updated}건</span>
+                <ClipboardCheck className="w-4 h-4 text-ok" />
+                <span className="font-semibold text-ok">계약자명단 처리 완료</span>
+                <span className="text-ok">총 {result.total}건</span>
+                <span className="text-accent">✓ 기존 매칭 {result.updated}건</span>
                 {result.nameChanged > 0 && (
-                  <span className="text-amber-800">
+                  <span className="text-warn">
                     <AlertTriangle className="w-3 h-3 inline" /> 이름 변경 {result.nameChanged}건
                   </span>
                 )}
                 {result.created > 0 && (
-                  <span className="text-purple-800">
+                  <span className="text-ink-2">
                     <UserPlus className="w-3 h-3 inline" /> 선착순 신규 등록 {result.created}건
                   </span>
                 )}
               </div>
               {result.samples.length > 0 && (
                 <details className="mt-2 text-[11px]" open>
-                  <summary className="cursor-pointer text-emerald-900 font-semibold">처리 샘플</summary>
+                  <summary className="cursor-pointer text-ok font-semibold">처리 샘플</summary>
                   <ul className="mt-1 ml-4 space-y-0.5 text-ink-2">
                     {result.samples.map((s, i) => (
                       <li key={i}>

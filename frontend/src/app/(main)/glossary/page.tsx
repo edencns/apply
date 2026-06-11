@@ -318,8 +318,8 @@ const CATEGORIES: Category[] = [
 /* ─── 페이지 ─────────────────────────────────────── */
 
 const COLOR_CLASS: Record<string, string> = {
-  indigo: "border-indigo-200 bg-indigo-50/40 text-indigo-900",
-  blue: "border-blue-200 bg-blue-50/40 text-blue-900",
+  indigo: "border-accent-line bg-accent-soft text-ink",
+  blue: "border-accent-line bg-accent-soft text-ink",
   purple: "border-purple-200 bg-purple-50/40 text-purple-900",
   emerald: "border-emerald-200 bg-emerald-50/40 text-emerald-900",
   amber: "border-amber-200 bg-amber-50/40 text-amber-900",
@@ -351,7 +351,7 @@ export default function GlossaryPage() {
       {/* 헤더 */}
       <div className="mb-4">
         <div className="flex items-center gap-2 mb-1">
-          <BookOpen className="w-5 h-5 text-indigo-700" />
+          <BookOpen className="w-5 h-5 text-accent" />
           <h1 className="text-xl font-bold text-ink tracking-[-0.3px]">용어사전</h1>
           <span className="text-[11px] text-ink-4">({totalCount}개)</span>
         </div>
@@ -410,13 +410,13 @@ export default function GlossaryPage() {
       <div className="mb-4 flex flex-wrap gap-1.5">
         <Link
           href="/verification-criteria"
-          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-100 hover:bg-indigo-200 text-indigo-900 text-[11px] font-medium"
+          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-accent-soft hover:bg-surface2 text-accent text-[11px] font-medium"
         >
           ⚖ 서류 검증 기준 →
         </Link>
         <Link
           href="/dashboard"
-          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-900 text-[11px] font-medium"
+          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-accent-soft hover:bg-surface2 text-accent text-[11px] font-medium"
         >
           🏠 대시보드 →
         </Link>
@@ -449,7 +449,7 @@ export default function GlossaryPage() {
                 {cat.terms.map((t, i) => (
                   <div
                     key={i}
-                    className="rounded border border-white bg-white/70 p-2.5 text-ink-2"
+                    className="rounded border border-border bg-surface p-2.5 text-ink-2"
                   >
                     <div className="flex items-baseline gap-1.5 flex-wrap mb-1">
                       <h3 className="text-[12.5px] font-bold text-ink">{t.term}</h3>
@@ -466,7 +466,7 @@ export default function GlossaryPage() {
                       </div>
                     )}
                     {t.example && (
-                      <div className="text-[10.5px] mt-1 p-1.5 rounded bg-blue-50 border border-blue-100 text-blue-900">
+                      <div className="text-[10.5px] mt-1 p-1.5 rounded bg-accent-soft border border-accent-line text-ink-2">
                         💡 예: {t.example}
                       </div>
                     )}

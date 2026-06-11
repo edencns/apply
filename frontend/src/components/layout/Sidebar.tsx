@@ -74,8 +74,8 @@ function NavLink({
         <span
           className={`inline-flex items-center justify-center w-[18px] h-[18px] rounded-full text-[10px] font-bold tnum flex-shrink-0 ${
             isActive
-              ? "bg-accent text-white"
-              : "bg-surface2 text-ink-3 shadow-[inset_0_0_0_1px_#e8e4dc]"
+              ? "bg-accent text-[#0a0a0a]"
+              : "bg-surface2 text-ink-3 shadow-[inset_0_0_0_1px_#ffffff1a]"
           }`}
         >
           {stepNumber}
@@ -122,8 +122,8 @@ export default function Sidebar() {
       {/* 로고 */}
       <div className="p-4 border-b border-border-soft">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-md bg-ink flex items-center justify-center">
-            <Building2 className="w-3.5 h-3.5 text-white" strokeWidth={1.8} />
+          <div className="w-6 h-6 rounded-md bg-accent flex items-center justify-center">
+            <Building2 className="w-3.5 h-3.5 text-[#0a0a0a]" strokeWidth={1.8} />
           </div>
           <div>
             <div className="text-[13px] font-bold text-ink tracking-tight">

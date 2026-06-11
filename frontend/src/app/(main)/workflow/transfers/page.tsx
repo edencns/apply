@@ -88,18 +88,18 @@ interface FileRow {
 }
 
 const REASON_COLORS: Record<Reason, string> = {
-  "상속": "bg-rose-100 text-rose-800",
-  "배우자증여": "bg-purple-100 text-purple-800",
-  "부모자녀증여": "bg-indigo-100 text-indigo-800",
-  "이혼재산분할": "bg-amber-100 text-amber-800",
-  "전매": "bg-emerald-100 text-emerald-800",
-  "기타": "bg-gray-100 text-gray-700",
+  "상속": "bg-fail-soft text-fail",
+  "배우자증여": "bg-surface2 text-ink-2",
+  "부모자녀증여": "bg-accent-soft text-accent",
+  "이혼재산분할": "bg-warn-soft text-warn",
+  "전매": "bg-ok-soft text-ok",
+  "기타": "bg-surface2 text-ink-2",
 };
 
 const CONF_COLORS: Record<string, string> = {
-  high: "bg-green-100 text-green-800",
-  med: "bg-amber-100 text-amber-800",
-  low: "bg-red-100 text-red-800",
+  high: "bg-ok-soft text-ok",
+  med: "bg-warn-soft text-warn",
+  low: "bg-fail-soft text-fail",
 };
 
 export default function TransfersStepPage() {
@@ -339,14 +339,14 @@ export default function TransfersStepPage() {
       {selected && (
         <>
           {/* 안내 */}
-          <div className="mb-4 p-3 rounded-lg bg-indigo-50 border border-indigo-100 text-xs text-indigo-900">
+          <div className="mb-4 p-3 rounded-lg bg-accent-soft border border-accent-line text-xs text-accent">
             <div className="font-semibold mb-1">📋 명의변경 배치 처리 — 계약 체결 이후 단계</div>
-            <p className="text-indigo-800 mb-2">
+            <p className="text-accent mb-2">
               <strong>당첨·서류 판정·계약 체결까지 완료한 분양권</strong>이 상속·증여·이혼·전매 등으로
               다른 명의자에게 넘어간 세대를 처리합니다. 서류 스캔본을 일괄 업로드하면 AI가
               신·구 명의자와 사유를 자동 추출하고, 각 당첨자 레코드에 명의변경 이력으로 저장됩니다.
             </p>
-            <ol className="list-decimal list-inside space-y-0.5 text-indigo-800">
+            <ol className="list-decimal list-inside space-y-0.5 text-accent">
               <li>파일명은 <strong>동-호수</strong> 형식이어야 자동 매칭됩니다 (예: <code>101-101.pdf</code>, <code>102-1204.pdf</code>).</li>
               <li>PDF들을 한 번에 선택해 업로드하면 AI(Gemini)가 각 파일에서 사유·신구 명의자·관계를 추출합니다.</li>
               <li>검토 후 [일괄 승인]으로 각 당첨자 레코드에 명의변경 이력이 저장되며, 감사 로그에도 기록됩니다.</li>
@@ -358,7 +358,7 @@ export default function TransfersStepPage() {
           <div className="flex items-center gap-2 flex-wrap mb-4">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-[#0a0a0a] bg-accent hover:opacity-90 shadow-sm"
             >
               <FilePlus className="w-4 h-4" /> 스캔본 선택 (여러 파일)
             </button>
@@ -403,7 +403,7 @@ export default function TransfersStepPage() {
             >
               초기화
             </button>
-            <div className="ml-auto flex items-center gap-1 border border-border rounded-lg px-2 py-1.5 bg-white">
+            <div className="ml-auto flex items-center gap-1 border border-border rounded-lg px-2 py-1.5 bg-surface">
               <Search className="w-3.5 h-3.5 text-ink-4" />
               <input
                 placeholder="파일명·당첨자·신명의자 검색"
@@ -417,17 +417,17 @@ export default function TransfersStepPage() {
           {/* 통계 */}
           {rows.length > 0 && (
             <div className="mb-3 flex gap-2 text-xs flex-wrap">
-              <span className="px-2 py-1 rounded bg-gray-100 text-ink-2">전체 <strong>{stats.total}</strong></span>
-              <span className="px-2 py-1 rounded bg-green-50 text-green-800">매칭 <strong>{stats.matched}</strong></span>
+              <span className="px-2 py-1 rounded bg-surface2 text-ink-2">전체 <strong>{stats.total}</strong></span>
+              <span className="px-2 py-1 rounded bg-ok-soft text-ok">매칭 <strong>{stats.matched}</strong></span>
               {stats.unmatched > 0 && (
-                <span className="px-2 py-1 rounded bg-red-50 text-red-800">매칭 실패 <strong>{stats.unmatched}</strong></span>
+                <span className="px-2 py-1 rounded bg-fail-soft text-fail">매칭 실패 <strong>{stats.unmatched}</strong></span>
               )}
-              <span className="px-2 py-1 rounded bg-blue-50 text-blue-800">파싱 완료 <strong>{stats.done}</strong></span>
+              <span className="px-2 py-1 rounded bg-accent-soft text-accent">파싱 완료 <strong>{stats.done}</strong></span>
               {stats.error > 0 && (
-                <span className="px-2 py-1 rounded bg-rose-50 text-rose-800">파싱 실패 <strong>{stats.error}</strong></span>
+                <span className="px-2 py-1 rounded bg-fail-soft text-fail">파싱 실패 <strong>{stats.error}</strong></span>
               )}
               {stats.lowConf > 0 && (
-                <span className="px-2 py-1 rounded bg-amber-50 text-amber-800">낮은 신뢰도 <strong>{stats.lowConf}</strong></span>
+                <span className="px-2 py-1 rounded bg-warn-soft text-warn">낮은 신뢰도 <strong>{stats.lowConf}</strong></span>
               )}
             </div>
           )}
@@ -475,11 +475,11 @@ export default function TransfersStepPage() {
                         <td className="px-3 py-2 text-xs">
                           {row.matchedCustomerName ? (
                             <div className="flex items-center gap-1">
-                              <UserCheck className="w-3 h-3 text-green-600" />
+                              <UserCheck className="w-3 h-3 text-ok" />
                               <span className="text-ink">{row.matchedCustomerName}</span>
                             </div>
                           ) : (
-                            <span className="text-red-700 text-[11px]">매칭 실패</span>
+                            <span className="text-fail text-[11px]">매칭 실패</span>
                           )}
                         </td>
                         <td className="px-3 py-2">
@@ -542,7 +542,7 @@ function StatusBadge({
 }: { status: FileStatus; error?: string; approved?: boolean }) {
   if (approved) {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-green-100 text-green-800 font-medium">
+      <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-ok-soft text-ok font-medium">
         <CheckCircle2 className="w-3 h-3" /> 승인됨
       </span>
     );
@@ -552,28 +552,28 @@ function StatusBadge({
   }
   if (status === "parsing") {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-blue-700">
+      <span className="inline-flex items-center gap-1 text-[11px] text-accent">
         <Loader2 className="w-3 h-3 animate-spin" /> 파싱 중…
       </span>
     );
   }
   if (status === "done") {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-medium">
+      <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-accent-soft text-accent font-medium">
         <CheckCircle2 className="w-3 h-3" /> 파싱 완료
       </span>
     );
   }
   if (status === "error") {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-medium" title={error || ""}>
+      <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-fail-soft text-fail font-medium" title={error || ""}>
         <AlertTriangle className="w-3 h-3" /> 실패
       </span>
     );
   }
   if (status === "unmatched") {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">
+      <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-warn-soft text-warn font-medium">
         <AlertTriangle className="w-3 h-3" /> 동호 미인식
       </span>
     );
@@ -585,7 +585,7 @@ function PreviewModal({ row, onClose }: { row: FileRow; onClose: () => void }) {
   const r = row.result;
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-surface rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="p-5 border-b border-border-soft flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold">{row.dong}-{row.ho} 명의변경 상세</h2>
@@ -597,7 +597,7 @@ function PreviewModal({ row, onClose }: { row: FileRow; onClose: () => void }) {
         </div>
         <div className="p-5 space-y-4">
           {row.status === "error" && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
+            <div className="p-3 rounded-lg bg-fail-soft border border-border text-sm text-fail">
               ❌ {row.error}
             </div>
           )}
@@ -635,7 +635,7 @@ function PreviewModal({ row, onClose }: { row: FileRow; onClose: () => void }) {
                   <div className="text-xs font-semibold text-ink-3 mb-1">제출 서류 ({r.submittedDocuments.length}종)</div>
                   <div className="flex flex-wrap gap-1">
                     {r.submittedDocuments.map((d, i) => (
-                      <span key={i} className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-ink-2">
+                      <span key={i} className="text-[11px] px-2 py-0.5 rounded bg-surface2 text-ink-2">
                         {d}
                       </span>
                     ))}
@@ -644,7 +644,7 @@ function PreviewModal({ row, onClose }: { row: FileRow; onClose: () => void }) {
               )}
 
               {r.notes && (
-                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900">
+                <div className="p-3 rounded-lg bg-warn-soft border border-border text-xs text-warn">
                   <strong>📌 특이사항:</strong> {r.notes}
                 </div>
               )}
@@ -654,7 +654,7 @@ function PreviewModal({ row, onClose }: { row: FileRow; onClose: () => void }) {
                   href={row.originalFileUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs hover:bg-indigo-700"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-[#0a0a0a] text-xs hover:opacity-90"
                 >
                   <FileText className="w-3.5 h-3.5" /> 원본 스캔본 열기
                 </a>
@@ -684,7 +684,7 @@ function InfoCard({ label, children }: { label: string; children: React.ReactNod
 
 function HolderCard({ title, data }: { title: string; data?: ParseResult["oldHolder"] | ParseResult["newHolder"] }) {
   return (
-    <div className="p-3 rounded-lg border border-border bg-white">
+    <div className="p-3 rounded-lg border border-border bg-surface">
       <div className="text-xs font-semibold text-ink-2 mb-2">{title}</div>
       {data ? (
         <div className="space-y-1 text-xs">

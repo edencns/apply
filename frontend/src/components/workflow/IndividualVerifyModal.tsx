@@ -69,13 +69,13 @@ export default function IndividualVerifyModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[85vh] flex flex-col">
+      <div className="bg-surface rounded-xl shadow-xl max-w-lg w-full max-h-[85vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <h3 className="text-lg font-bold text-ink">{title}</h3>
           <button
             onClick={onClose}
-            className="p-1 rounded-md hover:bg-gray-100 text-gray-500"
+            className="p-1 rounded-md hover:bg-surface2 text-ink-3"
           >
             <X className="w-5 h-5" />
           </button>
@@ -83,28 +83,28 @@ export default function IndividualVerifyModal({
 
         {/* Body */}
         <div className="px-5 py-4 flex-1 overflow-auto">
-          <p className="text-xs text-gray-500 mb-3">{fileHint}</p>
+          <p className="text-xs text-ink-3 mb-3">{fileHint}</p>
 
           {/* 고객 선택 */}
           <div className="mb-4">
-            <label className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1.5">
+            <label className="flex items-center justify-between text-xs font-semibold text-ink-2 mb-1.5">
               <span>1. 고객 선택</span>
-              <span className="text-[11px] font-normal text-gray-500">
+              <span className="text-[11px] font-normal text-ink-3">
                 {filtered.length} / {customers.filter((c) => !c.superseded).length}명
               </span>
             </label>
             <div className="relative mb-2">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-4" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="이름·연락처·주민번호 앞자리 검색"
-                className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-9 pr-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
-            <div className="border border-gray-200 rounded-lg max-h-80 overflow-auto divide-y divide-gray-50">
+            <div className="border border-border rounded-lg max-h-80 overflow-auto divide-y divide-border-soft">
               {filtered.length === 0 ? (
-                <div className="text-center py-8 text-xs text-gray-400">검색 결과 없음</div>
+                <div className="text-center py-8 text-xs text-ink-4">검색 결과 없음</div>
               ) : (
                 filtered.map((c) => {
                   const active = c.id === selectedId;
@@ -113,7 +113,7 @@ export default function IndividualVerifyModal({
                       key={c.id}
                       onClick={() => setSelectedId(c.id)}
                       className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between transition-colors ${
-                        active ? "bg-blue-50 text-blue-900" : "hover:bg-gray-50"
+                        active ? "bg-accent-soft text-accent" : "hover:bg-surface2"
                       }`}
                     >
                       <div className="flex items-center gap-2">
@@ -124,7 +124,7 @@ export default function IndividualVerifyModal({
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-gray-500 font-mono">
+                      <div className="text-xs text-ink-3 font-mono">
                         {c.rrn_front || "—"}
                         {c.phone && <span className="ml-2">{formatPhone(c.phone)}</span>}
                       </div>
@@ -137,13 +137,13 @@ export default function IndividualVerifyModal({
 
           {/* 파일 업로드 */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+            <label className="block text-xs font-semibold text-ink-2 mb-1.5">
               2. 파일 업로드
             </label>
             <button
               onClick={() => fileRef.current?.click()}
               disabled={!selected || uploading}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-600 hover:to-indigo-600 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold text-[#0a0a0a] bg-accent hover:bg-accent shadow-sm disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
               {uploading ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> 적용 중…</>
@@ -165,10 +165,10 @@ export default function IndividualVerifyModal({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-gray-100 flex justify-end">
+        <div className="px-5 py-3 border-t border-border flex justify-end">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 rounded-md text-sm text-gray-600 hover:bg-gray-100"
+            className="px-3 py-1.5 rounded-md text-sm text-ink-2 hover:bg-surface2"
           >
             닫기
           </button>

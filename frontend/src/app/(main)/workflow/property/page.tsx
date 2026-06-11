@@ -463,7 +463,7 @@ export default function PropertyStepPage() {
       {selected && (
         <>
           {regulation && (
-            <div className="mb-3 p-3 rounded-lg bg-indigo-50 border border-indigo-100 text-xs text-indigo-800">
+            <div className="mb-3 p-3 rounded-lg bg-accent-soft border border-accent-line text-xs text-ink-2">
               <strong>공고 규제: {regulation}</strong> ·{" "}
               {regulation === "투기과열" || regulation === "청약과열"
                 ? "규제지역 일반공급은 1주택 보유 시 1순위 제한. 특별공급은 공급유형별 무주택 요건 우선"
@@ -522,7 +522,7 @@ export default function PropertyStepPage() {
             <button
               onClick={handleBulkPriceLookup}
               disabled={priceLookupBusy}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm whitespace-nowrap transition-colors disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-[#0a0a0a] bg-accent hover:bg-accent shadow-sm whitespace-nowrap transition-colors disabled:opacity-40"
               title="60㎡ 이하 + 공시가격 미상인 보유 주택을 일괄 자동 조회 (공공데이터포털 API)"
             >
               {priceLookupBusy ? (
@@ -558,10 +558,10 @@ export default function PropertyStepPage() {
 
           {/* 공시가격 일괄 조회 결과 */}
           {priceLookupResult && (
-            <div className="card mb-4 p-3 text-sm bg-indigo-50/70 border-indigo-200">
+            <div className="card mb-4 p-3 text-sm bg-accent-soft border-accent-line">
               <div className="flex items-center gap-2 flex-wrap">
-                <Sparkles className="w-4 h-4 text-indigo-700" />
-                <span className="font-semibold text-indigo-900">공시가격 일괄 조회 완료</span>
+                <Sparkles className="w-4 h-4 text-accent" />
+                <span className="font-semibold text-ink">공시가격 일괄 조회 완료</span>
                 <span className="text-emerald-700">✓ 자동 반영 {priceLookupResult.success}건</span>
                 {priceLookupResult.notFound > 0 && (
                   <span className="text-amber-700">⚠ 미발견 {priceLookupResult.notFound}건 (수동 입력 또는 알리미 폴백)</span>
@@ -576,7 +576,7 @@ export default function PropertyStepPage() {
 
               {/* 사전 진단: PNU 보유 비율 */}
               {priceLookupResult.pnuStats && (
-                <div className="mt-2 text-[11px] text-indigo-900 bg-white/60 rounded p-2 border border-indigo-100">
+                <div className="mt-2 text-[11px] text-ink-2 bg-surface rounded p-2 border border-accent-line">
                   📍 식별번호(PNU) 보유: <strong>{priceLookupResult.pnuStats.withPnu}건</strong> /
                   미보유: <strong className={priceLookupResult.pnuStats.withoutPnu > 0 ? "text-red-700" : ""}>{priceLookupResult.pnuStats.withoutPnu}건</strong>
                   {priceLookupResult.pnuStats.withoutPnu > 0 && (
@@ -589,12 +589,12 @@ export default function PropertyStepPage() {
 
               {/* 에러 코드 breakdown */}
               {priceLookupResult.errorBreakdown && Object.keys(priceLookupResult.errorBreakdown).length > 0 && (
-                <div className="mt-2 text-[11px] text-indigo-900">
+                <div className="mt-2 text-[11px] text-ink-2">
                   <div className="font-semibold mb-0.5">실패 원인 분류:</div>
                   <ul className="ml-4 list-disc space-y-0.5">
                     {Object.entries(priceLookupResult.errorBreakdown).map(([code, n]) => (
                       <li key={code}>
-                        <code className="text-[10.5px] bg-white/70 px-1 rounded">{code}</code>: {n}건
+                        <code className="text-[10.5px] bg-surface px-1 rounded">{code}</code>: {n}건
                         {code === "PNU_REQUIRED" && <span className="text-red-700 ml-1">— 엑셀에 식별번호 컬럼이 없음</span>}
                         {code === "NO_API_KEY" && <span className="text-red-700 ml-1">— Vercel 환경변수 미설정 또는 미배포</span>}
                         {code === "NOT_FOUND" && <span className="text-amber-700 ml-1">— PNU 형식 오류 또는 API에 데이터 없음</span>}
@@ -609,12 +609,12 @@ export default function PropertyStepPage() {
               {/* 샘플 에러 메시지 */}
               {priceLookupResult.sampleErrors && priceLookupResult.sampleErrors.length > 0 && (
                 <details className="mt-2 text-[11px]">
-                  <summary className="cursor-pointer text-indigo-900 font-semibold">
+                  <summary className="cursor-pointer text-ink font-semibold">
                     실패 샘플 메시지 보기 ({priceLookupResult.sampleErrors.length}건)
                   </summary>
                   <ul className="mt-1 ml-4 space-y-1 text-ink-2">
                     {priceLookupResult.sampleErrors.map((e, i) => (
-                      <li key={i} className="bg-white/60 rounded p-1.5 border border-red-100">
+                      <li key={i} className="bg-surface rounded p-1.5 border border-red-100">
                         <div className="font-mono text-[10px] text-ink-3 truncate" title={e.address}>
                           📍 {e.address}
                         </div>
@@ -632,7 +632,7 @@ export default function PropertyStepPage() {
                 </details>
               )}
 
-              <div className="mt-2 text-[11px] text-indigo-800/80">
+              <div className="mt-2 text-[11px] text-ink-3">
                 💡 「소형·저가 예외」 기준({smallLowLimits})은 공고 룰이 입력된 경우에만 자동 비교됩니다.
                 특별공급은 소형·저가 예외를 자동 적용하지 않으며, 개별 주택은 「검증」 버튼으로 다시 평가하세요.
               </div>
@@ -660,10 +660,10 @@ export default function PropertyStepPage() {
 
           {/* 업로드 결과 */}
           {uploadResult && (
-            <div className="card mb-4 p-3 text-sm bg-indigo-50/60 border-indigo-100">
+            <div className="card mb-4 p-3 text-sm bg-accent-soft border-accent-line">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-indigo-900">주택소유 조회 연결 완료</span>
-                <span className="text-indigo-800">
+                <span className="font-semibold text-ink">주택소유 조회 연결 완료</span>
+                <span className="text-ink-2">
                   {uploadResult.attached}명에게 소유 이력 부착 · 총 {uploadResult.totalRecords}건
                 </span>
                 {uploadResult.unmatched > 0 && (

@@ -84,12 +84,12 @@ export default function PastWinningsBlock({ customer, onUpdate }: Props) {
           <History className="w-4 h-4 text-ink-2" />
           <h3 className="font-semibold text-ink">과거 당첨 이력 (청약홈 확인서)</h3>
           {entries.length > 0 && (
-            <span className="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-medium">
+            <span className="text-xs bg-warn-soft text-warn px-1.5 py-0.5 rounded font-medium">
               {entries.length}건
             </span>
           )}
           {entries.length === 0 && checkedAt && (
-            <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded font-medium">
+            <span className="text-xs bg-ok-soft text-ok px-1.5 py-0.5 rounded font-medium">
               이력 없음 확인
             </span>
           )}
@@ -105,7 +105,7 @@ export default function PastWinningsBlock({ customer, onUpdate }: Props) {
           {entries.length === 0 && !checkedAt && (
             <button
               onClick={markNoHistory}
-              className="text-xs bg-green-50 border border-green-200 text-green-700 rounded-md px-2.5 py-1 hover:bg-green-100"
+              className="text-xs bg-ok-soft border border-border text-ok rounded-md px-2.5 py-1 hover:bg-ok-soft"
               title="청약홈 확인서 확인 결과 과거 당첨 이력 없음"
             >
               이력 없음
@@ -115,7 +115,7 @@ export default function PastWinningsBlock({ customer, onUpdate }: Props) {
       </div>
 
       {!checkedAt && entries.length === 0 && !showForm && (
-        <div className="text-xs text-ink-3 bg-blue-50 border border-blue-200 rounded-md p-3">
+        <div className="text-xs text-ink-3 bg-accent-soft border border-accent-line rounded-md p-3">
           💡 청약홈에서 발급받은 <strong>당첨사실 확인서</strong>를 확인한 후:
           이력이 없으면 [이력 없음] 버튼을, 이력이 있으면 [이력 추가]로 입력하세요.
           미입력 상태면 교차검증에서 <strong>특공 평생 1회 제한 위반</strong>을 자동 감지할 수 없습니다.
@@ -126,37 +126,37 @@ export default function PastWinningsBlock({ customer, onUpdate }: Props) {
       {entries.length > 0 && (
         <div className="space-y-2">
           {entries.map((e, i) => (
-            <div key={i} className="border border-gray-200 rounded-lg p-3 flex items-start justify-between gap-3">
+            <div key={i} className="border border-border rounded-lg p-3 flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <span className="font-semibold text-sm">{e.announcementTitle}</span>
                   {e.canonicalType && (
-                    <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium">
+                    <span className="text-[10px] bg-surface2 text-ink-2 px-1.5 py-0.5 rounded font-medium">
                       {e.canonicalType}
                     </span>
                   )}
                   {e.unitType && (
-                    <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                    <span className="text-[10px] bg-surface2 text-ink-2 px-1.5 py-0.5 rounded">
                       {e.unitType}
                     </span>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-600">
-                  <span>당첨일: <span className="text-gray-800 font-medium">{e.winDate}</span></span>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-2">
+                  <span>당첨일: <span className="text-ink font-medium">{e.winDate}</span></span>
                   {e.restrictionYears && (
-                    <span>재당첨 제한: <span className="text-red-700 font-medium">{e.restrictionYears}년</span></span>
+                    <span>재당첨 제한: <span className="text-fail font-medium">{e.restrictionYears}년</span></span>
                   )}
                   {e.restrictionEndDate && (
-                    <span>제한 해제일: <span className="text-amber-700 font-medium">{e.restrictionEndDate}</span></span>
+                    <span>제한 해제일: <span className="text-warn font-medium">{e.restrictionEndDate}</span></span>
                   )}
                 </div>
                 {e.note && (
-                  <div className="text-[11px] text-gray-500 mt-1">{e.note}</div>
+                  <div className="text-[11px] text-ink-3 mt-1">{e.note}</div>
                 )}
               </div>
               <button
                 onClick={() => removeEntry(i)}
-                className="text-red-400 hover:text-red-600 flex-shrink-0"
+                className="text-fail hover:text-fail flex-shrink-0"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -167,7 +167,7 @@ export default function PastWinningsBlock({ customer, onUpdate }: Props) {
 
       {/* 입력 폼 */}
       {showForm && (
-        <div className="mt-3 border-2 border-dashed border-blue-300 rounded-lg p-4 bg-blue-50/30 space-y-3">
+        <div className="mt-3 border-2 border-dashed border-accent-line rounded-lg p-4 bg-accent-soft/30 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="block text-[11px] font-medium text-ink-2 mb-1">공고명 *</label>
@@ -175,7 +175,7 @@ export default function PastWinningsBlock({ customer, onUpdate }: Props) {
                 value={draft.announcementTitle}
                 onChange={(e) => setDraft({ ...draft, announcementTitle: e.target.value })}
                 placeholder="예: 2021 XX지구 XX단지"
-                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                className="w-full border border-border rounded-md px-2 py-1.5 text-sm"
               />
             </div>
             <div>
@@ -184,7 +184,7 @@ export default function PastWinningsBlock({ customer, onUpdate }: Props) {
                 type="date"
                 value={draft.winDate}
                 onChange={(e) => setDraft({ ...draft, winDate: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                className="w-full border border-border rounded-md px-2 py-1.5 text-sm"
               />
             </div>
             <div>
@@ -192,7 +192,7 @@ export default function PastWinningsBlock({ customer, onUpdate }: Props) {
               <select
                 value={draft.canonicalType || ""}
                 onChange={(e) => setDraft({ ...draft, canonicalType: e.target.value, supplyType: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                className="w-full border border-border rounded-md px-2 py-1.5 text-sm"
               >
                 <option value="">선택</option>
                 {CANONICAL_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -204,7 +204,7 @@ export default function PastWinningsBlock({ customer, onUpdate }: Props) {
                 value={draft.unitType || ""}
                 onChange={(e) => setDraft({ ...draft, unitType: e.target.value })}
                 placeholder="예: 84A"
-                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                className="w-full border border-border rounded-md px-2 py-1.5 text-sm"
               />
             </div>
             <div>
@@ -215,7 +215,7 @@ export default function PastWinningsBlock({ customer, onUpdate }: Props) {
                 value={draft.restrictionYears ?? ""}
                 onChange={(e) => setDraft({ ...draft, restrictionYears: e.target.value === "" ? undefined : Number(e.target.value) })}
                 placeholder="예: 5"
-                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                className="w-full border border-border rounded-md px-2 py-1.5 text-sm"
               />
             </div>
             <div>
@@ -224,7 +224,7 @@ export default function PastWinningsBlock({ customer, onUpdate }: Props) {
                 type="date"
                 value={draft.restrictionEndDate || ""}
                 onChange={(e) => setDraft({ ...draft, restrictionEndDate: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                className="w-full border border-border rounded-md px-2 py-1.5 text-sm"
               />
             </div>
             <div className="col-span-2">
@@ -233,7 +233,7 @@ export default function PastWinningsBlock({ customer, onUpdate }: Props) {
                 value={draft.note || ""}
                 onChange={(e) => setDraft({ ...draft, note: e.target.value })}
                 placeholder="특이사항"
-                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                className="w-full border border-border rounded-md px-2 py-1.5 text-sm"
               />
             </div>
           </div>

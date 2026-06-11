@@ -56,13 +56,13 @@ function Badge({ text, cls }: { text: string; cls: string }) {
 function Section({ title, children, defaultOpen = true, right }: { title: string; children: React.ReactNode; defaultOpen?: boolean; right?: React.ReactNode }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden">
+    <div className="border border-border rounded-xl overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-5 py-3.5 bg-gray-50 hover:bg-gray-100 transition-colors"
+        className="w-full flex items-center justify-between px-5 py-3.5 bg-surface2 hover:bg-surface2 transition-colors"
       >
-        <span className="font-semibold text-gray-800 text-sm flex items-center gap-2">{title}{right}</span>
-        {open ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        <span className="font-semibold text-ink text-sm flex items-center gap-2">{title}{right}</span>
+        {open ? <ChevronUp className="w-4 h-4 text-ink-3" /> : <ChevronDown className="w-4 h-4 text-ink-3" />}
       </button>
       {open && <div className="p-5">{children}</div>}
     </div>
@@ -86,15 +86,15 @@ function LintBanner({
     ? "bg-red-50 border-red-200"
     : severityColor === "amber"
     ? "bg-amber-50 border-amber-200"
-    : "bg-blue-50 border-blue-200";
-  const textClass = severityColor === "red" ? "text-red-800" : severityColor === "amber" ? "text-amber-800" : "text-blue-800";
+    : "bg-accent-soft border-accent-line";
+  const textClass = severityColor === "red" ? "text-red-800" : severityColor === "amber" ? "text-amber-800" : "text-accent";
 
   return (
     <div className={`border rounded-xl ${bgClass} overflow-hidden`}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-black/5 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors"
       >
         <div className="flex items-center gap-3">
           <AlertTriangle className={`w-4 h-4 ${textClass}`} />
@@ -104,10 +104,10 @@ function LintBanner({
           <div className="flex items-center gap-2 text-xs">
             {counts.error > 0 && <span className="text-red-700 font-semibold">🔴 오류 {counts.error}</span>}
             {counts.warning > 0 && <span className="text-amber-700 font-semibold">🟡 경고 {counts.warning}</span>}
-            {counts.info > 0 && <span className="text-blue-700">🔵 정보 {counts.info}</span>}
+            {counts.info > 0 && <span className="text-accent">🔵 정보 {counts.info}</span>}
           </div>
         </div>
-        {open ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+        {open ? <ChevronUp className="w-4 h-4 text-ink-3" /> : <ChevronDown className="w-4 h-4 text-ink-3" />}
       </button>
       {open && (
         <div className="px-4 py-3 border-t border-black/10 space-y-1.5 max-h-64 overflow-y-auto">
@@ -120,12 +120,12 @@ function LintBanner({
                 type="button"
                 disabled={!canClick}
                 onClick={() => onClickIssue(issue)}
-                className={`w-full text-left flex items-start gap-2 text-xs px-2 py-1 rounded ${canClick ? "hover:bg-white cursor-pointer" : "cursor-default"}`}
+                className={`w-full text-left flex items-start gap-2 text-xs px-2 py-1 rounded ${canClick ? "hover:bg-surface2 cursor-pointer" : "cursor-default"}`}
               >
                 <span className="flex-shrink-0">{dot}</span>
-                <span className="font-semibold text-gray-800 min-w-[120px]">{issue.label}</span>
-                <span className="text-gray-700 flex-1">{issue.message}</span>
-                {canClick && <span className="text-[10px] text-gray-500">→ 이동</span>}
+                <span className="font-semibold text-ink min-w-[120px]">{issue.label}</span>
+                <span className="text-ink-2 flex-1">{issue.message}</span>
+                {canClick && <span className="text-[10px] text-ink-3">→ 이동</span>}
               </button>
             );
           })}
@@ -142,7 +142,7 @@ function EvidencePage({ page }: { page?: number | null }) {
   const clickable = !!ctx.pdfUrl;
   if (!clickable) {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">
+      <span className="inline-flex items-center gap-1 text-[10px] bg-surface2 text-ink-2 px-1.5 py-0.5 rounded font-medium">
         📄 공고문 p.{page}
       </span>
     );
@@ -151,7 +151,7 @@ function EvidencePage({ page }: { page?: number | null }) {
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); ctx.onOpen(page); }}
-      className="inline-flex items-center gap-1 text-[10px] bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors px-1.5 py-0.5 rounded font-medium cursor-pointer"
+      className="inline-flex items-center gap-1 text-[10px] bg-accent-soft text-accent hover:bg-surface2 transition-colors px-1.5 py-0.5 rounded font-medium cursor-pointer"
       title="공고문 이 페이지 열기"
     >
       📄 공고문 p.{page}
@@ -165,7 +165,7 @@ function AppliesTo({ tags }: { tags: string[] }) {
   return (
     <div className="flex flex-wrap gap-1">
       {tags.map((t) => (
-        <span key={t} className="inline-block text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">{t}</span>
+        <span key={t} className="inline-block text-[10px] bg-accent-soft text-accent px-1.5 py-0.5 rounded font-medium">{t}</span>
       ))}
     </div>
   );
@@ -226,51 +226,51 @@ function OverviewTab({ ann, rules }: { ann: AnnouncementDetail; rules: Record<st
       <Section title="단지 기본 정보">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <p className="text-xs text-gray-500 mb-1">단지명</p>
+            <p className="text-xs text-ink-3 mb-1">단지명</p>
             <p className="text-sm font-semibold">{ann.title}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-1">위치</p>
+            <p className="text-xs text-ink-3 mb-1">위치</p>
             <p className="text-sm">{regionFull}</p>
           </div>
           {rules.developer && (
             <div>
-              <p className="text-xs text-gray-500 mb-1">사업주체</p>
+              <p className="text-xs text-ink-3 mb-1">사업주체</p>
               <p className="text-sm">{rules.developer}</p>
             </div>
           )}
           {rules.builder && (
             <div>
-              <p className="text-xs text-gray-500 mb-1">시공사</p>
+              <p className="text-xs text-ink-3 mb-1">시공사</p>
               <p className="text-sm">{rules.builder}</p>
             </div>
           )}
           {rules.housing_management_no && (
             <div>
-              <p className="text-xs text-gray-500 mb-1">주택관리번호</p>
+              <p className="text-xs text-ink-3 mb-1">주택관리번호</p>
               <p className="text-sm font-mono">{rules.housing_management_no}</p>
             </div>
           )}
           {rules.approval_no && (
             <div>
-              <p className="text-xs text-gray-500 mb-1">승인번호</p>
+              <p className="text-xs text-ink-3 mb-1">승인번호</p>
               <p className="text-sm font-mono">{rules.approval_no}</p>
             </div>
           )}
           {(rules._moveIn || rules.move_in_date) && (
             <div>
-              <p className="text-xs text-gray-500 mb-1">입주 예정</p>
+              <p className="text-xs text-ink-3 mb-1">입주 예정</p>
               <p className="text-sm">{rules._moveIn || rules.move_in_date}</p>
             </div>
           )}
           <div>
-            <p className="text-xs text-gray-500 mb-1">총 세대수</p>
+            <p className="text-xs text-ink-3 mb-1">총 세대수</p>
             <p className="text-sm font-semibold">{totalUnits > 0 ? `${totalUnits}세대` : "—"}
               {generalSum > 0 || specialSum > 0 ? (
-                <span className="text-gray-400 font-normal"> (일반 {generalSum} / 특별 {specialSum})</span>
+                <span className="text-ink-3 font-normal"> (일반 {generalSum} / 특별 {specialSum})</span>
               ) : null}
               {lowestFloorUnits ? (
-                <span className="text-gray-400 font-normal"> · 최하층 우선 {lowestFloorUnits}</span>
+                <span className="text-ink-3 font-normal"> · 최하층 우선 {lowestFloorUnits}</span>
               ) : null}
             </p>
           </div>
@@ -284,7 +284,7 @@ function OverviewTab({ ann, rules }: { ann: AnnouncementDetail; rules: Record<st
           const priceCap = rules._priceCapApplied !== undefined ? rules._priceCapApplied : rules.price_cap_applied;
           if (!resale && !reWin && !residence && priceCap === undefined) return null;
           return (
-            <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+            <div className="mt-4 pt-4 border-t border-border space-y-2">
               {resale && <YesNo value={resale} label="전매제한" />}
               {reWin && <YesNo value={reWin} label="재당첨 제한" />}
               {residence && <YesNo value={residence} label="거주의무" />}
@@ -307,24 +307,24 @@ function OverviewTab({ ann, rules }: { ann: AnnouncementDetail; rules: Record<st
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-2 px-2 text-xs font-medium text-gray-500">타입</th>
-                  <th className="text-right py-2 px-2 text-xs font-medium text-gray-500">전용면적</th>
-                  <th className="text-right py-2 px-2 text-xs font-medium text-gray-500">총 세대</th>
-                  <th className="text-right py-2 px-2 text-xs font-medium text-gray-500">일반</th>
-                  <th className="text-right py-2 px-2 text-xs font-medium text-gray-500">특별</th>
-                  <th className="text-right py-2 px-2 text-xs font-medium text-gray-500">분양가</th>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 px-2 text-xs font-medium text-ink-3">타입</th>
+                  <th className="text-right py-2 px-2 text-xs font-medium text-ink-3">전용면적</th>
+                  <th className="text-right py-2 px-2 text-xs font-medium text-ink-3">총 세대</th>
+                  <th className="text-right py-2 px-2 text-xs font-medium text-ink-3">일반</th>
+                  <th className="text-right py-2 px-2 text-xs font-medium text-ink-3">특별</th>
+                  <th className="text-right py-2 px-2 text-xs font-medium text-ink-3">분양가</th>
                 </tr>
               </thead>
               <tbody>
                 {exclusiveAreas.map((a: any, i: number) => (
-                  <tr key={i} className="border-b border-gray-50">
+                  <tr key={i} className="border-b border-border-soft">
                     <td className="py-2 px-2 font-medium">{a.area || `타입${i + 1}`}</td>
-                    <td className="py-2 px-2 text-right text-gray-600">{a.squareMeters ? `${a.squareMeters}㎡` : "—"}</td>
+                    <td className="py-2 px-2 text-right text-ink-2">{a.squareMeters ? `${a.squareMeters}㎡` : "—"}</td>
                     <td className="py-2 px-2 text-right">{a.totalUnits ?? "—"}</td>
-                    <td className="py-2 px-2 text-right text-gray-600">{a.generalUnits ?? "—"}</td>
-                    <td className="py-2 px-2 text-right text-gray-600">{a.specialUnits ?? "—"}</td>
-                    <td className="py-2 px-2 text-right text-gray-600">{a.price || "—"}</td>
+                    <td className="py-2 px-2 text-right text-ink-2">{a.generalUnits ?? "—"}</td>
+                    <td className="py-2 px-2 text-right text-ink-2">{a.specialUnits ?? "—"}</td>
+                    <td className="py-2 px-2 text-right text-ink-2">{a.price || "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -369,7 +369,7 @@ function OverviewTab({ ann, rules }: { ann: AnnouncementDetail; rules: Record<st
             ];
           })().map((item) => (
             <div key={item.label} className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">{item.label}</span>
+              <span className="text-ink-3">{item.label}</span>
               <span className="font-medium">{item.value}</span>
             </div>
           ))}
@@ -390,7 +390,7 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
 
   // 지역 우선공급 총합 비율로 bar chart 구성
   const ratioSum = regionalPriorityRows.reduce((s, r) => s + (Number(r.ratioPercent) || 0), 0);
-  const PRIORITY_COLORS = ["bg-blue-500", "bg-sky-500", "bg-indigo-500", "bg-violet-500", "bg-purple-500"];
+  const PRIORITY_COLORS = ["bg-accent", "bg-sky-500", "bg-indigo-500", "bg-violet-500", "bg-purple-500"];
 
   return (
     <div className="space-y-4">
@@ -399,26 +399,26 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
         <Section title="신청 가능 대상">
           <div className="grid grid-cols-2 gap-3">
             {rules.min_age !== undefined && rules.min_age !== null && (
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs text-gray-500">최소 나이</p>
-                <p className="text-sm font-bold text-blue-700 mt-1">만 {rules.min_age}세 이상</p>
+              <div className="bg-surface2 rounded-lg p-3">
+                <p className="text-xs text-ink-3">최소 나이</p>
+                <p className="text-sm font-bold text-accent mt-1">만 {rules.min_age}세 이상</p>
               </div>
             )}
             {rules.minor_head_allowed !== undefined && rules.minor_head_allowed !== null && (
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs text-gray-500">세대주인 미성년자</p>
+              <div className="bg-surface2 rounded-lg p-3">
+                <p className="text-xs text-ink-3">세대주인 미성년자</p>
                 <p className="text-sm font-medium mt-1">{rules.minor_head_allowed ? "허용" : "불가"}</p>
               </div>
             )}
             {rules.foreigner_allowed !== undefined && rules.foreigner_allowed !== null && (
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs text-gray-500">외국인/재외동포</p>
+              <div className="bg-surface2 rounded-lg p-3">
+                <p className="text-xs text-ink-3">외국인/재외동포</p>
                 <p className="text-sm font-medium mt-1">{rules.foreigner_allowed ? "가능" : "불가"}</p>
               </div>
             )}
             {eligibleRegions.length > 0 && (
-              <div className="bg-gray-50 rounded-lg p-3 col-span-2">
-                <p className="text-xs text-gray-500 mb-1">신청 가능 지역</p>
+              <div className="bg-surface2 rounded-lg p-3 col-span-2">
+                <p className="text-xs text-ink-3 mb-1">신청 가능 지역</p>
                 <p className="text-sm">{eligibleRegions.join(", ")}</p>
               </div>
             )}
@@ -430,7 +430,7 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
       {regionalPriorityRows.length > 0 && (
         <Section title="지역 우선공급 비율">
           <div className="space-y-3">
-            <div className="flex h-4 rounded-full overflow-hidden border border-gray-200">
+            <div className="flex h-4 rounded-full overflow-hidden border border-border">
               {regionalPriorityRows.map((r, i) => {
                 const pct = ratioSum > 0 ? ((Number(r.ratioPercent) || 0) / ratioSum) * 100 : 0;
                 return <div key={i} className={PRIORITY_COLORS[i % PRIORITY_COLORS.length]} style={{ width: `${pct}%` }} title={`${r.region} ${r.ratioPercent ?? "?"}%`} />;
@@ -441,7 +441,7 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
                 <div key={i} className="flex items-center gap-2 text-sm">
                   <div className={`w-2.5 h-2.5 rounded-full ${PRIORITY_COLORS[i % PRIORITY_COLORS.length]}`} />
                   <span className="flex-1">{r.region}{r.minResidenceMonths ? ` · ${r.minResidenceMonths}개월 이상 거주` : ""}{r.supplyScope ? ` · ${r.supplyScope}` : ""}</span>
-                  <span className="font-semibold text-gray-800">{r.ratioPercent ?? "?"}%</span>
+                  <span className="font-semibold text-ink">{r.ratioPercent ?? "?"}%</span>
                   <EvidencePage page={r.evidencePage} />
                 </div>
               ))}
@@ -453,11 +453,11 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
       <Section title="거주지역 요건" defaultOpen={regionalPriorityRows.length === 0}>
         <div className="space-y-3">
           <div>
-            <p className="text-xs font-medium text-blue-600 mb-1">해당지역 (우선공급)</p>
+            <p className="text-xs font-medium text-accent mb-1">해당지역 (우선공급)</p>
             <p className="text-sm font-semibold">{regionPriority[0] || "—"}</p>
           </div>
           <div>
-            <p className="text-xs font-medium text-gray-500 mb-1">기타지역</p>
+            <p className="text-xs font-medium text-ink-3 mb-1">기타지역</p>
             <p className="text-sm">{regionPriority.slice(1).join(", ") || "—"}</p>
           </div>
         </div>
@@ -469,19 +469,19 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-2 text-xs font-medium text-gray-500">면적</th>
-                  <th className="text-left py-2 text-xs font-medium text-gray-500">지역</th>
-                  <th className="text-right py-2 text-xs font-medium text-gray-500">최소 예치금</th>
-                  <th className="text-right py-2 text-xs font-medium text-gray-500">근거</th>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 text-xs font-medium text-ink-3">면적</th>
+                  <th className="text-left py-2 text-xs font-medium text-ink-3">지역</th>
+                  <th className="text-right py-2 text-xs font-medium text-ink-3">최소 예치금</th>
+                  <th className="text-right py-2 text-xs font-medium text-ink-3">근거</th>
                 </tr>
               </thead>
               <tbody>
                 {deposits.map((d, i) => (
-                  <tr key={i} className="border-b border-gray-50">
+                  <tr key={i} className="border-b border-border-soft">
                     <td className="py-2.5 font-medium">{d.areaRange || "—"}</td>
-                    <td className="py-2.5 text-gray-700">{d.region || "—"}</td>
-                    <td className="py-2.5 text-right font-bold text-blue-700">{d.minDeposit || "—"}</td>
+                    <td className="py-2.5 text-ink-2">{d.region || "—"}</td>
+                    <td className="py-2.5 text-right font-bold text-accent">{d.minDeposit || "—"}</td>
                     <td className="py-2.5 text-right"><EvidencePage page={d.evidencePage} /></td>
                   </tr>
                 ))}
@@ -496,33 +496,33 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
         <Section title="1·2순위 요건">
           <div className="space-y-3">
             {rules.rank1_criteria && (
-              <div className="bg-blue-50 rounded-lg p-3">
-                <p className="text-xs font-semibold text-blue-700 mb-1">1순위</p>
-                <p className="text-sm text-blue-900">{rules.rank1_criteria}</p>
+              <div className="bg-accent-soft rounded-lg p-3">
+                <p className="text-xs font-semibold text-accent mb-1">1순위</p>
+                <p className="text-sm text-accent">{rules.rank1_criteria}</p>
               </div>
             )}
             {rules.rank2_criteria && (
-              <div className="bg-sky-50 rounded-lg p-3">
-                <p className="text-xs font-semibold text-sky-700 mb-1">2순위</p>
-                <p className="text-sm text-sky-900">{rules.rank2_criteria}</p>
+              <div className="bg-surface2 rounded-lg p-3">
+                <p className="text-xs font-semibold text-ink-2 mb-1">2순위</p>
+                <p className="text-sm text-ink">{rules.rank2_criteria}</p>
               </div>
             )}
             <div className="grid grid-cols-3 gap-2">
               {rules.household_head_required !== undefined && rules.household_head_required !== null && (
-                <div className="bg-gray-50 rounded-lg p-2.5 text-center">
-                  <p className="text-[10px] text-gray-500">세대주 요건</p>
+                <div className="bg-surface2 rounded-lg p-2.5 text-center">
+                  <p className="text-[10px] text-ink-3">세대주 요건</p>
                   <p className="text-xs font-semibold mt-0.5">{rules.household_head_required ? "필수" : "무관"}</p>
                 </div>
               )}
               {rules.homeless_household_required !== undefined && rules.homeless_household_required !== null && (
-                <div className="bg-gray-50 rounded-lg p-2.5 text-center">
-                  <p className="text-[10px] text-gray-500">무주택세대구성원</p>
+                <div className="bg-surface2 rounded-lg p-2.5 text-center">
+                  <p className="text-[10px] text-ink-3">무주택세대구성원</p>
                   <p className="text-xs font-semibold mt-0.5">{rules.homeless_household_required ? "필수" : "무관"}</p>
                 </div>
               )}
               {rules.single_home_owner_rank1_allowed !== undefined && rules.single_home_owner_rank1_allowed !== null && (
-                <div className="bg-gray-50 rounded-lg p-2.5 text-center">
-                  <p className="text-[10px] text-gray-500">1주택자 1순위</p>
+                <div className="bg-surface2 rounded-lg p-2.5 text-center">
+                  <p className="text-[10px] text-ink-3">1주택자 1순위</p>
                   <p className="text-xs font-semibold mt-0.5">{rules.single_home_owner_rank1_allowed ? "가능" : "불가"}</p>
                 </div>
               )}
@@ -537,16 +537,16 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-2 text-xs font-medium text-gray-500">주택형</th>
-                  <th className="text-right py-2 text-xs font-medium text-gray-500">가점제</th>
-                  <th className="text-right py-2 text-xs font-medium text-gray-500">추첨제</th>
-                  <th className="text-right py-2 text-xs font-medium text-gray-500">근거</th>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 text-xs font-medium text-ink-3">주택형</th>
+                  <th className="text-right py-2 text-xs font-medium text-ink-3">가점제</th>
+                  <th className="text-right py-2 text-xs font-medium text-ink-3">추첨제</th>
+                  <th className="text-right py-2 text-xs font-medium text-ink-3">근거</th>
                 </tr>
               </thead>
               <tbody>
                 {ratios.map((r, i) => (
-                  <tr key={i} className="border-b border-gray-50">
+                  <tr key={i} className="border-b border-border-soft">
                     <td className="py-2.5 font-medium">{r.area || "—"}</td>
                     <td className="py-2.5 text-right">{r.pointPercent !== null && r.pointPercent !== undefined ? `${r.pointPercent}%` : "—"}</td>
                     <td className="py-2.5 text-right">{r.lotteryPercent !== null && r.lotteryPercent !== undefined ? `${r.lotteryPercent}%` : "—"}</td>
@@ -561,13 +561,13 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
 
       <Section title="청약통장 요건">
         <div className="mb-3">
-          <p className="text-xs text-gray-500 mb-1">최소 가입기간</p>
-          <p className="text-sm font-bold text-blue-700">
+          <p className="text-xs text-ink-3 mb-1">최소 가입기간</p>
+          <p className="text-sm font-bold text-accent">
             {rules.min_subscription_period ? `${rules.min_subscription_period}개월 이상` : "—"}
           </p>
         </div>
         <div className="mb-3">
-          <p className="text-xs text-gray-500 mb-1">최소 거주기간</p>
+          <p className="text-xs text-ink-3 mb-1">최소 거주기간</p>
           <p className="text-sm font-medium">
             {rules.min_region_residence_months ? `${rules.min_region_residence_months}개월` : "—"}
           </p>
@@ -579,17 +579,17 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
         <Section title="일반공급 가점제/추첨제">
           {rules._generalPointSystem ? (
             <>
-              <div className="mb-3 bg-indigo-50 rounded-lg p-3">
-                <p className="text-xs font-medium text-indigo-700">적용 비율</p>
-                <p className="text-sm text-indigo-900 mt-0.5 font-semibold">{rules._generalPointSystem.ratio}</p>
+              <div className="mb-3 bg-accent-soft rounded-lg p-3">
+                <p className="text-xs font-medium text-accent">적용 비율</p>
+                <p className="text-sm text-accent mt-0.5 font-semibold">{rules._generalPointSystem.ratio}</p>
               </div>
               {rules._generalPointSystem.items?.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-gray-500 mb-2">가점 항목 (최대 {rules._generalPointSystem.maxPoints}점)</p>
+                  <p className="text-xs font-medium text-ink-3 mb-2">가점 항목 (최대 {rules._generalPointSystem.maxPoints}점)</p>
                   <div className="space-y-1.5">
                     {rules._generalPointSystem.items.map((item: string, i: number) => (
                       <div key={i} className="flex items-center gap-2 text-sm">
-                        <div className="w-5 h-5 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">{i + 1}</div>
+                        <div className="w-5 h-5 bg-surface2 rounded-full flex items-center justify-center text-xs font-medium text-ink-2">{i + 1}</div>
                         <span>{item}</span>
                       </div>
                     ))}
@@ -598,9 +598,9 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
               )}
             </>
           ) : (
-            <div className="bg-indigo-50 rounded-lg p-3">
-              <p className="text-xs font-medium text-indigo-700">적용 비율</p>
-              <p className="text-sm text-indigo-900 mt-0.5 font-semibold">{rules.point_system}</p>
+            <div className="bg-accent-soft rounded-lg p-3">
+              <p className="text-xs font-medium text-accent">적용 비율</p>
+              <p className="text-sm text-accent mt-0.5 font-semibold">{rules.point_system}</p>
             </div>
           )}
         </Section>
@@ -608,41 +608,41 @@ function EligibilityTab({ rules }: { rules: Record<string, any> }) {
 
       <Section title="규제 현황">
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-500">규제지역</p>
-            <Badge text={rules.regulation || (rules.no_home_required ? "비규제" : "—")} cls={REG_COLOR[rules.regulation] || "bg-gray-100 text-gray-700"} />
+          <div className="bg-surface2 rounded-lg p-3">
+            <p className="text-xs text-ink-3">규제지역</p>
+            <Badge text={rules.regulation || (rules.no_home_required ? "비규제" : "—")} cls={REG_COLOR[rules.regulation] || "bg-surface2 text-ink-2"} />
           </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-500">무주택 요건</p>
+          <div className="bg-surface2 rounded-lg p-3">
+            <p className="text-xs text-ink-3">무주택 요건</p>
             <p className="text-sm font-medium mt-1">{rules.no_home_required ? "필수" : "해당 없음"}</p>
           </div>
           {(rules._landType || rules.land_type) && (
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500">택지유형</p>
+            <div className="bg-surface2 rounded-lg p-3">
+              <p className="text-xs text-ink-3">택지유형</p>
               <p className="text-sm font-medium mt-1">{rules._landType || rules.land_type}</p>
             </div>
           )}
           {(rules._resaleRestriction || rules.resale_restriction) && (
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500">전매제한</p>
+            <div className="bg-surface2 rounded-lg p-3">
+              <p className="text-xs text-ink-3">전매제한</p>
               <p className="text-sm font-medium mt-1">{rules._resaleRestriction || rules.resale_restriction}</p>
             </div>
           )}
           {(rules._reWinRestriction || rules.rewin_restriction) && (
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500">재당첨 제한</p>
+            <div className="bg-surface2 rounded-lg p-3">
+              <p className="text-xs text-ink-3">재당첨 제한</p>
               <p className="text-sm font-medium mt-1">{rules._reWinRestriction || rules.rewin_restriction}</p>
             </div>
           )}
           {(rules._residenceObligation || rules.residence_obligation) && (
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500">거주의무</p>
+            <div className="bg-surface2 rounded-lg p-3">
+              <p className="text-xs text-ink-3">거주의무</p>
               <p className="text-sm font-medium mt-1">{rules._residenceObligation || rules.residence_obligation}</p>
             </div>
           )}
           {rules.passbook_reuse_blocked !== undefined && rules.passbook_reuse_blocked !== null && (
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500">통장 재사용</p>
+            <div className="bg-surface2 rounded-lg p-3">
+              <p className="text-xs text-ink-3">통장 재사용</p>
               <p className="text-sm font-medium mt-1">{rules.passbook_reuse_blocked ? "당첨 시 재사용 불가" : "가능"}</p>
             </div>
           )}
@@ -706,7 +706,7 @@ function SpecialTab({ rules, onJumpToDocs }: { rules: Record<string, any>; onJum
           <Section title="특별공급 세대수 배분">
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-600">총 특별공급</span>
+                <span className="text-sm text-ink-2">총 특별공급</span>
                 <span className="text-lg font-bold">{total}세대</span>
               </div>
               <div className="flex h-3 rounded-full overflow-hidden">
@@ -717,9 +717,9 @@ function SpecialTab({ rules, onJumpToDocs }: { rules: Record<string, any>; onJum
             </div>
             <div className="grid grid-cols-2 gap-2">
               {items.map((item) => (
-                <div key={item.label} className="flex items-center gap-2.5 p-2 rounded-lg bg-gray-50">
+                <div key={item.label} className="flex items-center gap-2.5 p-2 rounded-lg bg-surface2">
                   <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
-                  <span className="text-sm text-gray-700 flex-1">{item.label}</span>
+                  <span className="text-sm text-ink-2 flex-1">{item.label}</span>
                   <span className="text-sm font-bold">{item.value}세대</span>
                 </div>
               ))}
@@ -733,9 +733,9 @@ function SpecialTab({ rules, onJumpToDocs }: { rules: Record<string, any>; onJum
         <Section title="특별공급 유형">
           <div className="flex flex-wrap gap-2">
             {specialTypes.map((t) => (
-              <div key={t} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50">
-                <div className={`w-2.5 h-2.5 rounded-full ${TYPE_COLORS[t] || "bg-gray-400"}`} />
-                <span className="text-sm text-gray-700">{t}</span>
+              <div key={t} className="flex items-center gap-2 p-2 rounded-lg bg-surface2">
+                <div className={`w-2.5 h-2.5 rounded-full ${TYPE_COLORS[t] || "bg-ink-4"}`} />
+                <span className="text-sm text-ink-2">{t}</span>
               </div>
             ))}
           </div>
@@ -758,7 +758,7 @@ function SpecialTab({ rules, onJumpToDocs }: { rules: Record<string, any>; onJum
           if (st.carValueLimit) qualFields.push({ label: "자동차가액", value: st.carValueLimit });
 
           return (
-            <Section key={i} title={st.type} right={st.units ? <span className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-medium">{st.units}세대</span> : undefined}>
+            <Section key={i} title={st.type} right={st.units ? <span className="text-[10px] bg-surface2 text-ink-2 px-1.5 py-0.5 rounded font-medium">{st.units}세대</span> : undefined}>
               <div className="space-y-4">
                 {/* ── 1) 자격요건 ── */}
                 <div>
@@ -775,14 +775,14 @@ function SpecialTab({ rules, onJumpToDocs }: { rules: Record<string, any>; onJum
                   {qualFields.length > 0 ? (
                     <div className="grid grid-cols-2 gap-2">
                       {qualFields.map((f) => (
-                        <div key={f.label} className="bg-gray-50 rounded-lg p-2.5">
-                          <p className="text-[11px] text-gray-500">{f.label}</p>
-                          <p className={`text-sm font-semibold mt-0.5 ${f.accent ? "text-blue-700" : ""}`}>{f.value}</p>
+                        <div key={f.label} className="bg-surface2 rounded-lg p-2.5">
+                          <p className="text-[11px] text-ink-3">{f.label}</p>
+                          <p className={`text-sm font-semibold mt-0.5 ${f.accent ? "text-accent" : ""}`}>{f.value}</p>
                         </div>
                       ))}
                     </div>
                   ) : !st.requireHomeless && (
-                    <p className="text-xs text-gray-400">자격요건 데이터 없음</p>
+                    <p className="text-xs text-ink-3">자격요건 데이터 없음</p>
                   )}
                   {st.conditions && st.conditions.length > 0 && (
                     <div className="mt-2 pl-2 border-l-2 border-emerald-200">
@@ -800,11 +800,11 @@ function SpecialTab({ rules, onJumpToDocs }: { rules: Record<string, any>; onJum
                 {st.selectionMethod && (
                   <div>
                     <div className="flex items-center gap-1.5 mb-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                      <p className="text-xs font-bold text-indigo-700">선정방식</p>
+                      <div className="w-1.5 h-1.5 rounded-full bg-accent" />
+                      <p className="text-xs font-bold text-accent">선정방식</p>
                     </div>
-                    <div className="bg-indigo-50 rounded-lg p-3">
-                      <p className="text-sm text-indigo-900">{st.selectionMethod}</p>
+                    <div className="bg-accent-soft rounded-lg p-3">
+                      <p className="text-sm text-accent">{st.selectionMethod}</p>
                     </div>
                   </div>
                 )}
@@ -851,7 +851,7 @@ function SpecialTab({ rules, onJumpToDocs }: { rules: Record<string, any>; onJum
 
                 {/* 근거 — 있으면 표시 */}
                 {(st.evidenceQuote || st.evidencePage) && (
-                  <div className="flex items-center gap-2 text-[11px] text-gray-500 border-t border-gray-100 pt-2">
+                  <div className="flex items-center gap-2 text-[11px] text-ink-3 border-t border-border pt-2">
                     {st.evidenceQuote && (
                       <span className="italic">"{st.evidenceQuote.slice(0, 120)}{st.evidenceQuote.length > 120 ? "…" : ""}"</span>
                     )}
@@ -863,7 +863,7 @@ function SpecialTab({ rules, onJumpToDocs }: { rules: Record<string, any>; onJum
           );
         })
       ) : (
-        <div className="text-center py-10 text-gray-400">
+        <div className="text-center py-10 text-ink-3">
           <Heart className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p>특별공급 상세 조건이 아직 추출되지 않았습니다</p>
           <p className="text-xs mt-1">PDF를 다시 업로드하면 AI가 자동 분석합니다</p>
@@ -930,21 +930,21 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
     <div className="space-y-4">
       {/* Phase E — 조건 선택 패널 */}
       {hasIncome && (
-        <div className="border border-blue-200 bg-blue-50/50 rounded-xl p-4 space-y-3">
+        <div className="border border-accent-line bg-accent-soft rounded-xl p-4 space-y-3">
           <div className="flex items-center gap-2">
-            <Banknote className="w-4 h-4 text-blue-600" />
-            <h3 className="text-sm font-semibold text-blue-900">소득기준 계산기</h3>
+            <Banknote className="w-4 h-4 text-accent" />
+            <h3 className="text-sm font-semibold text-accent">소득기준 계산기</h3>
           </div>
-          <p className="text-xs text-blue-700">
+          <p className="text-xs text-accent">
             해당 세대의 조건을 선택하면 적용되는 소득 상한이 자동 계산됩니다.
           </p>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-[11px] font-semibold text-blue-700 mb-1">가구원수</label>
+              <label className="block text-[11px] font-semibold text-accent mb-1">가구원수</label>
               <select
                 value={selectedSize}
                 onChange={(e) => setSelectedSize(e.target.value)}
-                className="w-full border border-blue-200 rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="w-full border border-accent-line rounded-md px-2 py-1.5 text-sm bg-bg focus:outline-none focus:ring-2 focus:ring-accent"
               >
                 {householdSizes.map((s) => (
                   <option key={s} value={s}>{s}</option>
@@ -952,14 +952,14 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
               </select>
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-blue-700 mb-1">공급 구분</label>
-              <div className="flex rounded-md border border-blue-200 bg-white overflow-hidden text-sm">
+              <label className="block text-[11px] font-semibold text-accent mb-1">공급 구분</label>
+              <div className="flex rounded-md border border-accent-line bg-bg overflow-hidden text-sm">
                 {(["우선", "일반"] as const).map((m) => (
                   <button
                     key={m}
                     type="button"
                     onClick={() => setSupplyMode(m)}
-                    className={`flex-1 py-1.5 transition-colors ${supplyMode === m ? "bg-blue-600 text-white font-semibold" : "text-blue-700 hover:bg-blue-50"}`}
+                    className={`flex-1 py-1.5 transition-colors ${supplyMode === m ? "bg-accent text-[#0a0a0a] font-semibold" : "text-accent hover:bg-accent-soft"}`}
                   >
                     {m}공급
                   </button>
@@ -967,14 +967,14 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
               </div>
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-blue-700 mb-1">소득 형태</label>
-              <div className="flex rounded-md border border-blue-200 bg-white overflow-hidden text-sm">
+              <label className="block text-[11px] font-semibold text-accent mb-1">소득 형태</label>
+              <div className="flex rounded-md border border-accent-line bg-bg overflow-hidden text-sm">
                 {(["외벌이", "맞벌이"] as const).map((m) => (
                   <button
                     key={m}
                     type="button"
                     onClick={() => setEarnerMode(m)}
-                    className={`flex-1 py-1.5 transition-colors ${earnerMode === m ? "bg-blue-600 text-white font-semibold" : "text-blue-700 hover:bg-blue-50"}`}
+                    className={`flex-1 py-1.5 transition-colors ${earnerMode === m ? "bg-accent text-[#0a0a0a] font-semibold" : "text-accent hover:bg-accent-soft"}`}
                   >
                     {m}
                   </button>
@@ -984,13 +984,13 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
           </div>
 
           {/* 계산 결과 */}
-          <div className="mt-2 bg-white border border-blue-200 rounded-lg p-3">
+          <div className="mt-2 bg-surface border border-accent-line rounded-lg p-3">
             <div className="flex items-baseline gap-2 flex-wrap">
-              <span className="text-xs text-gray-500">이 조건의 소득 상한</span>
-              <span className="text-xl font-bold text-blue-700">
+              <span className="text-xs text-ink-3">이 조건의 소득 상한</span>
+              <span className="text-xl font-bold text-accent">
                 {selectedValue !== null ? `${selectedValue.toLocaleString("ko-KR")}원` : "—"}
               </span>
-              <span className="text-[11px] text-gray-500">
+              <span className="text-[11px] text-ink-3">
                 ({highlightCol} · {selectedSize} · {earnerMode} · {supplyMode}공급)
               </span>
             </div>
@@ -1004,22 +1004,22 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-2 text-xs font-medium text-gray-500">가구원수</th>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 text-xs font-medium text-ink-3">가구원수</th>
                   {percentColumns.map((p) => (
-                    <th key={p} className={`text-right py-2 text-xs font-medium ${p === highlightCol ? "text-blue-700 bg-blue-50" : "text-gray-500"}`}>{p}</th>
+                    <th key={p} className={`text-right py-2 text-xs font-medium ${p === highlightCol ? "text-accent bg-accent-soft" : "text-ink-3"}`}>{p}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {Object.entries(incomeTable).map(([size, vals]: [string, any]) => (
-                  <tr key={size} className={`border-b border-gray-50 ${size === selectedSize ? "bg-blue-50/30" : ""}`}>
-                    <td className={`py-2.5 font-medium ${size === selectedSize ? "text-blue-700" : ""}`}>{size}</td>
+                  <tr key={size} className={`border-b border-border-soft ${size === selectedSize ? "bg-accent-soft" : ""}`}>
+                    <td className={`py-2.5 font-medium ${size === selectedSize ? "text-accent" : ""}`}>{size}</td>
                     {percentColumns.map((p, i) => {
                       const v = vals?.[p];
                       const isHit = size === selectedSize && p === highlightCol;
                       return (
-                        <td key={i} className={`py-2.5 text-right ${isHit ? "bg-blue-600 text-white font-bold rounded-md" : p === highlightCol ? "bg-blue-50 text-blue-900" : "text-gray-700"}`}>
+                        <td key={i} className={`py-2.5 text-right ${isHit ? "bg-accent text-[#0a0a0a] font-bold rounded-md" : p === highlightCol ? "bg-accent-soft text-accent" : "text-ink-2"}`}>
                           {v === null || v === undefined ? "—" : typeof v === "number" ? `${v.toLocaleString("ko-KR")}원` : String(v)}
                         </td>
                       );
@@ -1037,22 +1037,22 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
         <Section title="특별공급 유형별 소득·자산 기준">
           <div className="grid grid-cols-1 gap-2">
             {incomeCards.map((c, i) => (
-              <div key={i} className="border border-gray-200 rounded-lg p-3">
+              <div key={i} className="border border-border rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <span className="font-semibold text-sm">{c.type}</span>
                   {c.homeless && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-medium">무주택 필수</span>}
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   {c.single != null && (
-                    <div className="bg-blue-50 rounded-md px-2.5 py-1.5">
-                      <span className="text-[10px] text-blue-700">외벌이 소득</span>
-                      <p className="font-bold text-blue-900">{c.single}% 이하</p>
+                    <div className="bg-accent-soft rounded-md px-2.5 py-1.5">
+                      <span className="text-[10px] text-accent">외벌이 소득</span>
+                      <p className="font-bold text-accent">{c.single}% 이하</p>
                     </div>
                   )}
                   {c.dual != null && (
-                    <div className="bg-blue-50 rounded-md px-2.5 py-1.5">
-                      <span className="text-[10px] text-blue-700">맞벌이 소득</span>
-                      <p className="font-bold text-blue-900">{c.dual}% 이하</p>
+                    <div className="bg-accent-soft rounded-md px-2.5 py-1.5">
+                      <span className="text-[10px] text-accent">맞벌이 소득</span>
+                      <p className="font-bold text-accent">{c.dual}% 이하</p>
                     </div>
                   )}
                   {c.asset && (
@@ -1078,7 +1078,7 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
       {nwIncome && (
         <Section title="신혼부부 소득기준 (3인이하 가구 기준)">
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-gray-200"><th className="text-left py-2 text-xs font-medium text-gray-500">구분</th><th className="text-right py-2 text-xs font-medium text-gray-500">소득 상한</th></tr></thead>
+            <thead><tr className="border-b border-border"><th className="text-left py-2 text-xs font-medium text-ink-3">구분</th><th className="text-right py-2 text-xs font-medium text-ink-3">소득 상한</th></tr></thead>
             <tbody>
               {[
                 { label: "우선공급 (외벌이 100%)", sub: "신생아우선 + 우선공급", value: nwIncome.single100, match: supplyMode === "우선" && earnerMode === "외벌이" },
@@ -1086,9 +1086,9 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
                 { label: "일반공급 (외벌이 140%)", sub: "소득초과~140%", value: nwIncome.single140, match: supplyMode === "일반" && earnerMode === "외벌이" },
                 { label: "일반공급 (맞벌이 160%)", sub: "부부 모두 소득 시", value: nwIncome.dual160, match: supplyMode === "일반" && earnerMode === "맞벌이" },
               ].map((r) => (
-                <tr key={r.label} className={`border-b border-gray-50 ${r.match ? "bg-blue-600/10" : ""}`}>
-                  <td className="py-2.5"><p className={`font-medium ${r.match ? "text-blue-700" : ""}`}>{r.label}</p><p className="text-xs text-gray-400">{r.sub}</p></td>
-                  <td className={`py-2.5 text-right font-medium ${r.match ? "text-blue-700 font-bold" : ""}`}>{r.value}</td>
+                <tr key={r.label} className={`border-b border-border-soft ${r.match ? "bg-accent-soft" : ""}`}>
+                  <td className="py-2.5"><p className={`font-medium ${r.match ? "text-accent" : ""}`}>{r.label}</p><p className="text-xs text-ink-3">{r.sub}</p></td>
+                  <td className={`py-2.5 text-right font-medium ${r.match ? "text-accent font-bold" : ""}`}>{r.value}</td>
                 </tr>
               ))}
             </tbody>
@@ -1100,14 +1100,14 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
       {flIncome && (
         <Section title="생애최초 소득기준 (3인이하 가구 기준)">
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-gray-200"><th className="text-left py-2 text-xs font-medium text-gray-500">구분</th><th className="text-right py-2 text-xs font-medium text-gray-500">소득 상한</th></tr></thead>
+            <thead><tr className="border-b border-border"><th className="text-left py-2 text-xs font-medium text-ink-3">구분</th><th className="text-right py-2 text-xs font-medium text-ink-3">소득 상한</th></tr></thead>
             <tbody>
               {[
                 { label: "우선공급 (130% 이하)", sub: "신생아우선 + 우선공급", value: flIncome.pct130, match: supplyMode === "우선" },
                 { label: "일반공급 (160% 이하)", sub: "신생아일반 + 일반공급", value: flIncome.pct160, match: supplyMode === "일반" },
               ].map((r) => (
-                <tr key={r.label} className={`border-b border-gray-50 ${r.match ? "bg-emerald-600/10" : ""}`}>
-                  <td className="py-2.5"><p className={`font-medium ${r.match ? "text-emerald-700" : ""}`}>{r.label}</p><p className="text-xs text-gray-400">{r.sub}</p></td>
+                <tr key={r.label} className={`border-b border-border-soft ${r.match ? "bg-emerald-600/10" : ""}`}>
+                  <td className="py-2.5"><p className={`font-medium ${r.match ? "text-emerald-700" : ""}`}>{r.label}</p><p className="text-xs text-ink-3">{r.sub}</p></td>
                   <td className={`py-2.5 text-right font-medium ${r.match ? "text-emerald-700 font-bold" : "text-emerald-700"}`}>{r.value}</td>
                 </tr>
               ))}
@@ -1117,7 +1117,7 @@ function IncomeTab({ rules }: { rules: Record<string, any> }) {
       )}
 
       {!hasIncome && !nwIncome && !flIncome && incomeCards.length === 0 && (
-        <div className="text-center py-10 text-gray-400">
+        <div className="text-center py-10 text-ink-3">
           <Banknote className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p>소득기준표가 아직 추출되지 않았습니다</p>
           <p className="text-xs mt-1">PDF를 다시 업로드하면 AI가 자동 분석합니다</p>
@@ -1220,7 +1220,7 @@ function DocumentsTab({ rules }: { rules: Record<string, any> }) {
 
   if (!hasDocuments) {
     return (
-      <div className="text-center py-10 text-gray-400">
+      <div className="text-center py-10 text-ink-3">
         <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
         <p>제출서류 목록이 아직 추출되지 않았습니다</p>
         <p className="text-xs mt-1">PDF를 다시 업로드하면 AI가 자동 분석합니다</p>
@@ -1258,40 +1258,40 @@ function DocumentsTab({ rules }: { rules: Record<string, any> }) {
             <Section
               title={`${category} 서류 (상세)`}
               defaultOpen={category === "공통"}
-              right={<span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-medium">{docs.length}건</span>}
+              right={<span className="text-[10px] bg-accent-soft text-accent px-1.5 py-0.5 rounded font-medium">{docs.length}건</span>}
             >
               <div className="space-y-2">
                 {docs.map((d, i) => {
                   const earliest = d.validityDays ? earliestIssueDate(d.validityDays) : "";
                   return (
-                    <div key={i} className="border border-gray-200 rounded-lg p-3 hover:border-gray-300 transition-colors">
+                    <div key={i} className="border border-border rounded-lg p-3 hover:border-border transition-colors">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <FileText className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
+                            <FileText className="w-3.5 h-3.5 text-accent flex-shrink-0" />
                             <p className="text-sm font-semibold">{d.name}</p>
                             {d.required && (
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${d.required === "필수" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${d.required === "필수" ? "bg-red-100 text-red-700" : "bg-surface2 text-ink-2"}`}>
                                 {d.required}
                               </span>
                             )}
                             {d.detailedVersion && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">상세본</span>}
                             {d.originalRequired && <span className="text-[10px] bg-red-50 text-red-700 px-1.5 py-0.5 rounded font-medium">원본</span>}
                           </div>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-600 mt-1">
-                            {d.issuer && <span>발급처: <span className="text-gray-800 font-medium">{d.issuer}</span></span>}
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-2 mt-1">
+                            {d.issuer && <span>발급처: <span className="text-ink font-medium">{d.issuer}</span></span>}
                             {d.validityDays && (
                               <span>
-                                유효기간: <span className="text-gray-800 font-medium">{d.validityDays}일 이내</span>
+                                유효기간: <span className="text-ink font-medium">{d.validityDays}일 이내</span>
                                 {earliest && (
                                   <span className="ml-1 text-emerald-700 font-medium">→ {earliest} 이후 발급분만 유효</span>
                                 )}
                               </span>
                             )}
-                            {d.submitTiming && <span>제출: <span className="text-gray-800 font-medium">{d.submitTiming}</span></span>}
+                            {d.submitTiming && <span>제출: <span className="text-ink font-medium">{d.submitTiming}</span></span>}
                           </div>
                           {Array.isArray(d.alternativeDocs) && d.alternativeDocs.length > 0 && (
-                            <p className="text-[11px] text-gray-500 mt-1">
+                            <p className="text-[11px] text-ink-3 mt-1">
                               대체 가능: {d.alternativeDocs.join(", ")}
                             </p>
                           )}
@@ -1499,7 +1499,7 @@ export default function AnnouncementDetailPage() {
   if (loading) {
     return (
       <div className="p-6 max-w-5xl mx-auto">
-        <div className="card text-center py-16 text-gray-400">
+        <div className="card text-center py-16 text-ink-3">
           <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin opacity-60" />
           <p>공고 정보를 불러오는 중...</p>
         </div>
@@ -1510,12 +1510,12 @@ export default function AnnouncementDetailPage() {
   if (error || !ann) {
     return (
       <div className="p-6 max-w-5xl mx-auto">
-        <button onClick={() => router.push("/announcements")} className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1 mb-4">
+        <button onClick={() => router.push("/announcements")} className="text-sm text-ink-2 hover:text-ink flex items-center gap-1 mb-4">
           <ArrowLeft className="w-4 h-4" /> 목록으로 돌아가기
         </button>
         <div className="card text-center py-16">
           <AlertCircle className="w-12 h-12 mx-auto mb-3 text-red-400" />
-          <p className="text-gray-700 font-medium">{error || "공고를 찾을 수 없습니다"}</p>
+          <p className="text-ink-2 font-medium">{error || "공고를 찾을 수 없습니다"}</p>
         </div>
       </div>
     );
@@ -1533,16 +1533,16 @@ export default function AnnouncementDetailPage() {
     <EvidenceContext.Provider value={{ pdfUrl, onOpen: (page) => setPdfModal({ open: true, page }) }}>
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
-      <a href="/announcements" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-3">
+      <a href="/announcements" className="inline-flex items-center gap-1 text-sm text-ink-3 hover:text-ink-2 mb-3">
         <ArrowLeft className="w-3.5 h-3.5" /> 모집공고 목록
       </a>
 
       <div className="mb-6">
         <div className="flex items-center gap-3 flex-wrap mb-1">
-          <h1 className="text-2xl font-bold text-gray-900">{ann.title}</h1>
-          {regulation && <Badge text={regulation} cls={REG_COLOR[regulation] || "bg-gray-100 text-gray-700"} />}
+          <h1 className="text-2xl font-bold text-ink">{ann.title}</h1>
+          {regulation && <Badge text={regulation} cls={REG_COLOR[regulation] || "bg-surface2 text-ink-2"} />}
         </div>
-        <div className="flex items-center gap-4 text-sm text-gray-500">
+        <div className="flex items-center gap-4 text-sm text-ink-3">
           {regionFull && (
             <span className="flex items-center gap-1">
               <MapPin className="w-3.5 h-3.5" /> {regionFull}
@@ -1558,33 +1558,33 @@ export default function AnnouncementDetailPage() {
 
       {/* Phase B 상단 고정 메타 바 — 공고 기준일 + 식별 번호 + 원본 PDF 뷰어 */}
       {(rules.announcement_base_date || rules.housing_management_no || rules.approval_no || rules.announcement_date || pdfUrl) && (
-        <div className="mb-5 border border-blue-200 bg-blue-50 rounded-xl p-3">
+        <div className="mb-5 border border-accent-line bg-accent-soft rounded-xl p-3">
           <div className="flex items-center gap-4 flex-wrap text-xs">
             {(rules.announcement_base_date || rules.announcement_date) && (
               <div className="flex items-center gap-1.5">
-                <CalendarDays className="w-3.5 h-3.5 text-blue-600" />
-                <span className="text-blue-700 font-semibold">공고 기준일</span>
-                <span className="text-blue-900 font-bold">{fmtDate(rules.announcement_base_date || rules.announcement_date)}</span>
-                <span className="text-blue-500">— 자격 판정은 이 날짜 기준</span>
+                <CalendarDays className="w-3.5 h-3.5 text-accent" />
+                <span className="text-accent font-semibold">공고 기준일</span>
+                <span className="text-accent font-bold">{fmtDate(rules.announcement_base_date || rules.announcement_date)}</span>
+                <span className="text-accent">— 자격 판정은 이 날짜 기준</span>
               </div>
             )}
             {rules.housing_management_no && (
               <div className="flex items-center gap-1.5">
-                <span className="text-gray-500">주택관리번호</span>
-                <span className="font-mono font-semibold text-gray-800">{rules.housing_management_no}</span>
+                <span className="text-ink-3">주택관리번호</span>
+                <span className="font-mono font-semibold text-ink">{rules.housing_management_no}</span>
               </div>
             )}
             {rules.approval_no && (
               <div className="flex items-center gap-1.5">
-                <span className="text-gray-500">승인번호</span>
-                <span className="font-mono font-semibold text-gray-800">{rules.approval_no}</span>
+                <span className="text-ink-3">승인번호</span>
+                <span className="font-mono font-semibold text-ink">{rules.approval_no}</span>
               </div>
             )}
             {pdfUrl && (
               <button
                 type="button"
                 onClick={() => setPdfModal({ open: true })}
-                className="ml-auto inline-flex items-center gap-1 bg-white border border-blue-300 hover:bg-blue-100 transition-colors text-blue-700 font-semibold px-2.5 py-1 rounded-md text-[11px]"
+                className="ml-auto inline-flex items-center gap-1 bg-surface border border-accent-line hover:bg-surface2 transition-colors text-accent font-semibold px-2.5 py-1 rounded-md text-[11px]"
                 title="공고 원본 PDF 열기"
               >
                 📄 공고 원본
@@ -1624,15 +1624,15 @@ export default function AnnouncementDetailPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1">
+      <div className="flex gap-1 mb-5 bg-surface2 rounded-xl p-1">
         {TABS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             onClick={() => setTab(key)}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all flex-1 justify-center ${
               tab === key
-                ? "bg-white text-blue-700 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
+                ? "bg-accent-soft text-accent shadow-sm"
+                : "text-ink-3 hover:text-ink-2"
             }`}
           >
             <Icon className="w-3.5 h-3.5" />

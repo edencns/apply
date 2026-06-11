@@ -49,17 +49,17 @@ export default function PdfEvidenceModal({ open, url, page, title, onClose }: Pr
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl w-full max-w-5xl h-[90vh] flex flex-col shadow-2xl"
+        className="bg-surface rounded-xl w-full max-w-5xl h-[90vh] flex flex-col shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 flex-shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-semibold text-gray-800">
+            <span className="text-sm font-semibold text-ink">
               공고 원본 {page ? `· ${page}페이지` : ""}
             </span>
             {title && (
-              <span className="text-xs text-gray-500 truncate max-w-md">{title}</span>
+              <span className="text-xs text-ink-3 truncate max-w-md">{title}</span>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -74,16 +74,16 @@ export default function PdfEvidenceModal({ open, url, page, title, onClose }: Pr
             </a>
             <button
               onClick={onClose}
-              className="p-1 hover:bg-gray-100 rounded-full"
+              className="p-1 hover:bg-surface2 rounded-full"
               aria-label="닫기"
             >
-              <X className="w-4 h-4 text-gray-600" />
+              <X className="w-4 h-4 text-ink-2" />
             </button>
           </div>
         </div>
 
         {/* PDF iframe — 브라우저 기본 뷰어 사용 */}
-        <div className="flex-1 bg-gray-50 overflow-hidden">
+        <div className="flex-1 bg-surface2 overflow-hidden">
           <iframe
             src={src}
             className="w-full h-full border-0"
@@ -92,7 +92,7 @@ export default function PdfEvidenceModal({ open, url, page, title, onClose }: Pr
         </div>
 
         {/* 푸터 안내 */}
-        <div className="px-4 py-2 border-t border-gray-200 text-[11px] text-gray-500 flex items-center justify-between flex-shrink-0">
+        <div className="px-4 py-2 border-t border-border text-[11px] text-ink-3 flex items-center justify-between flex-shrink-0">
           <span>ESC 또는 배경 클릭으로 닫기</span>
           <span>공고문 자체 파일이 원본이며, 추출 데이터와 상이 시 공고문이 우선합니다.</span>
         </div>

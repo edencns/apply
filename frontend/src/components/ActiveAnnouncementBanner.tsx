@@ -27,29 +27,29 @@ export function ActiveAnnouncementBanner({ onClear }: { onClear?: () => void }) 
   };
 
   return (
-    <div className="mb-5 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 flex items-center gap-3">
-      <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center flex-shrink-0">
+    <div className="mb-5 rounded-xl border border-accent-line bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 flex items-center gap-3">
+      <div className="w-9 h-9 rounded-lg bg-accent text-[#0a0a0a] flex items-center justify-center flex-shrink-0">
         <BookOpen className="w-4 h-4" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-[11px] uppercase tracking-wider text-blue-600 font-medium">현재 작업 중인 공고</div>
-        <div className="text-sm font-semibold text-gray-900 truncate">
+        <div className="text-[11px] uppercase tracking-wider text-accent font-medium">현재 작업 중인 공고</div>
+        <div className="text-sm font-semibold text-ink truncate">
           {ann.title}
           {ann.announcement_no && (
-            <span className="ml-2 text-xs text-gray-500 font-normal">#{ann.announcement_no}</span>
+            <span className="ml-2 text-xs text-ink-3 font-normal">#{ann.announcement_no}</span>
           )}
         </div>
       </div>
       <Link
         href={`/announcements/${ann.id}`}
-        className="inline-flex items-center gap-1 text-xs text-blue-700 hover:text-blue-900 font-medium"
+        className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent font-medium"
       >
         공고 상세 <ChevronRight className="w-3 h-3" />
       </Link>
       <button
         type="button"
         onClick={handleClear}
-        className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-white/60 transition-colors"
+        className="p-1.5 rounded-md text-ink-3 hover:text-ink-2 hover:bg-surface/60 transition-colors"
         title="공고 연결 해제"
       >
         <X className="w-3.5 h-3.5" />

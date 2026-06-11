@@ -99,32 +99,32 @@ export default function ManualReviewBlock({ customer, onUpdate }: Props) {
   if (signedOff) {
     const signedDate = new Date(existing.signed_at);
     return (
-      <div className="card border-2 border-green-300 bg-green-50">
+      <div className="card border-2 border-border bg-ok-soft">
         <div className="flex items-start gap-3">
-          <ClipboardCheck className="w-5 h-5 text-green-700 flex-shrink-0 mt-0.5" />
+          <ClipboardCheck className="w-5 h-5 text-ok flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold text-green-900">담당자 서명 완료</span>
-              <span className="text-xs text-green-800">
+              <span className="font-bold text-ok">담당자 서명 완료</span>
+              <span className="text-xs text-ok">
                 {existing.reviewer_name} · {signedDate.toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" })}
               </span>
             </div>
-            <ul className="mt-2 text-xs text-green-800 space-y-0.5">
+            <ul className="mt-2 text-xs text-ok space-y-0.5">
               {CHECKLIST_ITEMS.map((item) => (
                 <li key={item.key} className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3 h-3 text-green-600" /> {item.label}
+                  <CheckCircle2 className="w-3 h-3 text-ok" /> {item.label}
                 </li>
               ))}
             </ul>
             {existing.note && (
-              <div className="mt-2 text-xs text-green-900 bg-white/60 rounded px-2 py-1 border border-green-200">
+              <div className="mt-2 text-xs text-ok bg-surface/60 rounded px-2 py-1 border border-border">
                 <span className="font-semibold">메모:</span> {existing.note}
               </div>
             )}
           </div>
           <button
             onClick={handleUnsign}
-            className="text-xs text-green-700 hover:text-green-900 inline-flex items-center gap-1"
+            className="text-xs text-ok hover:text-ok inline-flex items-center gap-1"
           >
             <Edit2 className="w-3 h-3" /> 재편집
           </button>
@@ -135,12 +135,12 @@ export default function ManualReviewBlock({ customer, onUpdate }: Props) {
 
   // 편집/미서명 뷰
   return (
-    <div className="card border-2 border-amber-300 bg-amber-50">
+    <div className="card border-2 border-border bg-warn-soft">
       <div className="flex items-start gap-3 mb-3">
-        <ClipboardCheck className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5" />
+        <ClipboardCheck className="w-5 h-5 text-warn flex-shrink-0 mt-0.5" />
         <div>
-          <div className="font-bold text-amber-900">최종 승인 체크리스트</div>
-          <div className="text-xs text-amber-800 mt-0.5">
+          <div className="font-bold text-warn">최종 승인 체크리스트</div>
+          <div className="text-xs text-warn mt-0.5">
             아래 항목을 모두 확인한 후 서명하세요. 서명 후에만 최종 판정이 확정됩니다.
           </div>
         </div>
@@ -150,7 +150,7 @@ export default function ManualReviewBlock({ customer, onUpdate }: Props) {
         {CHECKLIST_ITEMS.map((item) => (
           <label
             key={item.key}
-            className="flex items-start gap-2 cursor-pointer hover:bg-white/60 rounded px-2 py-1.5 transition-colors"
+            className="flex items-start gap-2 cursor-pointer hover:bg-surface/60 rounded px-2 py-1.5 transition-colors"
           >
             <button
               type="button"
@@ -158,16 +158,16 @@ export default function ManualReviewBlock({ customer, onUpdate }: Props) {
               className="mt-0.5 flex-shrink-0"
             >
               {checks[item.key] ? (
-                <CheckCircle2 className="w-5 h-5 text-green-600" />
+                <CheckCircle2 className="w-5 h-5 text-ok" />
               ) : (
-                <Circle className="w-5 h-5 text-gray-400" />
+                <Circle className="w-5 h-5 text-ink-3" />
               )}
             </button>
             <div className="flex-1">
-              <div className={`text-sm font-medium ${checks[item.key] ? "text-green-900" : "text-gray-800"}`}>
+              <div className={`text-sm font-medium ${checks[item.key] ? "text-ok" : "text-ink"}`}>
                 {item.label}
               </div>
-              <div className="text-[11px] text-gray-600">{item.hint}</div>
+              <div className="text-[11px] text-ink-2">{item.hint}</div>
             </div>
           </label>
         ))}
@@ -175,21 +175,21 @@ export default function ManualReviewBlock({ customer, onUpdate }: Props) {
 
       <div className="grid grid-cols-3 gap-2 mb-3">
         <div className="col-span-1">
-          <label className="block text-[11px] font-medium text-amber-900 mb-1">담당자명 *</label>
+          <label className="block text-[11px] font-medium text-warn mb-1">담당자명 *</label>
           <input
             value={reviewerName}
             onChange={(e) => setReviewerName(e.target.value)}
             placeholder="예: 홍길동"
-            className="w-full border border-amber-300 rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="w-full border border-border rounded-md px-2 py-1.5 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-amber-400"
           />
         </div>
         <div className="col-span-2">
-          <label className="block text-[11px] font-medium text-amber-900 mb-1">특이사항 메모 (선택)</label>
+          <label className="block text-[11px] font-medium text-warn mb-1">특이사항 메모 (선택)</label>
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="예: 상급자 ○○○과 협의"
-            className="w-full border border-amber-300 rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="w-full border border-border rounded-md px-2 py-1.5 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-amber-400"
           />
         </div>
       </div>
@@ -197,7 +197,7 @@ export default function ManualReviewBlock({ customer, onUpdate }: Props) {
       <button
         onClick={handleSignOff}
         disabled={!allChecked || !reviewerName.trim()}
-        className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-md text-sm transition-colors"
+        className="w-full bg-green-600 hover:bg-green-700 disabled:bg-surface2 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-md text-sm transition-colors"
       >
         {allChecked && reviewerName.trim() ? "최종 승인 및 서명" : "모든 항목 체크 + 담당자명 입력 필요"}
       </button>

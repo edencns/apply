@@ -27,11 +27,11 @@ import {
 
 const KIND_LABEL: Record<FileKind, { label: string; cls: string; icon: typeof FileText }> = {
   "lottery-results":        { label: "전산추첨결과",        cls: "bg-accent-soft text-accent",      icon: FileSpreadsheet },
-  "lottery-results-masked": { label: "전산추첨결과(마스킹)", cls: "bg-sky-100 text-sky-700",         icon: FileSpreadsheet },
-  "winner-pdf":             { label: "당첨자현황 PDF",     cls: "bg-purple-100 text-purple-700",   icon: FileText },
-  "confirmation-list":      { label: "정당 확인용",        cls: "bg-emerald-100 text-emerald-700", icon: FileSpreadsheet },
-  "household-members":      { label: "세대원내역",         cls: "bg-amber-100 text-amber-700",     icon: Users },
-  "info-desk":              { label: "인포용 명단",        cls: "bg-indigo-100 text-indigo-700",   icon: FileSpreadsheet },
+  "lottery-results-masked": { label: "전산추첨결과(마스킹)", cls: "bg-accent-soft text-accent",         icon: FileSpreadsheet },
+  "winner-pdf":             { label: "당첨자현황 PDF",     cls: "bg-surface2 text-ink-2",   icon: FileText },
+  "confirmation-list":      { label: "정당 확인용",        cls: "bg-ok-soft text-ok", icon: FileSpreadsheet },
+  "household-members":      { label: "세대원내역",         cls: "bg-warn-soft text-warn",     icon: Users },
+  "info-desk":              { label: "인포용 명단",        cls: "bg-accent-soft text-accent",   icon: FileSpreadsheet },
   "additional-standbys":    { label: "추가 예비입주자",    cls: "bg-pink-100 text-pink-700",       icon: FileSpreadsheet },
   "property-ownership":     { label: "주택소유 검색결과",  cls: "bg-orange-100 text-orange-700",   icon: Home },
   "savings-priority-pdf":   { label: "청약통장 순위확인",  cls: "bg-teal-100 text-teal-700",       icon: Banknote },
@@ -122,7 +122,7 @@ export default function WinnerIngestModal({ open, onClose, onRegister }: Props) 
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col">
+      <div className="bg-surface rounded-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="p-5 border-b border-border-soft flex items-center justify-between flex-shrink-0">
           <div>
@@ -156,7 +156,7 @@ export default function WinnerIngestModal({ open, onClose, onRegister }: Props) 
                   if (e.dataTransfer.files) addFiles(e.dataTransfer.files);
                 }}
                 className={`border-2 border-dashed rounded-lg p-10 text-center transition-colors ${
-                  dragActive ? "border-blue-400 bg-accent-soft" : "border-gray-300 bg-surface2 hover:bg-surface2"
+                  dragActive ? "border-accent-line bg-accent-soft" : "border-border bg-surface2 hover:bg-surface2"
                 }`}
               >
                 <Upload className="w-10 h-10 mx-auto text-ink-4 mb-3" />
@@ -240,7 +240,7 @@ export default function WinnerIngestModal({ open, onClose, onRegister }: Props) 
                       <div
                         key={i}
                         className={`flex items-center gap-3 p-3 rounded-lg border ${
-                          f.kind === "unknown" ? "border-amber-200 bg-amber-50" : "border-border bg-white"
+                          f.kind === "unknown" ? "border-border bg-warn-soft" : "border-border bg-surface"
                         }`}
                       >
                         <Icon className="w-4 h-4 text-ink-3 flex-shrink-0" />
@@ -256,7 +256,7 @@ export default function WinnerIngestModal({ open, onClose, onRegister }: Props) 
                             {count > 0 && <span className="text-ink-4"> · {count}건 인식</span>}
                           </p>
                           {f.notes.length > 0 && (
-                            <p className="text-xs text-amber-700 mt-0.5">{f.notes.join(" · ")}</p>
+                            <p className="text-xs text-warn mt-0.5">{f.notes.join(" · ")}</p>
                           )}
                         </div>
                       </div>
@@ -267,7 +267,7 @@ export default function WinnerIngestModal({ open, onClose, onRegister }: Props) 
 
               {/* 공통 공고 정보 */}
               {(result.announcement?.no || result.announcement?.date) && (
-                <div className="p-3 rounded-lg bg-accent-soft border border-blue-100 text-xs text-accent">
+                <div className="p-3 rounded-lg bg-accent-soft border border-accent-line text-xs text-accent">
                   <strong>공통 공고 정보</strong>
                   {result.announcement.no && <> · 관리번호 <strong>{result.announcement.no}</strong></>}
                   {result.announcement.date && <> · 당첨자발표일 <strong>{result.announcement.date}</strong></>}
@@ -284,14 +284,14 @@ export default function WinnerIngestModal({ open, onClose, onRegister }: Props) 
                     <div>
                       <span className="text-ink-3">총</span> <strong className="text-ink">{total}명</strong>
                     </div>
-                    <div className="h-3 w-px bg-gray-300" />
+                    <div className="h-3 w-px bg-border" />
                     <div>
                       <span className="text-accent">당첨자</span>{" "}
                       <strong className="text-accent">{winners}명</strong>
                     </div>
                     <div>
-                      <span className="text-amber-600">예비입주자</span>{" "}
-                      <strong className="text-amber-900">{standbys}명</strong>
+                      <span className="text-warn">예비입주자</span>{" "}
+                      <strong className="text-warn">{standbys}명</strong>
                     </div>
                     <div className="text-[10px] text-ink-3 ml-auto">
                       예비는 당첨자가 부적합·포기할 때 자동 승계 후보로 보관됩니다
@@ -311,7 +311,7 @@ export default function WinnerIngestModal({ open, onClose, onRegister }: Props) 
                   </div>
                 </div>
                 {result.profiles.length === 0 ? (
-                  <div className="p-6 text-center text-sm text-ink-4 border border-dashed border-gray-300 rounded-lg">
+                  <div className="p-6 text-center text-sm text-ink-4 border border-dashed border-border rounded-lg">
                     추출된 당첨자가 없습니다
                   </div>
                 ) : (
@@ -371,7 +371,7 @@ export default function WinnerIngestModal({ open, onClose, onRegister }: Props) 
                               <tr
                                 key={id}
                                 className={`border-t border-border-soft hover:bg-surface2 ${
-                                  p.isStandby ? "bg-amber-50/40" : ""
+                                  p.isStandby ? "bg-warn-soft/40" : ""
                                 }`}
                               >
                                 <td className="px-3 py-2">
@@ -397,7 +397,7 @@ export default function WinnerIngestModal({ open, onClose, onRegister }: Props) 
                                 </td>
                                 <td className="px-3 py-2">
                                   {p.isStandby ? (
-                                    <span className="inline-flex items-center gap-0.5 text-[10px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded font-medium mr-1">
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] bg-amber-200 text-warn px-1.5 py-0.5 rounded font-medium mr-1">
                                       예비 {p.standbyRank || "—"}
                                     </span>
                                   ) : (
@@ -417,7 +417,7 @@ export default function WinnerIngestModal({ open, onClose, onRegister }: Props) 
                                 </td>
                                 <td className="px-3 py-2">
                                   {p.householdMembers?.length ? (
-                                    <span className="inline-flex items-center gap-0.5 text-amber-700">
+                                    <span className="inline-flex items-center gap-0.5 text-warn">
                                       <Users className="w-3 h-3" /> {p.householdMembers.length}
                                     </span>
                                   ) : "—"}
@@ -432,9 +432,9 @@ export default function WinnerIngestModal({ open, onClose, onRegister }: Props) 
                                 <td className="px-3 py-2">
                                   {p.savingsPriority ? (
                                     p.savingsPriority.verified ? (
-                                      <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-ok" />
                                     ) : (
-                                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                                      <AlertTriangle className="w-3.5 h-3.5 text-warn" />
                                     )
                                   ) : "—"}
                                 </td>
@@ -463,7 +463,7 @@ export default function WinnerIngestModal({ open, onClose, onRegister }: Props) 
 
               {/* 매칭 안 된 주택소유 */}
               {result.unmatched.properties.length > 0 && (
-                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                <div className="p-3 rounded-lg bg-warn-soft border border-border text-xs text-warn">
                   <strong>주의:</strong> 당첨자/세대원과 매칭되지 않은 주택소유 레코드가 {result.unmatched.properties.length}건 있습니다.
                   (세대원내역이 업로드되지 않았거나 주민번호가 일치하지 않을 수 있습니다)
                 </div>

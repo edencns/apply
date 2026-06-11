@@ -222,21 +222,21 @@ export default function RuleVerificationPanel({ announcement, onUpdate }: Props)
   const missingFields = CRITICAL_FIELDS.filter((f) => !isSet(rules[f.key]) && !overrides.includes(f.key));
 
   return (
-    <div className="mb-5 border-2 border-indigo-300 bg-indigo-50/50 rounded-xl">
+    <div className="mb-5 border-2 border-accent-line bg-accent-soft rounded-xl">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between gap-3 p-3 text-left hover:bg-indigo-100/40 transition-colors rounded-xl"
+        className="w-full flex items-center justify-between gap-3 p-3 text-left hover:bg-surface2 transition-colors rounded-xl"
       >
         <div className="flex items-center gap-2 flex-wrap">
-          <ShieldCheck className="w-4 h-4 text-indigo-700" />
-          <span className="text-sm font-bold text-indigo-900">
+          <ShieldCheck className="w-4 h-4 text-accent" />
+          <span className="text-sm font-bold text-ink">
             🔍 핵심 룰 검증 (Phase A — 판정 정확도의 근원)
           </span>
           <span className="text-[10.5px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded font-semibold">
             ✓ 사용자 검증 {verifiedFields.length}
           </span>
-          <span className="text-[10.5px] text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded font-medium">
+          <span className="text-[10.5px] text-accent bg-accent-soft px-1.5 py-0.5 rounded font-medium">
             자동 추출 {setFields.length - verifiedFields.length}
           </span>
           {missingFields.length > 0 && (
@@ -245,12 +245,12 @@ export default function RuleVerificationPanel({ announcement, onUpdate }: Props)
             </span>
           )}
         </div>
-        <span className="text-[10px] text-indigo-700">{open ? "접기 ▲" : "펼치기 ▼"}</span>
+        <span className="text-[10px] text-accent">{open ? "접기 ▲" : "펼치기 ▼"}</span>
       </button>
 
       {open && (
         <div className="px-3 pb-3 space-y-1.5">
-          <div className="text-[10.5px] text-indigo-800/80 leading-relaxed mb-2 px-1">
+          <div className="text-[10.5px] text-ink-3 leading-relaxed mb-2 px-1">
             아래 9개 룰은 모든 당첨자 판정에 직접 영향. 자동 추출 값을 검토하고 잘못된 부분은 「수정」 클릭. 검증된 값은 ✓ 마킹되어 추후 자동 재파싱 시 덮어쓰이지 않음.
           </div>
 
@@ -265,10 +265,10 @@ export default function RuleVerificationPanel({ announcement, onUpdate }: Props)
                 key={field.key}
                 className={`rounded-lg border p-2 ${
                   isOverridden
-                    ? "bg-white border-emerald-200"
+                    ? "bg-surface border-emerald-200"
                     : !isSet(value)
                       ? "bg-amber-50/60 border-amber-200"
-                      : "bg-white border-border"
+                      : "bg-surface border-border"
                 }`}
               >
                 <div className="flex items-start gap-2">
@@ -278,7 +278,7 @@ export default function RuleVerificationPanel({ announcement, onUpdate }: Props)
                     ) : !isSet(value) ? (
                       <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                     ) : (
-                      <HelpCircle className="w-3.5 h-3.5 text-indigo-500" />
+                      <HelpCircle className="w-3.5 h-3.5 text-accent" />
                     )}
                   </div>
 
@@ -339,7 +339,7 @@ export default function RuleVerificationPanel({ announcement, onUpdate }: Props)
                         </button>
                         <button
                           onClick={cancelEdit}
-                          className="inline-flex items-center gap-0.5 px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-ink-2 text-[10px]"
+                          className="inline-flex items-center gap-0.5 px-2 py-1 rounded bg-surface2 hover:bg-surface2 text-ink-2 text-[10px]"
                         >
                           <X className="w-3 h-3" /> 취소
                         </button>
@@ -349,7 +349,7 @@ export default function RuleVerificationPanel({ announcement, onUpdate }: Props)
                         <span className={`text-[12px] ${display.cls}`}>{display.text}</span>
                         <button
                           onClick={() => startEdit(field.key)}
-                          className="inline-flex items-center gap-0.5 text-[10px] text-indigo-700 hover:underline"
+                          className="inline-flex items-center gap-0.5 text-[10px] text-accent hover:underline"
                           title="이 값 수정"
                         >
                           <Edit2 className="w-2.5 h-2.5" /> 수정

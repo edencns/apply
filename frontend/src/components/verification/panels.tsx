@@ -97,7 +97,7 @@ export function HouseholdPanel({
           </thead>
           <tbody>
             {members.map((m, i) => (
-              <tr key={i} className={`border-b border-gray-50 ${m.errorCode ? "bg-red-50/50" : ""}`}>
+              <tr key={i} className={`border-b border-border-soft ${m.errorCode ? "bg-red-50/50" : ""}`}>
                 <td className="py-2 font-medium">{m.name}</td>
                 <td className="py-2 font-mono text-xs text-ink-2">
                   {m.rrn ? `${m.rrn.slice(0, 6)}-${m.rrn.slice(6, 7)}••••••` : "—"}
@@ -294,7 +294,7 @@ export function PropertyPanel({
         <h2 className="font-semibold text-ink">주택소유 전산검색</h2>
         <VerdictBadge verdict={verdict} />
         {regulation && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-accent-soft text-accent border border-accent-line">
             공고 규제: {regulation}
           </span>
         )}
@@ -303,7 +303,7 @@ export function PropertyPanel({
             type="button"
             onClick={handleBulkLookup}
             disabled={bulkBusy}
-            className="ml-auto inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-medium disabled:opacity-50"
+            className="ml-auto inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-accent hover:bg-accent text-[#0a0a0a] font-medium disabled:opacity-50"
             title="60㎡ 이하 + 공시가격 미상인 보유 주택의 가격을 일괄 자동 조회"
           >
             {bulkBusy ? (
@@ -360,10 +360,10 @@ export function PropertyPanel({
                       const exemptApplied = isSmall && isCurrent && isRes && price != null && price <= limit;
                       const exemptDenied = isSmall && isCurrent && isRes && price != null && price > limit;
                       return (
-                        <tr key={idx} className="border-b border-gray-50 last:border-0 align-top">
+                        <tr key={idx} className="border-b border-border-soft last:border-0 align-top">
                           <td className="py-1.5 text-ink-2 truncate max-w-xs" title={p.address}>
                             {p.address}
-                            {region === "metro" && <span className="ml-1 text-[9.5px] text-blue-700">[수도권]</span>}
+                            {region === "metro" && <span className="ml-1 text-[9.5px] text-accent">[수도권]</span>}
                             {region === "non_metro" && <span className="ml-1 text-[9.5px] text-purple-700">[비수도권]</span>}
                           </td>
                           <td className="py-1.5 text-right text-ink-2">
@@ -405,7 +405,7 @@ export function PropertyPanel({
                                   },
                                 )}
                                 disabled={busyIdx === idx}
-                                className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 disabled:opacity-50"
+                                className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-accent-soft hover:bg-surface2 text-accent border border-accent-line disabled:opacity-50"
                                 title="공공데이터포털 공시가격 자동 조회"
                               >
                                 {busyIdx === idx ? (
@@ -468,14 +468,14 @@ export function PropertyPanel({
                   <div
                     key={i}
                     className={`text-xs p-2 rounded border ${
-                      isSpouse ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-200"
+                      isSpouse ? "bg-red-50 border-red-200" : "bg-surface2 border-border"
                     }`}
                   >
                     <div className="flex items-center gap-1.5 mb-0.5">
                       <span className="font-medium text-ink-2">{p.ownerName}</span>
                       {p.relation && (
                         <span className={`text-[10px] px-1 py-0 rounded ${
-                          isSpouse ? "bg-red-200 text-red-900" : "bg-gray-200 text-ink-3"
+                          isSpouse ? "bg-red-200 text-red-900" : "bg-surface2 text-ink-3"
                         }`}>
                           {p.relation}
                         </span>
@@ -553,7 +553,7 @@ export function SavingsPanel({
         <h2 className="font-semibold text-ink">청약통장 순위확인</h2>
         <VerdictBadge verdict={verdict} />
         {typeof minSubscriptionMonths === "number" && minSubscriptionMonths > 0 && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-accent-soft text-accent border border-accent-line">
             공고 최소 가입기간 {minSubscriptionMonths}개월
           </span>
         )}

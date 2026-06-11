@@ -75,7 +75,7 @@ const prefixColumns: StageColumn[] = [
           </span>
           {tt && (
             <span
-              className="inline-flex items-center gap-0.5 text-[9.5px] text-rose-700 bg-rose-50 px-1 py-0.5 rounded font-medium whitespace-nowrap"
+              className="inline-flex items-center gap-0.5 text-[9.5px] text-fail bg-fail-soft px-1 py-0.5 rounded font-medium whitespace-nowrap"
               title={`명의변경 (${tt.reason || "사유 미상"}) — 새 명의자: ${newName || "—"}`}
             >
               🔄 명의변경{newName ? ` → ${newName}` : ""}
@@ -103,7 +103,7 @@ const columns: StageColumn[] = [
     sortValue: (c) => c.supply_type || "",
     render: (c) => {
       const supply = c.supply_type || "—";
-      const cls = supply === "일반공급" ? "bg-indigo-50 text-indigo-700" : "bg-purple-50 text-purple-700";
+      const cls = supply === "일반공급" ? "bg-accent-soft text-accent" : "bg-surface2 text-ink-2";
       return <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${cls}`}>{supply}</span>;
     },
   },
@@ -131,7 +131,7 @@ const columns: StageColumn[] = [
         case "eligible":
           return (
             <span
-              className="inline-flex items-center gap-1 text-sm text-green-700 font-semibold cursor-help"
+              className="inline-flex items-center gap-1 text-sm text-ok font-semibold cursor-help"
               title="적합 — 1~5단계 모든 검증 통과. 계약 진행 가능"
             >
               <CheckCircle2 className="w-3.5 h-3.5" /> 적합
@@ -140,7 +140,7 @@ const columns: StageColumn[] = [
         case "ineligible":
           return (
             <span
-              className="inline-flex items-center gap-1 text-sm text-red-700 font-semibold cursor-help"
+              className="inline-flex items-center gap-1 text-sm text-fail font-semibold cursor-help"
               title="부적합 — 한 가지 이상 자격 미달. 계약 불가, 같은 주택형 예비에서 승계 처리 대상"
             >
               <XCircle className="w-3.5 h-3.5" /> 부적합
@@ -149,7 +149,7 @@ const columns: StageColumn[] = [
         case "in_review":
           return (
             <span
-              className="inline-flex items-center gap-1 text-xs text-amber-700 font-medium cursor-help"
+              className="inline-flex items-center gap-1 text-xs text-warn font-medium cursor-help"
               title="검수 보류 — 자동 판정만으로 결정 어려움. 담당자가 추가 서류·확인 후 수동 판정 필요"
             >
               <PauseCircle className="w-3.5 h-3.5" /> 검수 보류
@@ -158,7 +158,7 @@ const columns: StageColumn[] = [
         case "uploaded":
           return (
             <span
-              className="inline-flex items-center gap-1 text-xs text-blue-700 font-medium cursor-help"
+              className="inline-flex items-center gap-1 text-xs text-accent font-medium cursor-help"
               title="미검수 — 서류 파일은 업로드됐지만 아직 검토 시작 안 됨. 체크리스트 확인 또는 일괄 적합 판정 필요"
             >
               <Clock className="w-3.5 h-3.5" /> 미검수
@@ -761,7 +761,7 @@ function DocumentsStepInner() {
     <WorkflowShell step={step} selected={selected} onSelect={setSelected}>
       {selected && (
         <>
-          <div className="mb-3 p-3 rounded-lg bg-indigo-50 border border-indigo-100 text-xs text-indigo-800 flex items-start gap-2">
+          <div className="mb-3 p-3 rounded-lg bg-accent-soft border border-accent-line text-xs text-accent flex items-start gap-2">
             <FileText className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
             <span>
               이 단계는 공급유형별 필수 서류 + 2·3·4단계 검증 결과를 종합해 <strong>멀티팩터 적합 판정</strong>을 내립니다.
@@ -771,7 +771,7 @@ function DocumentsStepInner() {
 
 
           {/* Phase #5 — 면책 디스클레이머 */}
-          <div className="mb-4 p-3 rounded-lg bg-red-50 border-2 border-red-300 text-xs text-red-900 flex items-start gap-2">
+          <div className="mb-4 p-3 rounded-lg bg-fail-soft border-2 border-border text-xs text-fail flex items-start gap-2">
             <span className="text-base leading-none flex-shrink-0">⚠️</span>
             <div>
               <div className="font-bold mb-1">이 판정은 참고용 자동 로직 결과입니다.</div>
@@ -785,12 +785,12 @@ function DocumentsStepInner() {
           </div>
 
           {/* ─── 메인 작업: 서류 스캔본 배치 + 판정 ─── */}
-          <div className="mb-4 p-4 rounded-lg border-2 border-indigo-200 bg-indigo-50/40">
+          <div className="mb-4 p-4 rounded-lg border-2 border-accent-line bg-accent-soft/40">
             <div className="flex items-center gap-2 mb-3">
-              <FolderUp className="w-5 h-5 text-indigo-700" />
-              <h3 className="text-base font-bold text-indigo-900">서류 판정 주 작업</h3>
+              <FolderUp className="w-5 h-5 text-accent" />
+              <h3 className="text-base font-bold text-accent">서류 판정 주 작업</h3>
             </div>
-            <p className="text-xs text-indigo-800/90 mb-3">
+            <p className="text-xs text-accent/90 mb-3">
               <strong>① 스캔본 배치 업로드</strong>로 당첨자별 서류 PDF(파일명 <code>동-호수 이름.pdf</code>)를 한 번에 첨부 →
               <strong> ② 개별 검토</strong> (당첨자 클릭 → 체크포인트 확인) →
               <strong> ③ 일괄 적합 판정</strong>으로 검토 완료자 한 번에 "적합" 처리.
@@ -799,7 +799,7 @@ function DocumentsStepInner() {
               <button
                 onClick={() => batchRef.current?.click()}
                 disabled={batchBusy}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-[#0a0a0a] bg-accent hover:opacity-90 shadow-sm disabled:opacity-40"
                 title="파일명 '동-호수 이름.pdf' 형식의 PDF 여러 개 선택 → 당첨자 자동 매칭 (병렬 업로드)"
               >
                 {batchBusy ? (
@@ -836,7 +836,7 @@ function DocumentsStepInner() {
               </button>
               <button
                 onClick={handleFinalVerify}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-700 hover:bg-indigo-800 shadow-sm"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-[#0a0a0a] bg-accent hover:opacity-90 shadow-sm"
                 title="1~4단계 + 체크리스트를 규칙 기반으로 자동 재판정 (시스템 규칙 검증)"
               >
                 <Gavel className="w-4 h-4" /> 전체 자동 재판정
@@ -867,24 +867,24 @@ function DocumentsStepInner() {
 
             {/* 부적격 명단 일괄 처리 결과 */}
             {ineligibleResult && (
-              <div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-sm">
+              <div className="mt-3 p-3 rounded-lg bg-fail-soft border border-border text-sm">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <UserX className="w-4 h-4 text-red-700" />
-                  <span className="font-semibold text-red-900">부적격 명단 처리 완료</span>
-                  <span className="text-red-800">검출 {ineligibleResult.detected}건</span>
-                  <span className="text-red-900 font-semibold">→ 부적합 마킹 {ineligibleResult.marked}건</span>
+                  <UserX className="w-4 h-4 text-fail" />
+                  <span className="font-semibold text-fail">부적격 명단 처리 완료</span>
+                  <span className="text-fail">검출 {ineligibleResult.detected}건</span>
+                  <span className="text-fail font-semibold">→ 부적합 마킹 {ineligibleResult.marked}건</span>
                   {ineligibleResult.unmatched > 0 && (
-                    <span className="text-amber-800">매칭 실패 {ineligibleResult.unmatched}건</span>
+                    <span className="text-warn">매칭 실패 {ineligibleResult.unmatched}건</span>
                   )}
                 </div>
                 {ineligibleResult.samples.length > 0 && (
                   <details className="mt-2 text-[11px]" open>
-                    <summary className="cursor-pointer text-red-900 font-semibold">샘플</summary>
+                    <summary className="cursor-pointer text-fail font-semibold">샘플</summary>
                     <ul className="mt-1 ml-4 space-y-0.5 text-ink-2">
                       {ineligibleResult.samples.map((s, i) => (
                         <li key={i}>
                           <strong>{s.dong || "?"}-{s.ho || "?"} {s.name}</strong>
-                          <span className="text-red-700"> — {s.reason}</span>
+                          <span className="text-fail"> — {s.reason}</span>
                         </li>
                       ))}
                     </ul>
@@ -895,23 +895,23 @@ function DocumentsStepInner() {
 
             {/* 배치 업로드 진행 바 */}
             {batchBusy && batchProgress && batchProgress.total > 0 && (
-              <div className="mt-3 p-2.5 rounded-md bg-indigo-50 border border-indigo-200">
-                <div className="flex items-center justify-between text-[11px] text-indigo-900 mb-1">
+              <div className="mt-3 p-2.5 rounded-md bg-accent-soft border border-accent-line">
+                <div className="flex items-center justify-between text-[11px] text-accent mb-1">
                   <span className="font-medium">
                     📤 병렬 업로드 진행 중 — {batchProgress.done} / {batchProgress.total}
                   </span>
-                  <span className="text-indigo-700">
+                  <span className="text-accent">
                     {Math.round((batchProgress.done / batchProgress.total) * 100)}%
                   </span>
                 </div>
-                <div className="w-full h-1.5 bg-white rounded-full overflow-hidden border border-indigo-100">
+                <div className="w-full h-1.5 bg-surface rounded-full overflow-hidden border border-accent-line">
                   <div
-                    className="h-full bg-indigo-500 transition-all"
+                    className="h-full bg-accent transition-all"
                     style={{ width: `${(batchProgress.done / batchProgress.total) * 100}%` }}
                   />
                 </div>
                 {batchProgress.current && (
-                  <div className="mt-1 text-[10px] text-indigo-700 truncate" title={batchProgress.current}>
+                  <div className="mt-1 text-[10px] text-accent truncate" title={batchProgress.current}>
                     최근 처리: {batchProgress.current}
                   </div>
                 )}
@@ -919,26 +919,26 @@ function DocumentsStepInner() {
             )}
 
             {batchResult && (
-              <div className="mt-3 text-xs text-indigo-900 flex flex-wrap gap-1.5">
-                <span className="px-2 py-0.5 rounded bg-white border border-indigo-200">
+              <div className="mt-3 text-xs text-accent flex flex-wrap gap-1.5">
+                <span className="px-2 py-0.5 rounded bg-surface border border-accent-line">
                   전체 {batchResult.total}개
                 </span>
-                <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900">
+                <span className="px-2 py-0.5 rounded bg-ok-soft text-ok">
                   ✓ 자동 첨부 {batchResult.attached}건
                 </span>
                 {batchResult.pending > 0 && (
-                  <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-medium">
+                  <span className="px-2 py-0.5 rounded bg-warn-soft text-warn font-medium">
                     ⏸ 수동 매칭 필요 {batchResult.pending}건
                   </span>
                 )}
                 {batchResult.unmatched > 0 && (
-                  <span className="px-2 py-0.5 rounded bg-red-100 text-red-800">
+                  <span className="px-2 py-0.5 rounded bg-fail-soft text-fail">
                     매칭 실패 {batchResult.unmatched}건
                   </span>
                 )}
                 {batchResult.errors.length > 0 && (
                   <details className="w-full mt-1" open>
-                    <summary className="cursor-pointer text-red-700 text-xs font-medium">
+                    <summary className="cursor-pointer text-fail text-xs font-medium">
                       실패 목록 ▶ ({batchResult.errors.length}건)
                     </summary>
                     {/* 실패한 파일에 대해 [수동 매칭] 액션 제공 */}
@@ -947,17 +947,17 @@ function DocumentsStepInner() {
                         {batchResult.failedFiles.slice(0, 10).map((ff, i) => (
                           <li
                             key={i}
-                            className="flex items-start justify-between gap-2 p-2 rounded bg-white border border-red-200 text-[11px]"
+                            className="flex items-start justify-between gap-2 p-2 rounded bg-surface border border-border text-[11px]"
                           >
                             <div className="min-w-0 flex-1">
                               <div className="font-mono text-ink truncate" title={ff.file.name}>
                                 📄 {ff.file.name}
                               </div>
-                              <div className="text-red-700 mt-0.5">{ff.reason}</div>
+                              <div className="text-fail mt-0.5">{ff.reason}</div>
                             </div>
                             <button
                               onClick={() => sendFailedToManual(ff)}
-                              className="flex-shrink-0 inline-flex items-center gap-0.5 px-2 py-1 rounded bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-semibold whitespace-nowrap"
+                              className="flex-shrink-0 inline-flex items-center gap-0.5 px-2 py-1 rounded bg-warn hover:opacity-90 text-[#0a0a0a] text-[10px] font-semibold whitespace-nowrap"
                               title="모든 등록 당첨자를 후보로 보고 직접 첨부할 사람 선택"
                             >
                               ⏸ 수동 매칭으로 보내기
@@ -965,11 +965,11 @@ function DocumentsStepInner() {
                           </li>
                         ))}
                         {batchResult.failedFiles.length > 10 && (
-                          <li className="text-[10.5px] text-red-700">… 외 {batchResult.failedFiles.length - 10}건</li>
+                          <li className="text-[10.5px] text-fail">… 외 {batchResult.failedFiles.length - 10}건</li>
                         )}
                       </ul>
                     ) : (
-                      <ul className="mt-1 pl-4 space-y-0.5 text-[11px] text-red-700 list-disc">
+                      <ul className="mt-1 pl-4 space-y-0.5 text-[11px] text-fail list-disc">
                         {batchResult.errors.slice(0, 10).map((e, i) => <li key={i}>{e}</li>)}
                         {batchResult.errors.length > 10 && <li>… 외 {batchResult.errors.length - 10}건</li>}
                       </ul>
@@ -985,13 +985,13 @@ function DocumentsStepInner() {
 
             {/* 수동 매칭 큐 — 동호수+이름이 모두 일치하지 않아 자동 첨부 보류된 파일들 */}
             {pendingMatches.length > 0 && (
-              <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-300">
+              <div className="mt-4 p-3 rounded-lg bg-warn-soft border border-border">
                 <div className="flex items-center justify-between mb-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-amber-900">
+                    <h3 className="text-sm font-semibold text-warn">
                       ⏸ 수동 매칭 필요 ({pendingMatches.length}건)
                     </h3>
-                    <p className="text-[11px] text-amber-800 mt-0.5">
+                    <p className="text-[11px] text-warn mt-0.5">
                       동호수+이름이 모두 일치하지 않은 파일입니다. 후보 중 어느 고객에 첨부할지 직접 선택하세요.
                     </p>
                   </div>
@@ -1013,7 +1013,7 @@ function DocumentsStepInner() {
                     })()}
                     <button
                       onClick={clearAllPending}
-                      className="text-[11px] text-amber-700 hover:underline"
+                      className="text-[11px] text-warn hover:underline"
                     >
                       모두 비우기
                     </button>
@@ -1025,7 +1025,7 @@ function DocumentsStepInner() {
                     return (
                       <li
                         key={p.id}
-                        className="p-2.5 rounded-md bg-white border border-amber-200"
+                        className="p-2.5 rounded-md bg-surface border border-border"
                       >
                         <div className="flex items-start justify-between gap-2 mb-1.5">
                           <div className="min-w-0 flex-1">
@@ -1037,8 +1037,8 @@ function DocumentsStepInner() {
                               {p.parsedName && <span>이름: <strong className="text-ink-2">{p.parsedName}</strong></span>}
                               <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
                                 p.tier === "dongHoOnly"
-                                  ? "bg-blue-100 text-blue-700"
-                                  : "bg-purple-100 text-purple-700"
+                                  ? "bg-accent-soft text-accent"
+                                  : "bg-surface2 text-ink-2"
                               }`}>
                                 {p.tier === "dongHoOnly" ? "동호수 일치" : "이름만 일치"}
                               </span>
@@ -1047,7 +1047,7 @@ function DocumentsStepInner() {
                           <button
                             onClick={() => skipPendingMatch(p.id)}
                             disabled={isResolving}
-                            className="text-[10px] text-ink-4 hover:text-red-600 px-1 disabled:opacity-40"
+                            className="text-[10px] text-ink-4 hover:text-fail px-1 disabled:opacity-40"
                             title="이 파일 건너뛰기 (큐에서 제거)"
                           >
                             건너뛰기
@@ -1066,7 +1066,7 @@ function DocumentsStepInner() {
                             }
                             const hasLikelyDuplicate = Array.from(rrnGroups.values()).some((n) => n >= 2);
                             return hasLikelyDuplicate ? (
-                              <div className="text-[10px] text-rose-700 bg-rose-50 border border-rose-200 rounded px-1.5 py-1 mb-1">
+                              <div className="text-[10px] text-fail bg-fail-soft border border-border rounded px-1.5 py-1 mb-1">
                                 ⚠ 같은 주민번호의 후보가 여러 개입니다 — 시스템 내부에 중복 등록된 가능성. 우선 1건만 첨부 후 1단계 당첨자 등록 화면에서 정리 권장.
                               </div>
                             ) : null;
@@ -1084,7 +1084,7 @@ function DocumentsStepInner() {
                                 key={c.id}
                                 onClick={() => resolvePendingMatch(p.id, c.id)}
                                 disabled={isResolving}
-                                className="w-full text-left p-2 rounded border border-border hover:border-indigo-400 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className="w-full text-left p-2 rounded border border-border hover:border-accent hover:bg-surface2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                               >
                                 {/* 1줄: 동호수 + 이름 + 공급유형 + 배지 + 첨부 액션 */}
                                 <div className="flex items-center gap-2">
@@ -1096,7 +1096,7 @@ function DocumentsStepInner() {
                                       title="고객 레코드에 동호수가 비어 있습니다. 첨부하면 파일명의 동호수가 자동 입력됩니다."
                                     >
                                       <span className="text-ink-4 line-through">?-?</span>
-                                      <span className="text-emerald-700">→ {p.parsedDong}-{p.parsedHo}</span>
+                                      <span className="text-ok">→ {p.parsedDong}-{p.parsedHo}</span>
                                     </span>
                                   )}
                                   <span className="text-[11px] font-semibold text-ink">{c.name}</span>
@@ -1105,21 +1105,21 @@ function DocumentsStepInner() {
                                   </span>
                                   {!hasDh && (
                                     <span
-                                      className="text-[9px] px-1 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                      className="text-[9px] px-1 py-0.5 rounded bg-ok-soft text-ok border border-border"
                                       title="첨부 시 동호수가 자동으로 입력됨"
                                     >
                                       동호수 자동입력
                                     </span>
                                   )}
                                   {c.is_standby && (
-                                    <span className="text-[9.5px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded">
+                                    <span className="text-[9.5px] bg-warn-soft text-warn px-1 py-0.5 rounded">
                                       예비 {c.standby_rank || ""}
                                     </span>
                                   )}
                                   {isResolving ? (
-                                    <Loader2 className="w-3 h-3 animate-spin ml-auto text-indigo-500" />
+                                    <Loader2 className="w-3 h-3 animate-spin ml-auto text-accent" />
                                   ) : (
-                                    <span className="ml-auto text-[10px] text-indigo-600 font-medium">
+                                    <span className="ml-auto text-[10px] text-accent font-medium">
                                       이 고객에 첨부 →
                                     </span>
                                   )}
@@ -1152,8 +1152,8 @@ function DocumentsStepInner() {
               </div>
             )}
             {bulkResult && (
-              <div className="mt-3 text-xs text-emerald-900">
-                <span className="px-2 py-0.5 rounded bg-emerald-100 font-medium">
+              <div className="mt-3 text-xs text-ok">
+                <span className="px-2 py-0.5 rounded bg-ok-soft font-medium">
                   ✅ {bulkResult.eligible}명 적합 처리 완료
                 </span>
                 <span className="ml-2 text-ink-3">(감사 로그 기록됨)</span>
@@ -1175,7 +1175,7 @@ function DocumentsStepInner() {
                 <button
                   onClick={() => pdfRef.current?.click()}
                   disabled={uploading}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium text-rose-700 bg-white border border-rose-200 hover:bg-rose-50 disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium text-fail bg-surface border border-border hover:bg-fail-soft disabled:opacity-40"
                 >
                   {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />}
                   PDF 업로드
@@ -1187,7 +1187,7 @@ function DocumentsStepInner() {
                 <button
                   onClick={() => xlsxRef.current?.click()}
                   disabled={uploading}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium text-green-700 bg-white border border-green-200 hover:bg-green-50 disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium text-ok bg-surface border border-border hover:bg-ok-soft disabled:opacity-40"
                 >
                   {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileSpreadsheet className="w-3 h-3" />}
                   엑셀 업로드
@@ -1202,29 +1202,29 @@ function DocumentsStepInner() {
 
 
           {verifyResult && (
-            <div className="card mb-4 p-3 text-sm bg-emerald-50/60 border-emerald-100">
-              <span className="font-semibold text-emerald-900 mr-3">최종 판정 결과</span>
-              <span className="text-green-700 mr-3">적합 {verifyResult.eligible}명</span>
-              <span className="text-red-700 mr-3">부적합 {verifyResult.ineligible}명</span>
+            <div className="card mb-4 p-3 text-sm bg-ok-soft/60 border-border">
+              <span className="font-semibold text-ok mr-3">최종 판정 결과</span>
+              <span className="text-ok mr-3">적합 {verifyResult.eligible}명</span>
+              <span className="text-fail mr-3">부적합 {verifyResult.ineligible}명</span>
               <span className="text-ink-2">보류 {verifyResult.pending}명</span>
             </div>
           )}
 
           {uploadResult && (
-            <div className="card mb-4 p-3 text-sm bg-indigo-50/60 border-indigo-100">
+            <div className="card mb-4 p-3 text-sm bg-accent-soft/60 border-accent-line">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-indigo-900">
+                <span className="font-semibold text-accent">
                   {stageLabel(uploadResult.stage)} 데이터 반영 완료
                 </span>
-                <span className="text-indigo-800">
+                <span className="text-accent">
                   {uploadResult.attached}명 · 총 {uploadResult.totalRecords}건
                 </span>
                 {uploadResult.unmatched > 0 && (
-                  <span className="text-red-700">매칭 실패 {uploadResult.unmatched}건</span>
+                  <span className="text-fail">매칭 실패 {uploadResult.unmatched}건</span>
                 )}
               </div>
               {uploadResult.errors.length > 0 && (
-                <ul className="mt-2 text-xs text-red-700 list-disc list-inside space-y-0.5">
+                <ul className="mt-2 text-xs text-fail list-disc list-inside space-y-0.5">
                   {uploadResult.errors.map((e, i) => <li key={i}>{e}</li>)}
                 </ul>
               )}

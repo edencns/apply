@@ -29,8 +29,8 @@ interface AuditRow {
 }
 
 const ACTION_LABELS: Record<string, { label: string; color: string; icon: any }> = {
-  create: { label: "생성", color: "bg-blue-100 text-blue-800", icon: Plus },
-  update: { label: "수정", color: "bg-gray-100 text-gray-700", icon: Edit },
+  create: { label: "생성", color: "bg-accent-soft text-accent", icon: Plus },
+  update: { label: "수정", color: "bg-surface2 text-ink-2", icon: Edit },
   delete: { label: "삭제", color: "bg-red-100 text-red-800", icon: Trash2 },
   update_verdict: { label: "판정 변경", color: "bg-amber-100 text-amber-800", icon: AlertTriangle },
   manual_sign: { label: "수기 서명", color: "bg-emerald-100 text-emerald-800", icon: FileSignature },
@@ -47,7 +47,7 @@ const ENTITY_LABELS: Record<string, { label: string; icon: any }> = {
 };
 
 function ActionBadge({ action }: { action: string }) {
-  const cfg = ACTION_LABELS[action] || { label: action, color: "bg-gray-100 text-gray-700", icon: Edit };
+  const cfg = ACTION_LABELS[action] || { label: action, color: "bg-surface2 text-ink-2", icon: Edit };
   const Icon = cfg.icon;
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium ${cfg.color}`}>
@@ -487,7 +487,7 @@ export default function AuditPage() {
       </div>
 
       {/* 도움말 */}
-      <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-md text-xs text-blue-900">
+      <div className="mt-6 p-3 bg-accent-soft border border-accent-line rounded-md text-xs text-ink-2">
         <div className="font-semibold mb-1">💡 이 페이지로 확인 가능한 것</div>
         <ul className="list-disc pl-5 space-y-0.5">
           <li>당첨자 판정(적합↔부적합) 변경 이력과 변경자</li>

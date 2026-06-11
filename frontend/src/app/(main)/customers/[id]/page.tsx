@@ -239,7 +239,7 @@ function CustomerDetailInner() {
           <div className="flex items-center gap-3 flex-wrap mb-1">
             <h1 className={`text-2xl font-bold ${customer.superseded ? "text-ink-4 line-through" : "text-ink"}`}>{customer.name}</h1>
             {customer.superseded ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-200 text-ink-2">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-surface2 text-ink-2">
                 포기·승계 완료
               </span>
             ) : customer.succeeded_from ? (
@@ -256,7 +256,7 @@ function CustomerDetailInner() {
               </span>
             )}
             {customer.supply_type && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-accent-soft text-accent border border-accent-line">
                 {customer.supply_type}
               </span>
             )}
@@ -264,7 +264,7 @@ function CustomerDetailInner() {
           <div className="flex items-center gap-3 text-sm text-ink-3 flex-wrap">
             {((customer as any).unit_dong || customer.winner_info?.building || (customer as any).unit_ho || customer.winner_info?.unit_no) && (
               <span
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-900 font-mono text-[13px] font-bold"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent-soft border border-accent-line text-accent font-mono text-[13px] font-bold"
                 title="당첨 동·호수"
               >
                 🏠 {(customer as any).unit_dong || customer.winner_info?.building || "?"}동 {(customer as any).unit_ho || customer.winner_info?.unit_no || "?"}호
@@ -282,7 +282,7 @@ function CustomerDetailInner() {
       {announcement && (
         <div
           onClick={() => router.push(`/announcements/${announcement.id}`)}
-          className="card mb-5 cursor-pointer hover:border-blue-300 transition-colors"
+          className="card mb-5 cursor-pointer hover:border-accent-line transition-colors"
         >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-accent-soft text-accent flex items-center justify-center flex-shrink-0">
@@ -389,7 +389,7 @@ function RegistrationStage({
   return (
     <>
       {customer.superseded && (
-        <div className="card border-2 border-gray-300 bg-surface2">
+        <div className="card border-2 border-border bg-surface2">
           <div className="flex items-start gap-3">
             <UserX className="w-5 h-5 text-ink-3 flex-shrink-0 mt-0.5" />
             <div className="flex-1 text-sm">
@@ -499,7 +499,7 @@ function RegistrationStage({
               type="number"
               value={form.income_monthly ?? ""}
               onChange={(e) => setForm((p) => ({ ...p, income_monthly: e.target.value ? Number(e.target.value) : null }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
+              className="w-full border border-border rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
             />
           ) : (
             <p className="font-medium text-sm">
@@ -746,7 +746,7 @@ function DocumentsStage({
 
   const SUPPLY_COLORS: Record<string, string> = {
     "공통": "bg-surface2 text-ink-2",
-    "일반공급": "bg-indigo-100 text-indigo-700",
+    "일반공급": "bg-accent-soft text-accent",
     "신혼부부": "bg-red-100 text-red-700",
     "생애최초": "bg-emerald-100 text-emerald-700",
     "다자녀가구": "bg-pink-100 text-pink-700",
@@ -839,9 +839,9 @@ function DocumentsStage({
             <span className="text-ink-4 font-normal ml-1">(필수)</span>
           </span>
         </div>
-        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div className="w-full h-2 bg-surface2 rounded-full overflow-hidden">
           <div
-            className={`h-full transition-all ${percent === 100 ? "bg-green-500" : "bg-accent-soft0"}`}
+            className={`h-full transition-all ${percent === 100 ? "bg-green-500" : "bg-accent"}`}
             style={{ width: `${percent}%` }}
           />
         </div>
@@ -852,7 +852,7 @@ function DocumentsStage({
             <button
               type="button"
               onClick={() => openMapperFor()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#0a0a0a] bg-accent hover:bg-accent shadow-sm"
             >
               📋 페이지 매퍼 열기
             </button>
@@ -919,7 +919,7 @@ function DocumentsStage({
                           </span>
                         ) : (
                           d.name !== "서류 묶음(통합)" && (
-                            <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-semibold">
+                            <span className="text-[10px] bg-accent-soft text-accent px-1.5 py-0.5 rounded font-semibold">
                               필수
                             </span>
                           )
@@ -987,24 +987,24 @@ function DocumentsStage({
                         if (!guide) return null;
                         return (
                           <details
-                            className="mt-1.5 rounded border border-indigo-100 bg-indigo-50/40 text-[11px]"
+                            className="mt-1.5 rounded border border-accent-line bg-accent-soft text-[11px]"
                             open={!isSubmitted}
                           >
-                            <summary className="cursor-pointer px-2 py-1 text-[10.5px] font-semibold text-indigo-900 select-none flex items-center gap-1">
+                            <summary className="cursor-pointer px-2 py-1 text-[10.5px] font-semibold text-accent select-none flex items-center gap-1">
                               <span>📖 검토 가이드 — {d.shortName || d.name}</span>
-                              <span className="text-[9.5px] font-normal text-indigo-700">
+                              <span className="text-[9.5px] font-normal text-accent">
                                 (이 서류로 무엇을 어떻게 확인하는지)
                               </span>
                             </summary>
                             <div className="px-2.5 pb-2 pt-0.5 space-y-1.5 text-ink-2">
                               <div>
-                                <span className="text-[9.5px] font-semibold text-indigo-800 uppercase tracking-wide">
+                                <span className="text-[9.5px] font-semibold text-accent uppercase tracking-wide">
                                   목적
                                 </span>
                                 <div className="mt-0.5 leading-snug">{guide.purpose}</div>
                               </div>
                               <div>
-                                <span className="text-[9.5px] font-semibold text-indigo-800 uppercase tracking-wide">
+                                <span className="text-[9.5px] font-semibold text-accent uppercase tracking-wide">
                                   검토 기준 (법령·공고)
                                 </span>
                                 <ul className="mt-0.5 space-y-0.5 list-disc list-outside ml-3.5 leading-snug">
@@ -1038,9 +1038,9 @@ function DocumentsStage({
 
                       {/* 체크포인트 */}
                       {checkpoints.length > 0 && (
-                        <div className="mt-1.5 p-2 rounded bg-white/60 border border-blue-100 text-[11px] space-y-1">
+                        <div className="mt-1.5 p-2 rounded bg-surface2/60 border border-border text-[11px] space-y-1">
                           <div className="flex items-center justify-between">
-                            <div className="text-[10px] font-semibold text-blue-900">
+                            <div className="text-[10px] font-semibold text-accent">
                               💡 담당자 확인 포인트
                             </div>
                             <div className="text-[9.5px] text-ink-4">
@@ -1090,7 +1090,7 @@ function DocumentsStage({
                                       value={result?.note || ""}
                                       onChange={(e) => handleCheckpointChange(d.name, cp.key, { note: e.target.value })}
                                       placeholder="메모 (선택)"
-                                      className="mt-1 w-full border border-gray-200 rounded px-1.5 py-0.5 text-[10px] bg-white"
+                                      className="mt-1 w-full border border-border rounded px-1.5 py-0.5 text-[10px] bg-bg"
                                     />
                                   )}
                                 </div>
@@ -1102,7 +1102,7 @@ function DocumentsStage({
                                     className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition ${
                                       status === "pass"
                                         ? "bg-green-600 text-white"
-                                        : "bg-gray-100 text-ink-3 hover:bg-green-100"
+                                        : "bg-surface2 text-ink-3 hover:bg-green-100"
                                     }`}
                                     title="확인 완료 (일치)"
                                   >
@@ -1114,7 +1114,7 @@ function DocumentsStage({
                                     className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition ${
                                       status === "fail"
                                         ? "bg-red-600 text-white"
-                                        : "bg-gray-100 text-ink-3 hover:bg-red-100"
+                                        : "bg-surface2 text-ink-3 hover:bg-red-100"
                                     }`}
                                     title="불일치 (문제 있음)"
                                   >
@@ -1126,7 +1126,7 @@ function DocumentsStage({
                                     className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition ${
                                       status === "pending"
                                         ? "bg-ink-4 text-white"
-                                        : "bg-gray-100 text-ink-3 hover:bg-gray-200"
+                                        : "bg-surface2 text-ink-3 hover:bg-surface2"
                                     }`}
                                     title="미확인"
                                   >
@@ -1146,8 +1146,8 @@ function DocumentsStage({
                         // 서류 묶음 행: 파일 업로드 & 교체
                         <label className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium cursor-pointer transition ${
                           file
-                            ? "bg-gray-100 text-ink-2 hover:bg-gray-200"
-                            : "bg-indigo-100 text-indigo-800 hover:bg-indigo-200"
+                            ? "bg-surface2 text-ink-2 hover:bg-surface2"
+                            : "bg-accent-soft text-accent hover:bg-accent-soft"
                         } ${isUploading ? "opacity-50 pointer-events-none" : ""}`}>
                           {isUploading ? (
                             <><Loader2 className="w-3 h-3 animate-spin" /> 업로드</>
@@ -1209,7 +1209,7 @@ function DocumentsStage({
                           <button
                             type="button"
                             onClick={() => openMapperFor(d.name)}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-indigo-100 text-indigo-800 hover:bg-indigo-200"
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-accent-soft text-accent hover:bg-accent-soft"
                             title="묶음 PDF에서 이 서류가 있는 페이지를 지정"
                           >
                             📌 페이지 지정
@@ -1219,8 +1219,8 @@ function DocumentsStage({
                         // 묶음 PDF 없음: 기존 개별 업로드 fallback
                         <label className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium cursor-pointer transition ${
                           file
-                            ? "bg-gray-100 text-ink-2 hover:bg-gray-200"
-                            : "bg-indigo-100 text-indigo-800 hover:bg-indigo-200"
+                            ? "bg-surface2 text-ink-2 hover:bg-surface2"
+                            : "bg-accent-soft text-accent hover:bg-accent-soft"
                         } ${isUploading ? "opacity-50 pointer-events-none" : ""}`}>
                           {isUploading ? (
                             <><Loader2 className="w-3 h-3 animate-spin" /> 업로드</>
@@ -1338,7 +1338,7 @@ function Field({
           value={value ?? ""}
           placeholder={placeholder}
           onChange={(e) => onChange(format ? format(e.target.value) : e.target.value)}
-          className="w-full border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
+          className="w-full border border-border rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
         />
       ) : (
         <p className="font-medium text-ink text-sm">{displayed}</p>
@@ -1361,7 +1361,7 @@ function NumField({
           min={0}
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="w-full border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
+          className="w-full border border-border rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
         />
       ) : (
         <p className="font-medium text-ink text-sm">{value}</p>
@@ -1405,7 +1405,7 @@ function StandbyPromotionBlock({
   // 이미 승계된 당첨자
   if (customer.superseded) {
     return (
-      <div className="card border-2 border-gray-300 bg-surface2">
+      <div className="card border-2 border-border bg-surface2">
         <div className="flex items-start gap-3">
           <UserX className="w-5 h-5 text-ink-3 flex-shrink-0 mt-0.5" />
           <div className="flex-1 text-sm">
@@ -1510,7 +1510,7 @@ function StandbyPromotionBlock({
 
         {pickerOpen && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-surface rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
               <div className="p-5 border-b border-border-soft flex items-center justify-between flex-shrink-0">
                 <div>
                   <h2 className="text-lg font-semibold">예비 승계 후보</h2>
@@ -1528,7 +1528,7 @@ function StandbyPromotionBlock({
 
               <div className="flex-1 overflow-y-auto p-5">
                 {candidates.length === 0 ? (
-                  <div className="p-8 text-center text-sm text-ink-4 border border-dashed border-gray-300 rounded-lg">
+                  <div className="p-8 text-center text-sm text-ink-4 border border-dashed border-border rounded-lg">
                     같은 주택형의 가능한 예비 후보가 없습니다.
                     <br />
                     <span className="text-xs">
@@ -1544,7 +1544,7 @@ function StandbyPromotionBlock({
                         value={reason}
                         onChange={(e) => setReason(e.target.value)}
                         placeholder="예: 부적합 판정, 계약 포기 등"
-                        className="w-full border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                        className="w-full border border-border rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
                       />
                     </div>
 
@@ -1556,7 +1556,7 @@ function StandbyPromotionBlock({
                             <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
                               picked
                                 ? "border-amber-400 bg-amber-50"
-                                : "border-border hover:border-gray-300"
+                                : "border-border hover:border-border"
                             }`}>
                               <input
                                 type="radio"
@@ -1571,7 +1571,7 @@ function StandbyPromotionBlock({
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="font-medium text-ink">{c.customer.name}</span>
                                   {c.customer.supply_type && (
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent-soft text-accent">
                                       {c.customer.supply_type}
                                     </span>
                                   )}

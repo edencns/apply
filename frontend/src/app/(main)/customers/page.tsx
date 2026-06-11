@@ -20,7 +20,7 @@ function RedirectInner() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <div className="card text-center py-16 text-gray-400">
+      <div className="card text-center py-16 text-ink-3">
         <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin opacity-60" />
         <p>당첨자 등록 페이지로 이동 중...</p>
       </div>
@@ -30,7 +30,7 @@ function RedirectInner() {
 
 export default function CustomersRedirect() {
   return (
-    <Suspense fallback={<div className="p-6 text-gray-400">로딩 중...</div>}>
+    <Suspense fallback={<div className="p-6 text-ink-3">로딩 중...</div>}>
       <RedirectInner />
     </Suspense>
   );

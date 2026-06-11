@@ -42,7 +42,7 @@ function LoginInner() {
       <div className="bg-surface rounded-lg border border-border w-full max-w-md p-8">
         <div className="text-center mb-6">
           <div className="w-12 h-12 bg-ink rounded-md flex items-center justify-center mx-auto mb-3">
-            <Building2 className="w-6 h-6 text-white" strokeWidth={1.8} />
+            <Building2 className="w-6 h-6 text-bg" strokeWidth={1.8} />
           </div>
           <h1 className="text-lg font-bold text-ink tracking-tight">분양 자동화 시스템</h1>
           <p className="text-xs text-ink-3 mt-1">로그인해서 시작하세요</p>

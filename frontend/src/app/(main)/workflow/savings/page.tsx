@@ -186,10 +186,10 @@ export default function SavingsStepPage() {
       {selected && (
         <>
           {/* 선택사항 안내 — 당첨자는 이미 통장 요건 통과 상태이므로 본 시스템에서는 참고 정보로만 활용 */}
-          <div className="mb-3 p-3 rounded-lg bg-gray-50 border border-gray-200 text-xs text-ink-2 flex items-start gap-2">
+          <div className="mb-3 p-3 rounded-lg bg-surface2 border border-border text-xs text-ink-2 flex items-start gap-2">
             <Banknote className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-ink-3" />
             <div>
-              <span className="inline-block px-1.5 py-0.5 rounded bg-gray-200 text-ink-2 text-[10px] font-semibold mr-1.5">
+              <span className="inline-block px-1.5 py-0.5 rounded bg-surface2 text-ink-2 text-[10px] font-semibold mr-1.5">
                 선택 사항
               </span>
               청약 당첨자는 이미 통장 요건을 통과한 상태입니다. 본 단계는 <strong>참고용</strong>으로 활용하세요 —
@@ -198,7 +198,7 @@ export default function SavingsStepPage() {
           </div>
 
           {typeof minMonths === "number" && minMonths > 0 && (
-            <div className="mb-3 p-3 rounded-lg bg-indigo-50 border border-indigo-100 text-xs text-indigo-800 flex items-center gap-2">
+            <div className="mb-3 p-3 rounded-lg bg-accent-soft border border-accent-line text-xs text-ink-2 flex items-center gap-2">
               <Banknote className="w-3.5 h-3.5" />
               <span>
                 공고 최소 가입기간(참고): <strong>{minMonths}개월</strong>
@@ -275,10 +275,10 @@ export default function SavingsStepPage() {
 
           {/* 업로드 결과 */}
           {uploadResult && (
-            <div className="card mb-4 p-3 text-sm bg-indigo-50/60 border-indigo-100">
+            <div className="card mb-4 p-3 text-sm bg-accent-soft border-accent-line">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-indigo-900">청약통장 순위확인 연결 완료</span>
-                <span className="text-indigo-800">
+                <span className="font-semibold text-ink">청약통장 순위확인 연결 완료</span>
+                <span className="text-ink-2">
                   {uploadResult.attached}명에게 결과 부착 · 총 {uploadResult.totalRecords}건
                 </span>
                 {uploadResult.wrongStage && (

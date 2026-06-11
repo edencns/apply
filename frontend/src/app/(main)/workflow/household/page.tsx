@@ -34,7 +34,7 @@ const columns: StageColumn[] = [
     header: "공급유형",
     render: (c) => {
       const supply = c.supply_type || "—";
-      const cls = supply === "일반공급" ? "bg-indigo-50 text-indigo-700" : "bg-purple-50 text-purple-700";
+      const cls = supply === "일반공급" ? "bg-accent-soft text-accent" : "bg-surface2 text-ink-2";
       return <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${cls}`}>{supply}</span>;
     },
   },
@@ -46,7 +46,7 @@ const columns: StageColumn[] = [
       if (count === 0) return <span className="text-xs text-ink-4">미등록</span>;
       return (
         <span className="inline-flex items-center gap-1 text-sm">
-          <Users className="w-3.5 h-3.5 text-amber-600" />
+          <Users className="w-3.5 h-3.5 text-warn" />
           <strong>{count}</strong>명
         </span>
       );
@@ -58,11 +58,11 @@ const columns: StageColumn[] = [
     render: (c) => {
       const issues = (c.household_members || []).filter((m) => m.errorCode);
       if (issues.length === 0 && (c.household_members?.length ?? 0) > 0) {
-        return <span className="text-xs text-green-700">정상</span>;
+        return <span className="text-xs text-ok">정상</span>;
       }
       if (issues.length > 0) {
         return (
-          <span className="inline-flex items-center gap-1 text-xs text-red-700">
+          <span className="inline-flex items-center gap-1 text-xs text-fail">
             <AlertTriangle className="w-3 h-3" /> {issues.length}건
           </span>
         );
@@ -307,7 +307,7 @@ export default function HouseholdStepPage() {
             </button>
             <button
               onClick={() => setIndivOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 shadow-sm whitespace-nowrap transition-colors"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold text-white bg-accent hover:bg-accent shadow-sm whitespace-nowrap transition-colors"
               title="고객 한 명을 지정해 개별 파일 업로드"
             >
               <UserCheck className="w-4 h-4" /> 추가 검증
@@ -347,18 +347,18 @@ export default function HouseholdStepPage() {
 
           {/* 업로드 결과 배너 */}
           {uploadResult && (
-            <div className="card mb-4 p-3 text-sm bg-indigo-50/60 border-indigo-100">
+            <div className="card mb-4 p-3 text-sm bg-accent-soft/60 border-accent-line">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-indigo-900">세대원내역 연결 완료</span>
-                <span className="text-indigo-800">
+                <span className="font-semibold text-accent">세대원내역 연결 완료</span>
+                <span className="text-accent">
                   {uploadResult.attached}명에게 세대원 정보 부착 · 총 {uploadResult.totalRecords}건
                 </span>
                 {uploadResult.unmatched > 0 && (
-                  <span className="text-red-700">매칭 실패 {uploadResult.unmatched}명</span>
+                  <span className="text-fail">매칭 실패 {uploadResult.unmatched}명</span>
                 )}
               </div>
               {uploadResult.errors.length > 0 && (
-                <ul className="mt-2 text-xs text-red-700 list-disc list-inside space-y-0.5">
+                <ul className="mt-2 text-xs text-fail list-disc list-inside space-y-0.5">
                   {uploadResult.errors.map((e, i) => <li key={i}>{e}</li>)}
                 </ul>
               )}
@@ -367,18 +367,18 @@ export default function HouseholdStepPage() {
 
           {/* 전산검색 결과 PDF 결과 (7가지 카테고리) */}
           {hSearchResult && (
-            <div className="card mb-4 p-3 text-sm bg-red-50/70 border-red-200">
+            <div className="card mb-4 p-3 text-sm bg-fail-soft/70 border-border">
               <div className="flex items-center gap-2 flex-wrap">
-                <ShieldAlert className="w-4 h-4 text-red-700" />
-                <span className="font-semibold text-red-900">전산검색 결과 분석 완료</span>
+                <ShieldAlert className="w-4 h-4 text-fail" />
+                <span className="font-semibold text-fail">전산검색 결과 분석 완료</span>
                 {hSearchResult.detected === 0 ? (
-                  <span className="text-emerald-700">✓ 모든 카테고리 위반자 없음</span>
+                  <span className="text-ok">✓ 모든 카테고리 위반자 없음</span>
                 ) : (
                   <>
-                    <span className="text-red-800">위반자 {hSearchResult.detected}명 검출</span>
-                    <span className="text-red-900 font-semibold">→ 부적합 자동 마킹 {hSearchResult.marked}건</span>
+                    <span className="text-fail">위반자 {hSearchResult.detected}명 검출</span>
+                    <span className="text-fail font-semibold">→ 부적합 자동 마킹 {hSearchResult.marked}건</span>
                     {hSearchResult.unmatched.length > 0 && (
-                      <span className="text-amber-800">매칭 실패 {hSearchResult.unmatched.length}건</span>
+                      <span className="text-warn">매칭 실패 {hSearchResult.unmatched.length}건</span>
                     )}
                   </>
                 )}
@@ -388,7 +388,7 @@ export default function HouseholdStepPage() {
               {Object.keys(hSearchResult.byCategory).length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1 text-[10.5px]">
                   {Object.entries(hSearchResult.byCategory).map(([cat, n]) => (
-                    <span key={cat} className="px-1.5 py-0.5 rounded bg-red-100 text-red-900 font-medium">
+                    <span key={cat} className="px-1.5 py-0.5 rounded bg-fail-soft text-fail font-medium">
                       {cat}: {n}건
                     </span>
                   ))}
@@ -397,18 +397,18 @@ export default function HouseholdStepPage() {
 
               {hSearchResult.samples.length > 0 && (
                 <details className="mt-2 text-[11px]" open>
-                  <summary className="cursor-pointer text-red-900 font-semibold">
+                  <summary className="cursor-pointer text-fail font-semibold">
                     검출 샘플 ({hSearchResult.samples.length}건)
                   </summary>
                   <ul className="mt-1 ml-4 space-y-0.5 text-ink-2">
                     {hSearchResult.samples.map((s, i) => (
                       <li key={i}>
-                        <span className="text-[9.5px] px-1 py-0 rounded bg-red-200 text-red-900 font-semibold mr-1">
+                        <span className="text-[9.5px] px-1 py-0 rounded bg-red-200 text-fail font-semibold mr-1">
                           {s.category || "기타"}
                         </span>
                         <strong>{s.dong || "?"}-{s.ho || "?"} {s.name}</strong>
-                        {s.with.length > 0 && <span className="text-red-700"> ↔ 세대원: {s.with.join(", ")}</span>}
-                        {s.violation && <span className="text-red-700"> — {s.violation}</span>}
+                        {s.with.length > 0 && <span className="text-fail"> ↔ 세대원: {s.with.join(", ")}</span>}
+                        {s.violation && <span className="text-fail"> — {s.violation}</span>}
                       </li>
                     ))}
                   </ul>
@@ -416,17 +416,17 @@ export default function HouseholdStepPage() {
               )}
               {hSearchResult.unmatched.length > 0 && (
                 <details className="mt-2 text-[11px]">
-                  <summary className="cursor-pointer text-amber-900 font-semibold">
+                  <summary className="cursor-pointer text-warn font-semibold">
                     매칭 실패 ({hSearchResult.unmatched.length}건) — 1단계 명단에 없음 또는 동·호 불일치
                   </summary>
-                  <ul className="mt-1 ml-4 space-y-0.5 text-amber-800">
+                  <ul className="mt-1 ml-4 space-y-0.5 text-warn">
                     {hSearchResult.unmatched.map((u, i) => (
                       <li key={i}>[{u.category || "기타"}] {u.dong || "?"}-{u.ho || "?"} {u.name}</li>
                     ))}
                   </ul>
                 </details>
               )}
-              <div className="mt-2 text-[10.5px] text-red-800/80">
+              <div className="mt-2 text-[10.5px] text-fail/80">
                 💡 7가지 부적격 카테고리 (가점제2년·당첨5년·중복청약·재당첨일반/특공·특공1회·사전청약) 자동 검출. 부적합 호수는 예비 승계 또는 선착순으로 처리.
               </div>
             </div>
@@ -434,10 +434,10 @@ export default function HouseholdStepPage() {
 
           {/* 검증 결과 배너 */}
           {verifyResult && (
-            <div className="card mb-4 p-3 text-sm bg-emerald-50/60 border-emerald-100">
-              <span className="font-semibold text-emerald-900 mr-3">세대원 검증 결과</span>
-              <span className="text-green-700 mr-3">통과 {verifyResult.ok}명</span>
-              <span className="text-red-700 mr-3">부적합 {verifyResult.fail}명</span>
+            <div className="card mb-4 p-3 text-sm bg-ok-soft/60 border-border">
+              <span className="font-semibold text-ok mr-3">세대원 검증 결과</span>
+              <span className="text-ok mr-3">통과 {verifyResult.ok}명</span>
+              <span className="text-fail mr-3">부적합 {verifyResult.fail}명</span>
               <span className="text-ink-2">검증 필요 {verifyResult.missing}명</span>
             </div>
           )}

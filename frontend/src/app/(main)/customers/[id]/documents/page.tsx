@@ -21,7 +21,7 @@ export default function CustomerDocumentsRedirect() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <div className="card text-center py-16 text-gray-400">
+      <div className="card text-center py-16 text-ink-3">
         <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin opacity-60" />
         <p>서류 검수 탭으로 이동 중...</p>
       </div>
