@@ -14,17 +14,8 @@ interface NavItem {
   label: string;
 }
 
-/** 서류검토·판정 단계에서 공급유형별 sub-tab. 클릭 시 ?supply=XXX 쿼리로 필터링 */
-const DOCUMENTS_SUB_TABS: Array<{ supply: string; label: string }> = [
-  { supply: "all",       label: "전체" },
-  { supply: "기관추천",   label: "기관추천" },
-  { supply: "다자녀가구", label: "다자녀" },
-  { supply: "신혼부부",   label: "신혼부부" },
-  { supply: "노부모부양", label: "노부모부양" },
-  { supply: "생애최초",   label: "생애최초" },
-  { supply: "일반공급",   label: "일반공급" },
-  { supply: "선착순",     label: "선착순/잔여세대" },
-];
+// 서류검토·판정 단계에서 열리는 외부 검수화면(VPS). 비번 보호 HTTPS
+const DOCUMENTS_REVIEW_URL = "https://72-62-79-122.nip.io";
 
 const topItems: NavItem[] = [
   { href: "/dashboard",     icon: LayoutDashboard, label: "대시보드" },
@@ -108,14 +99,8 @@ export default function Sidebar() {
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
 
-  // 서류검토·판정 sub-tab — 현재 활성 supply (URL 쿼리에서 읽음)
-  const currentSupply = (() => {
-    if (typeof window === "undefined") return "all";
-    if (!pathname?.startsWith("/workflow/documents")) return "all";
-    const sp = new URLSearchParams(window.location.search);
-    return sp.get("supply") || "all";
-  })();
-  const showDocSubTabs = isActive("/workflow/documents");
+  // 서류검토·판정 단계 활성 시 외부 검수화면 링크 노출
+  const showDocReview = isActive("/workflow/documents");
 
   return (
     <aside className="w-[220px] bg-surface2 border-r border-border flex flex-col h-screen sticky top-0">
@@ -150,28 +135,17 @@ export default function Sidebar() {
               isActive={isActive(item.href)}
               stepNumber={i + 1}
             />
-            {/* 5단계(서류검토·판정) 활성 시 공급유형별 sub-tab 노출 */}
-            {item.href === "/workflow/documents" && showDocSubTabs && (
+            {/* 5단계(서류검토·판정) 활성 시 외부 검수화면(VPS) 링크 노출 */}
+            {item.href === "/workflow/documents" && showDocReview && (
               <div className="ml-7 mt-0.5 mb-1 space-y-0.5 border-l border-border-soft pl-2">
-                {DOCUMENTS_SUB_TABS.map((sub) => {
-                  const isCur = currentSupply === sub.supply;
-                  const href = sub.supply === "all"
-                    ? "/workflow/documents"
-                    : `/workflow/documents?supply=${encodeURIComponent(sub.supply)}`;
-                  return (
-                    <Link
-                      key={sub.supply}
-                      href={href}
-                      className={`block px-2 py-1 rounded text-[11.5px] transition-colors ${
-                        isCur
-                          ? "bg-accent-soft text-accent font-semibold"
-                          : "text-ink-3 hover:bg-surface hover:text-ink-2"
-                      }`}
-                    >
-                      └ {sub.label}
-                    </Link>
-                  );
-                })}
+                <a
+                  href={DOCUMENTS_REVIEW_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block px-2 py-1 rounded text-[11.5px] font-semibold text-accent hover:bg-surface transition-colors"
+                >
+                  └ 무주택 1차 검수 (VPS) ↗
+                </a>
               </div>
             )}
           </div>
