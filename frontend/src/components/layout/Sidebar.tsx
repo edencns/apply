@@ -112,9 +112,9 @@ export default function Sidebar() {
           </div>
           <div>
             <div className="text-[13px] font-bold text-ink tracking-tight">
-              KUKDO<span className="text-[#F37021]">.</span>
+              KUKDO <span className="text-[#F37021]">ID</span>
             </div>
-            <div className="text-[10px] text-ink-4 mt-px">분양 자동화 · SH공사</div>
+            <div className="text-[10px] text-white mt-px">분양자동화 시스템</div>
           </div>
         </div>
       </div>
