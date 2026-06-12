@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Building2, Lock, User, Loader2 } from "lucide-react";
+import { Lock, User, Loader2 } from "lucide-react";
 
 function LoginInner() {
   const router = useRouter();
@@ -41,10 +41,10 @@ function LoginInner() {
     <div className="min-h-screen bg-bg flex items-center justify-center p-4">
       <div className="bg-surface rounded-lg border border-border w-full max-w-md p-8">
         <div className="text-center mb-6">
-          <div className="w-12 h-12 bg-ink rounded-md flex items-center justify-center mx-auto mb-3">
-            <Building2 className="w-6 h-6 text-bg" strokeWidth={1.8} />
+          <div className="w-12 h-12 bg-[#F37021] rounded-md flex items-center justify-center mx-auto mb-3 shadow-[0_0_0_1px_#ffffff14]">
+            <span className="text-white text-2xl font-extrabold leading-none tracking-tight">K</span>
           </div>
-          <h1 className="text-lg font-bold text-ink tracking-tight">분양 자동화 시스템</h1>
+          <h1 className="text-lg font-bold text-ink tracking-tight">KUKDO <span className="text-[#F37021]">ID</span></h1>
           <p className="text-xs text-ink-3 mt-1">로그인해서 시작하세요</p>
         </div>
 
