@@ -44,7 +44,7 @@ function LoginInner() {
           <div className="w-12 h-12 bg-[#F37021] rounded-md flex items-center justify-center mx-auto mb-3 shadow-[0_0_0_1px_#ffffff14]">
             <span className="text-white text-2xl font-extrabold leading-none tracking-tight">K</span>
           </div>
-          <h1 className="text-lg font-bold text-ink tracking-tight">KUKDO <span className="text-[#F37021]">ID</span></h1>
+          <h1 className="text-lg font-bold text-white tracking-tight">분양자동화 시스템</h1>
           <p className="text-xs text-ink-3 mt-1">로그인해서 시작하세요</p>
         </div>
 
