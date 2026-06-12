@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Building2, LayoutDashboard, Users, FileText,
+  LayoutDashboard, Users, FileText,
   BookOpen, LogOut, PenLine, Scale,
   UserCheck, Home, Banknote, Settings, RefreshCw, GraduationCap, ClipboardCheck,
 } from "lucide-react";
@@ -107,14 +107,14 @@ export default function Sidebar() {
       {/* 로고 */}
       <div className="p-4 border-b border-border-soft">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-md bg-accent flex items-center justify-center">
-            <Building2 className="w-3.5 h-3.5 text-[#0a0a0a]" strokeWidth={1.8} />
+          <div className="w-6 h-6 rounded-md bg-[#F37021] flex items-center justify-center shadow-[0_0_0_1px_#ffffff14]">
+            <span className="text-white text-[12px] font-extrabold leading-none tracking-tight">K</span>
           </div>
           <div>
             <div className="text-[13px] font-bold text-ink tracking-tight">
-              분양 자동화
+              KUKDO<span className="text-[#F37021]">.</span>
             </div>
-            <div className="text-[10px] text-ink-4 mt-px">SH공사 · 은평지부</div>
+            <div className="text-[10px] text-ink-4 mt-px">분양 자동화 · SH공사</div>
           </div>
         </div>
       </div>
