@@ -14,9 +14,6 @@ interface NavItem {
   label: string;
 }
 
-// 서류검토·판정 단계에서 열리는 외부 검수화면(VPS). 비번 보호 HTTPS
-const DOCUMENTS_REVIEW_URL = "https://72-62-79-122.nip.io";
-
 const topItems: NavItem[] = [
   { href: "/dashboard",     icon: LayoutDashboard, label: "대시보드" },
   { href: "/announcements", icon: BookOpen,        label: "모집공고" },
@@ -99,9 +96,6 @@ export default function Sidebar() {
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
 
-  // 서류검토·판정 단계 활성 시 외부 검수화면 링크 노출
-  const showDocReview = isActive("/workflow/documents");
-
   return (
     <aside className="w-[220px] bg-surface2 border-r border-border flex flex-col h-screen sticky top-0">
       {/* 로고 */}
@@ -135,19 +129,6 @@ export default function Sidebar() {
               isActive={isActive(item.href)}
               stepNumber={i + 1}
             />
-            {/* 5단계(서류검토·판정) 활성 시 외부 검수화면(VPS) 링크 노출 */}
-            {item.href === "/workflow/documents" && showDocReview && (
-              <div className="ml-7 mt-0.5 mb-1 space-y-0.5 border-l border-border-soft pl-2">
-                <a
-                  href={DOCUMENTS_REVIEW_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block px-2 py-1 rounded text-[11.5px] font-semibold text-accent hover:bg-surface transition-colors"
-                >
-                  └ 무주택 1차 검수 (VPS) ↗
-                </a>
-              </div>
-            )}
           </div>
         ))}
 
